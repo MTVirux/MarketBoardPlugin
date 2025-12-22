@@ -390,11 +390,15 @@ namespace MarketBoardPlugin.GUI
 
             if (ImGui.Selectable("Add to the shopping list") && this.marketData != null && this.selectedWorld >= 0)
               {
-                MarketDataListing itm = this.marketData.Listings.OrderBy(l => l.PricePerUnit).ToList()[0];
-                double price = this.plugin.Config.NoGilSalesTax
-                  ? itm.PricePerUnit
-                  : itm.PricePerUnit + (itm.Tax / itm.Quantity);
-                this.plugin.ShoppingList.Add(new SavedItem(item.Value, price, itm.WorldName ?? string.Empty));
+                var listingsSnapshot = this.marketData.Listings.ToArray();
+                if (listingsSnapshot.Length > 0)
+                {
+                  MarketDataListing itm = listingsSnapshot.OrderBy(l => l.PricePerUnit).First();
+                  double price = this.plugin.Config.NoGilSalesTax
+                    ? itm.PricePerUnit
+                    : itm.PricePerUnit + (itm.Tax / itm.Quantity);
+                  this.plugin.ShoppingList.Add(new SavedItem(item.Value, price, itm.WorldName ?? string.Empty));
+                }
               }
 
             if (ImGui.Selectable("Add to the favorites"))
@@ -507,11 +511,15 @@ namespace MarketBoardPlugin.GUI
 
                 if (ImGui.Selectable("Add to the shopping list") && this.marketData != null && this.selectedWorld >= 0)
                 {
-                  MarketDataListing itm = this.marketData.Listings.OrderBy(l => l.PricePerUnit).ToList()[0];
-                  double price = this.plugin.Config.NoGilSalesTax
-                    ? itm.PricePerUnit
-                    : itm.PricePerUnit + (itm.Tax / itm.Quantity);
-                  this.plugin.ShoppingList.Add(new SavedItem(item, price, itm.WorldName ?? this.worldList[this.selectedWorld].Item1));
+                  var listingsSnapshot = this.marketData.Listings.ToArray();
+                  if (listingsSnapshot.Length > 0)
+                  {
+                    MarketDataListing itm = listingsSnapshot.OrderBy(l => l.PricePerUnit).First();
+                    double price = this.plugin.Config.NoGilSalesTax
+                      ? itm.PricePerUnit
+                      : itm.PricePerUnit + (itm.Tax / itm.Quantity);
+                    this.plugin.ShoppingList.Add(new SavedItem(item, price, itm.WorldName ?? this.worldList[this.selectedWorld].Item1));
+                  }
                 }
 
                 if (ImGui.Selectable("Add to the favorites"))
@@ -682,7 +690,8 @@ namespace MarketBoardPlugin.GUI
             ImGui.NextColumn();
             ImGui.Separator();
 
-            var marketDataListings = this.marketData?.Listings.Where(i => !this.hQOnly || i.Hq)
+            var listingsSnapshot = this.marketData?.Listings.ToArray();
+            var marketDataListings = listingsSnapshot?.Where(i => !this.hQOnly || i.Hq)
               .Where(l => l.Quantity >= this.minQuantityFilter).OrderBy(l => l.PricePerUnit).ToList();
             if (marketDataListings != null)
             {
@@ -803,7 +812,8 @@ namespace MarketBoardPlugin.GUI
               ImGui.NextColumn();
               ImGui.Separator();
 
-              var marketDataRecentHistory = this.marketData?.RecentHistory.OrderByDescending(h => h.Timestamp).ToList();
+              var historySnapshot = this.marketData?.RecentHistory.ToArray();
+              var marketDataRecentHistory = historySnapshot?.OrderByDescending(h => h.Timestamp).ToList();
               if (marketDataRecentHistory != null)
               {
                 foreach (var history in marketDataRecentHistory)
