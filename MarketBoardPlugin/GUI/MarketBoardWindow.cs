@@ -1,7 +1,6 @@
 // <copyright file="MarketBoardWindow.cs" company="MTVirux">
 // Copyright (c) MTVirux. All rights reserved.
 // </copyright>
-
 namespace MarketBoardPlugin.GUI
 {
   using System;
@@ -26,6 +25,7 @@ namespace MarketBoardPlugin.GUI
   using Lumina.Extensions;
   using MarketBoardPlugin.Extensions;
   using MarketBoardPlugin.Helpers;
+  using MarketBoardPlugin.Models.FFXIVMT;
   using MarketBoardPlugin.Models.ShoppingList;
   using MarketBoardPlugin.Models.Universalis;
 
@@ -98,9 +98,15 @@ namespace MarketBoardPlugin.GUI
 
     private MarketDataResponse? marketData;
 
+    private GilfluxRankingItem? gilfluxData;
+
+    private bool isLoadingGilflux;
+
     private int selectedListing = -1;
 
     private int selectedHistory = -1;
+
+    private int openStatsSection = -1;
 
     private bool hasListingsHQColumnWidthBeenSet;
 
@@ -867,66 +873,276 @@ namespace MarketBoardPlugin.GUI
           }
 
           ImGui.Separator();
-          if (ImGui.BeginTabItem("Charts##chartsTab"))
+          if (ImGui.BeginTabItem("Stats##statsTab"))
           {
             this.titleFontHandle.Push();
-            var tableHeight = (ImGui.GetContentRegionAvail().Y / 2) - (ImGui.GetTextLineHeightWithSpacing() * 2);
+            ImGui.Text("Stats");
             this.titleFontHandle.Pop();
 
-            if (this.marketData?.RecentHistory != null && this.marketData?.RecentHistory.Count > 0)
+            if (this.marketData != null)
             {
-              this.titleFontHandle.Push();
-              ImGui.Text("Price variations (per unit)");
-              this.titleFontHandle.Pop();
-
-              if (ImPlot.BeginPlot("##pricePlot", new Vector2(-1, tableHeight)))
+              // KPIs in a collapsing header
+              ImGui.SetNextItemOpen(this.openStatsSection == 0, ImGuiCond.Always);
+              if (ImGui.CollapsingHeader($"KPIs ({this.worldList[this.selectedWorld].Item1})##statsKpisHeader"))
               {
-                var now = DateTimeOffset.Now;
-                var x = new List<float>();
-                var y = new List<float>();
+                this.openStatsSection = 0;
+                ImGui.Columns(3, "statsKpis");
 
-                if (this.marketData?.RecentHistory != null)
-                {
-                  foreach (var historyEntry in this.marketData.RecentHistory)
-                  {
-                    x.Add(historyEntry.Timestamp);
-                    y.Add(historyEntry.PricePerUnit);
-                  }
-                }
+                ImGui.Text("Current Avg");
+                ImGui.NextColumn();
+                ImGui.Text("Current Avg NQ");
+                ImGui.NextColumn();
+                ImGui.Text("Current Avg HQ");
+                ImGui.NextColumn();
 
-                ImPlot.SetupAxesLimits(now.AddDays(-7).ToUnixTimeSeconds(), now.ToUnixTimeSeconds(), 0, y.Max(), ImPlotCond.Always);
-                ImPlot.SetupAxisScale(ImAxis.X1, ImPlotScale.Time);
-                ImPlot.SetNextMarkerStyle(ImPlotMarker.Circle);
-                ImPlot.PlotLine("Price", ref x.ToArray()[0], ref y.ToArray()[0], x.Count);
-                ImPlot.EndPlot();
+                ImGui.Text(this.marketData.CurrentAveragePrice.ToString("C", this.plugin.NumberFormatInfo));
+                ImGui.NextColumn();
+                ImGui.Text(this.marketData.CurrentAveragePriceNq.ToString("C", this.plugin.NumberFormatInfo));
+                ImGui.NextColumn();
+                ImGui.Text(this.marketData.CurrentAveragePriceHq.ToString("C", this.plugin.NumberFormatInfo));
+                ImGui.NextColumn();
+
+                ImGui.Text("Average");
+                ImGui.NextColumn();
+                ImGui.Text("Average NQ");
+                ImGui.NextColumn();
+                ImGui.Text("Average HQ");
+                ImGui.NextColumn();
+
+                ImGui.Text(this.marketData.AveragePrice.ToString("C", this.plugin.NumberFormatInfo));
+                ImGui.NextColumn();
+                ImGui.Text(this.marketData.AveragePriceNq.ToString("C", this.plugin.NumberFormatInfo));
+                ImGui.NextColumn();
+                ImGui.Text(this.marketData.AveragePriceHq.ToString("C", this.plugin.NumberFormatInfo));
+                ImGui.NextColumn();
+
+                ImGui.Text("Min / Max");
+                ImGui.NextColumn();
+                ImGui.Text("Min / Max NQ");
+                ImGui.NextColumn();
+                ImGui.Text("Min / Max HQ");
+                ImGui.NextColumn();
+
+                ImGui.Text($"{this.marketData.MinPrice:N0} / {this.marketData.MaxPrice:N0}");
+                ImGui.NextColumn();
+                ImGui.Text($"{this.marketData.MinPriceNq:N0} / {this.marketData.MaxPriceNq:N0}");
+                ImGui.NextColumn();
+                ImGui.Text($"{this.marketData.MinPriceHq:N0} / {this.marketData.MaxPriceHq:N0}");
+                ImGui.NextColumn();
+
+                ImGui.Text("Sale Velocity");
+                ImGui.NextColumn();
+                ImGui.Text("Sale Velocity NQ");
+                ImGui.NextColumn();
+                ImGui.Text("Sale Velocity HQ");
+                ImGui.NextColumn();
+
+                ImGui.Text(this.marketData.SaleVelocity.ToString("N2", CultureInfo.CurrentCulture));
+                ImGui.NextColumn();
+                ImGui.Text(this.marketData.SaleVelocityNq.ToString("N2", CultureInfo.CurrentCulture));
+                ImGui.NextColumn();
+                ImGui.Text(this.marketData.SaleVelocityHq.ToString("N2", CultureInfo.CurrentCulture));
+                ImGui.NextColumn();
+
+                ImGui.Text("Units For Sale");
+                ImGui.NextColumn();
+                ImGui.Text("Listings");
+                ImGui.NextColumn();
+                ImGui.NextColumn();
+
+                ImGui.Text(this.marketData.UnitsForSale.ToString("N0", CultureInfo.CurrentCulture));
+                ImGui.NextColumn();
+                ImGui.Text(this.marketData.ListingsCount.ToString("N0", CultureInfo.CurrentCulture));
+                ImGui.NextColumn();
+                ImGui.NextColumn();
+                ImGui.Columns(1);
+              }
+              else if (this.openStatsSection == 0)
+              {
+                this.openStatsSection = -1;
               }
 
-              ImGui.Separator();
-
-              this.titleFontHandle.Push();
-              ImGui.Text("Traded volumes");
-              this.titleFontHandle.Pop();
-
-              if (ImPlot.BeginPlot("##qtyPlot", new Vector2(-1, tableHeight)))
+              // Price trend collapsing header
+              ImGui.SetNextItemOpen(this.openStatsSection == 1, ImGuiCond.Always);
+              if (ImGui.CollapsingHeader("Price trend##statsPriceHeader"))
               {
-                var now = DateTimeOffset.Now;
+                this.openStatsSection = 1;
+                var priceChildHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
+                ImGui.BeginChild("priceChild", new Vector2(-1, priceChildHeight), false);
+
                 var x = new List<float>();
                 var y = new List<float>();
-
-                if (this.marketData?.RecentHistory != null)
+                foreach (var historyEntry in this.marketData.RecentHistory ?? new List<MarketDataRecentHistory>())
                 {
-                  foreach (var historyEntry in this.marketData.RecentHistory)
-                  {
-                    x.Add(historyEntry.Timestamp);
-                    y.Add(historyEntry.Quantity);
-                  }
+                  x.Add(historyEntry.Timestamp);
+                  y.Add(historyEntry.PricePerUnit);
                 }
 
-                ImPlot.SetupAxesLimits(now.AddDays(-7).ToUnixTimeSeconds(), now.ToUnixTimeSeconds(), 0, y.Max(), ImPlotCond.Always);
-                ImPlot.SetupAxisScale(ImAxis.X1, ImPlotScale.Time);
-                ImPlot.PlotBars("Quantities", ref x.ToArray()[0], ref y.ToArray()[0], x.Count, 3600);
-                ImPlot.EndPlot();
+                if (x.Count > 0)
+                {
+                  var xa = x.ToArray();
+                  var ya = y.ToArray();
+                  if (ImPlot.BeginPlot("##statsPricePlot", new Vector2(-1, priceChildHeight - 30)))
+                  {
+                    ImPlot.SetupAxisScale(ImAxis.X1, ImPlotScale.Time);
+                    ImPlot.PlotLine("Price", ref xa[0], ref ya[0], xa.Length);
+                    ImPlot.EndPlot();
+                  }
+                }
+                else
+                {
+                  ImGui.Text("No recent history available to draw price trend.");
+                }
+
+                ImGui.EndChild();
               }
+              else if (this.openStatsSection == 1)
+              {
+                this.openStatsSection = -1;
+              }
+
+              // Volume collapsing header
+              ImGui.SetNextItemOpen(this.openStatsSection == 2, ImGuiCond.Always);
+              if (ImGui.CollapsingHeader("Volume##statsVolumeHeader"))
+              {
+                this.openStatsSection = 2;
+                var volChildHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
+                ImGui.BeginChild("volumeChild", new Vector2(-1, volChildHeight), false);
+
+                var xq = new List<float>();
+                var q = new List<float>();
+                foreach (var historyEntry in this.marketData.RecentHistory ?? new List<MarketDataRecentHistory>())
+                {
+                  xq.Add(historyEntry.Timestamp);
+                  q.Add(historyEntry.Quantity);
+                }
+
+                if (xq.Count > 0)
+                {
+                  var xa = xq.ToArray();
+                  var qa = q.ToArray();
+                  if (ImPlot.BeginPlot("##statsQtyPlot", new Vector2(-1, volChildHeight - 30)))
+                  {
+                    ImPlot.SetupAxisScale(ImAxis.X1, ImPlotScale.Time);
+                    ImPlot.PlotBars("Quantity", ref xa[0], ref qa[0], xa.Length, 3600);
+                    ImPlot.EndPlot();
+                  }
+                }
+                else
+                {
+                  ImGui.Text("No recent history available to draw volumes.");
+                }
+
+                ImGui.EndChild();
+              }
+              else if (this.openStatsSection == 2)
+              {
+                this.openStatsSection = -1;
+              }
+
+              // Stack histogram collapsing header
+              ImGui.SetNextItemOpen(this.openStatsSection == 3, ImGuiCond.Always);
+              if (ImGui.CollapsingHeader("Stack size histogram##statsStackHeader"))
+              {
+                this.openStatsSection = 3;
+                var stackChildHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
+                ImGui.BeginChild("stackChild", new Vector2(-1, stackChildHeight), false);
+                if (this.marketData.StackSizeHistogram != null && this.marketData.StackSizeHistogram.Count > 0)
+                {
+                  foreach (var kv in this.marketData.StackSizeHistogram)
+                  {
+                    ImGui.Text($"{kv.Key}: {kv.Value}");
+                  }
+                }
+                else
+                {
+                  ImGui.Text("No stack size histogram available.");
+                }
+
+                ImGui.EndChild();
+              }
+              else if (this.openStatsSection == 3)
+              {
+                this.openStatsSection = -1;
+              }
+
+              // FFXIVMT Gilflux section
+              ImGui.SetNextItemOpen(this.openStatsSection == 5, ImGuiCond.Always);
+              if (ImGui.CollapsingHeader($"Gilflux ({this.worldList[this.selectedWorld].Item1})##statsGilfluxHeader"))
+              {
+                this.openStatsSection = 5;
+                if (this.isLoadingGilflux)
+                {
+                  var spinnerChars = new[] { '|', '/', '-', '\\' };
+                  var spinnerIndex = (int)(ImGui.GetTime() / 0.15) % spinnerChars.Length;
+                  ImGui.Text($"{spinnerChars[spinnerIndex]} Loading data from FFXIVMT...");
+                }
+                else if (this.gilfluxData != null)
+                {
+                  ImGui.Columns(2, "gilfluxColumns");
+
+                  ImGui.Text("1 Hour");
+                  ImGui.NextColumn();
+                  ImGui.Text(this.gilfluxData.Ranking1h.ToString("N0", CultureInfo.CurrentCulture));
+                  ImGui.NextColumn();
+
+                  ImGui.Text("3 Hours");
+                  ImGui.NextColumn();
+                  ImGui.Text(this.gilfluxData.Ranking3h.ToString("N0", CultureInfo.CurrentCulture));
+                  ImGui.NextColumn();
+
+                  ImGui.Text("6 Hours");
+                  ImGui.NextColumn();
+                  ImGui.Text(this.gilfluxData.Ranking6h.ToString("N0", CultureInfo.CurrentCulture));
+                  ImGui.NextColumn();
+
+                  ImGui.Text("12 Hours");
+                  ImGui.NextColumn();
+                  ImGui.Text(this.gilfluxData.Ranking12h.ToString("N0", CultureInfo.CurrentCulture));
+                  ImGui.NextColumn();
+
+                  ImGui.Text("1 Day");
+                  ImGui.NextColumn();
+                  ImGui.Text(this.gilfluxData.Ranking1d.ToString("N0", CultureInfo.CurrentCulture));
+                  ImGui.NextColumn();
+
+                  ImGui.Text("3 Days");
+                  ImGui.NextColumn();
+                  ImGui.Text(this.gilfluxData.Ranking3d.ToString("N0", CultureInfo.CurrentCulture));
+                  ImGui.NextColumn();
+
+                  ImGui.Text("7 Days");
+                  ImGui.NextColumn();
+                  ImGui.Text(this.gilfluxData.Ranking7d.ToString("N0", CultureInfo.CurrentCulture));
+                  ImGui.NextColumn();
+
+                  ImGui.Columns(1);
+
+                  if (this.gilfluxData.LastSaleTime > 0)
+                  {
+                    var lastSale = DateTimeOffset.FromUnixTimeMilliseconds(this.gilfluxData.LastSaleTime).LocalDateTime;
+                    ImGui.Text($"Last Sale: {lastSale.ToString("g", CultureInfo.CurrentCulture)}");
+                  }
+
+                  if (this.gilfluxData.UpdatedAt > 0)
+                  {
+                    var updatedAt = DateTimeOffset.FromUnixTimeMilliseconds(this.gilfluxData.UpdatedAt).LocalDateTime;
+                    ImGui.TextDisabled($"Updated: {updatedAt.ToString("g", CultureInfo.CurrentCulture)}");
+                  }
+                }
+                else
+                {
+                  ImGui.Text("No gilflux data available for this item.");
+                }
+              }
+              else if (this.openStatsSection == 5)
+              {
+                this.openStatsSection = -1;
+              }
+            }
+            else
+            {
+              ImGui.Text("No market data available.");
             }
 
             ImGui.EndTabItem();
@@ -1242,6 +1458,7 @@ namespace MarketBoardPlugin.GUI
       }
 
       this.marketData = null;
+      this.gilfluxData = null;
 
       if (this.currentRefreshTask?.Status != TaskStatus.RanToCompletion)
       {
@@ -1333,6 +1550,39 @@ namespace MarketBoardPlugin.GUI
           if (this.marketData != null)
           {
             this.marketDataCache.Add(this.selectedItem.Value.RowId, this.marketData);
+          }
+
+          // Fetch FFXIVMT gilflux data for the selected item
+          if (this.selectedItem.HasValue)
+          {
+            this.isLoadingGilflux = true;
+
+            try
+            {
+              this.gilfluxData = await this.plugin.FFXIVMTClient
+                .GetGilfluxForItem(
+                  this.selectedItem.Value.RowId,
+                  this.worldList[this.selectedWorld].Item1,
+                  this.currentRefreshCancellationTokenSource.Token)
+                .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+              this.gilfluxData = null;
+            }
+            catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+            {
+              this.plugin.Log.Warning(ex, "Failed to fetch FFXIVMT gilflux data.");
+              this.gilfluxData = null;
+            }
+            finally
+            {
+              this.isLoadingGilflux = false;
+            }
+          }
+          else
+          {
+            this.gilfluxData = null;
           }
         },
         this.currentRefreshCancellationTokenSource.Token);

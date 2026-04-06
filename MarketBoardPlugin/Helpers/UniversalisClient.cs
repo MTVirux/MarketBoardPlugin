@@ -157,6 +157,43 @@ namespace MarketBoardPlugin.Helpers
     }
 
     /// <summary>
+    /// Retrieves aggregated market data for a specific item from the Universalis API.
+    /// </summary>
+    /// <param name="itemId">The ID of the item to retrieve aggregated data for.</param>
+    /// <param name="worldOrDcOrRegion">The world, datacenter or region scope to query (e.g., "Omega" or "Primal" or "NA").</param>
+    /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+    /// <returns>An <see cref="AggregatedMarketBoardData"/> object containing the aggregated data, or null if the operation fails.</returns>
+    public async Task<AggregatedMarketBoardData> GetAggregatedMarketData(uint itemId, string worldOrDcOrRegion, CancellationToken cancellationToken)
+    {
+      try
+      {
+        using var content = await this.resiliencePipeline.ExecuteAsync(
+            async (ct) =>
+              await this.client.GetStreamAsync(new Uri($"aggregated/{worldOrDcOrRegion}/{itemId}", UriKind.Relative), ct).ConfigureAwait(false),
+            cancellationToken)
+          .ConfigureAwait(false);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var parsedRes = await JsonSerializer
+          .DeserializeAsync<AggregatedMarketBoardData>(content, cancellationToken: cancellationToken)
+          .ConfigureAwait(false) ?? throw new InvalidOperationException($"Failed to parse aggregated market data for item {itemId} on scope {worldOrDcOrRegion}.");
+
+        return parsedRes;
+      }
+      catch (HttpRequestException ex)
+      {
+        this.plugin.Log.Warning(ex, $"Failed to fetch aggregated market data for item {itemId} on scope {worldOrDcOrRegion}.");
+        throw;
+      }
+      catch (JsonException ex)
+      {
+        this.plugin.Log.Warning(ex, $"Failed to parse aggregated market data for item {itemId} on scope {worldOrDcOrRegion}.");
+        throw;
+      }
+    }
+
+    /// <summary>
     /// Disposes the Universalis client resources.
     /// </summary>
     public void Dispose()

@@ -83,6 +83,7 @@ namespace MarketBoardPlugin
       this.PlayerState = playerState;
 
       this.UniversalisClient = new UniversalisClient(this);
+      this.FFXIVMTClient = new FFXIVMTClient(this);
 
       this.Config = this.PluginInterface.GetPluginConfig() as MBPluginConfig ?? new MBPluginConfig();
 
@@ -199,6 +200,11 @@ namespace MarketBoardPlugin
     /// </summary>
     public UniversalisClient UniversalisClient { get; init; }
 
+    /// <summary>
+    /// Gets the FFXIVMT client used for accessing gilflux ranking data.
+    /// </summary>
+    public FFXIVMTClient FFXIVMTClient { get; init; }
+
     /// <inheritdoc/>
     public void Dispose()
     {
@@ -255,6 +261,9 @@ namespace MarketBoardPlugin
 
         // Remove context menu handler
         this.ContextMenu.OnMenuOpened -= this.OnContextMenuOpened;
+
+        // Dispose clients
+        this.FFXIVMTClient.Dispose();
       }
 
       this.isDisposed = true;
