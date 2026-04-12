@@ -116,7 +116,10 @@ namespace MarketBoardPlugin
       }
 
 #if DEBUG
-      this.marketBoardWindow.IsOpen = true;
+      if (this.Config.OpenOnStart)
+      {
+        this.marketBoardWindow.IsOpen = true;
+      }
 #endif
     }
 

@@ -98,6 +98,15 @@ namespace MarketBoardPlugin
         this.Plugin.ResetMarketData();
       });
 
+#if DEBUG
+      ImGui.NewLine();
+
+      // Debug
+      ImGui.Text("Debug");
+      ImGui.Separator();
+      this.Checkbox("Open window on start", "Toggles whether the main window opens automatically on plugin start in debug builds", this.Plugin.Config.OpenOnStart, (v) => this.Plugin.Config.OpenOnStart = v);
+#endif
+
       var itemRefreshTimeout = this.Plugin.Config.ItemRefreshTimeout;
       ImGui.Text("Item buffer Timeout (ms) :");
       ImGui.InputInt("###refreshTimeout", ref itemRefreshTimeout);
