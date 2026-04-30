@@ -1,4 +1,5 @@
 {
+  "_comment": "Local-dev stub. CI overwrites this with repo.json content at release time. Edit repo.json (the single source of truth); this file only exists so local debug builds load with sensible metadata.",
   "Author": "MTVirux",
   "Name": "Market Terror",
   "Punchline": "Browse the market board from anywhere.",
