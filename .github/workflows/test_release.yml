@@ -36,7 +36,9 @@ jobs:
           }
       - name: Generate bin manifest from repo.json
         run: |
+          $ver = '${{ github.ref_name }}' -replace 'testing_'
           $repo = Get-Content -Raw './repo.json' | ConvertFrom-Json
+          $repo[0].AssemblyVersion = $ver
           $repo[0] | ConvertTo-Json -Depth 10 | Set-Content './MarketBoardPlugin/bin/x64/Debug/MarketTerror.json'
       - name: Archive
         run: Compress-Archive -Path MarketBoardPlugin/bin/x64/Debug/* -DestinationPath MarketTerror.zip
