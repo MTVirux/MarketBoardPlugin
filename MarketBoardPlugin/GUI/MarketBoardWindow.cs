@@ -719,7 +719,7 @@ namespace MarketBoardPlugin.GUI
                     this.plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
 
                     // Queue the Market Board auto-search for when the travel completes
-                    if (this.plugin.Config.AutoSearchOnMarketBoard && this.selectedItem.HasValue)
+                    if (this.plugin.Config.AutoSearchOnMarketBoard && this.selectedItem.HasValue && this.plugin.IsLifestreamInstalled)
                     {
                       this.plugin.AutoSearch.Arm(this.selectedItem.Value.Name.ExtractText());
                     }

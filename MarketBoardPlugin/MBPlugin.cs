@@ -9,6 +9,7 @@ namespace MarketBoardPlugin
   using System.ComponentModel;
   using System.Diagnostics.CodeAnalysis;
   using System.Globalization;
+  using System.Linq;
   using Dalamud.Game.ClientState.Objects.Enums;
   using Dalamud.Game.Command;
   using Dalamud.Game.Gui.ContextMenu;
@@ -143,6 +144,11 @@ namespace MarketBoardPlugin
     /// Gets the plugin's configuration.
     /// </summary>
     public MBPluginConfig Config { get; private set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the Lifestream plugin is installed.
+    /// </summary>
+    public bool IsLifestreamInstalled => this.PluginInterface.InstalledPlugins.Any(p => p.InternalName == "Lifestream");
 
     /// <summary>
     /// Gets the shopping list.

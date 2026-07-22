@@ -5,7 +5,6 @@
 namespace MarketBoardPlugin
 {
   using System;
-  using System.Linq;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.Windowing;
@@ -63,7 +62,7 @@ namespace MarketBoardPlugin
       ImGui.Separator();
 
       // Auto-teleport to world setting (only enabled if Lifestream is installed)
-      var lifestreamInstalled = this.Plugin.PluginInterface.InstalledPlugins.Any(p => p.InternalName == "Lifestream");
+      var lifestreamInstalled = this.Plugin.IsLifestreamInstalled;
       if (!lifestreamInstalled)
       {
         ImGui.BeginDisabled();
