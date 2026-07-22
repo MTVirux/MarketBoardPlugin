@@ -100,6 +100,11 @@ namespace MarketBoardPlugin
     public bool AutoTeleportToWorld { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the Market Board search is automatically filled and run after auto-teleporting to a listing's world (requires Lifestream plugin).
+    /// </summary>
+    public bool AutoSearchOnMarketBoard { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the Oceania DC should be included in the Cross-DC filter.
     /// </summary>
     public bool IncludeOceaniaDC { get; set; } = true;

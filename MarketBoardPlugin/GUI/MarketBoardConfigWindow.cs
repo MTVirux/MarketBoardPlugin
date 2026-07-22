@@ -71,6 +71,8 @@ namespace MarketBoardPlugin
 
       this.Checkbox("Auto-teleport to world", lifestreamInstalled ? "Automatically teleport to the listing's world when clicked (requires Lifestream plugin)" : "Automatically teleport to the listing's world when clicked (Lifestream plugin not installed)", this.Plugin.Config.AutoTeleportToWorld, (v) => this.Plugin.Config.AutoTeleportToWorld = v);
 
+      this.Checkbox("Auto-search item on Market Board", lifestreamInstalled ? "After auto-teleporting to a listing's world, automatically type the item's name into the Market Board search and run it (requires Lifestream plugin)" : "After auto-teleporting to a listing's world, automatically type the item's name into the Market Board search and run it (Lifestream plugin not installed)", this.Plugin.Config.AutoSearchOnMarketBoard, (v) => this.Plugin.Config.AutoSearchOnMarketBoard = v);
+
       if (!lifestreamInstalled)
       {
         ImGui.EndDisabled();
