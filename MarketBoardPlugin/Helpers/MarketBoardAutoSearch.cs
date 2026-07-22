@@ -101,6 +101,27 @@ namespace MarketBoardPlugin.Helpers
       this.itemName = string.Empty;
     }
 
+    /// <summary>
+    /// Fills and runs the Market Board search immediately if its window is currently open. Does nothing otherwise.
+    /// </summary>
+    /// <param name="name">The item name to search for.</param>
+    public void TryFillNow(string name)
+    {
+      if (string.IsNullOrWhiteSpace(name))
+      {
+        return;
+      }
+
+      var addon = this.gameGui.GetAddonByName(AddonName);
+      if (addon == nint.Zero)
+      {
+        return;
+      }
+
+      this.itemName = name;
+      this.Fire(addon);
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {

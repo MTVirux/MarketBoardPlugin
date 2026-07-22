@@ -717,11 +717,19 @@ namespace MarketBoardPlugin.GUI
                   {
                     var worldName = listing.WorldName ?? string.Empty;
                     this.plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
+                  }
 
-                    // Queue the Market Board auto-search for when the travel completes
-                    if (this.plugin.Config.AutoSearchOnMarketBoard && this.selectedItem.HasValue && this.plugin.IsLifestreamInstalled)
+                  // Auto-search: queue for after the travel, or fill the open Market Board immediately
+                  if (this.plugin.Config.AutoSearchOnMarketBoard && this.selectedItem.HasValue)
+                  {
+                    var autoSearchName = this.selectedItem.Value.Name.ExtractText();
+                    if (this.plugin.Config.AutoTeleportToWorld && this.plugin.IsLifestreamInstalled)
                     {
-                      this.plugin.AutoSearch.Arm(this.selectedItem.Value.Name.ExtractText());
+                      this.plugin.AutoSearch.Arm(autoSearchName);
+                    }
+                    else
+                    {
+                      this.plugin.AutoSearch.TryFillNow(autoSearchName);
                     }
                   }
 
