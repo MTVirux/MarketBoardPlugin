@@ -356,3 +356,6 @@ MigrationBackup/
 
 # Ignore scripts folder
 scripts/
+
+# Local tooling workspace
+.claude/
