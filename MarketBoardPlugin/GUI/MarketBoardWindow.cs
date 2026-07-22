@@ -717,6 +717,12 @@ namespace MarketBoardPlugin.GUI
                   {
                     var worldName = listing.WorldName ?? string.Empty;
                     this.plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
+
+                    // Queue the Market Board auto-search for when the travel completes
+                    if (this.plugin.Config.AutoSearchOnMarketBoard && this.selectedItem.HasValue)
+                    {
+                      this.plugin.AutoSearch.Arm(this.selectedItem.Value.Name.ExtractText());
+                    }
                   }
 
                   // Copy the selected item name to clipboard when a listing is clicked (configurable)

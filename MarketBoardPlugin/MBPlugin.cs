@@ -57,6 +57,7 @@ namespace MarketBoardPlugin
     /// <param name="log">The plugin log.</param>
     /// <param name="contextMenu">The context menu.</param>
     /// <param name="playerState">The player state.</param>
+    /// <param name="addonLifecycle">The addon lifecycle.</param>
     public MBPlugin(
       IDalamudPluginInterface pluginInterface,
       IDataManager dataManager,
@@ -68,7 +69,8 @@ namespace MarketBoardPlugin
       ITextureProvider textureProvider,
       IPluginLog log,
       IContextMenu contextMenu,
-      IPlayerState playerState)
+      IPlayerState playerState,
+      IAddonLifecycle addonLifecycle)
     {
       this.PluginInterface = pluginInterface;
       this.DataManager = dataManager;
@@ -81,11 +83,20 @@ namespace MarketBoardPlugin
       this.Log = log;
       this.ContextMenu = contextMenu;
       this.PlayerState = playerState;
+      this.AddonLifecycle = addonLifecycle;
 
       this.UniversalisClient = new UniversalisClient(this);
       this.FFXIVMTClient = new FFXIVMTClient(this);
 
       this.Config = this.PluginInterface.GetPluginConfig() as MBPluginConfig ?? new MBPluginConfig();
+
+      this.AutoSearch = new MarketBoardAutoSearch(
+        this.PluginInterface,
+        this.Framework,
+        this.GameGui,
+        this.AddonLifecycle,
+        this.Log,
+        () => this.Config.AutoSearchOnMarketBoard);
 
       this.marketBoardWindow = new MarketBoardWindow(this);
       this.marketBoardConfigWindow = new MarketBoardConfigWindow(this);
@@ -199,6 +210,11 @@ namespace MarketBoardPlugin
     public IPlayerState PlayerState { get; init; }
 
     /// <summary>
+    /// Gets the addon lifecycle.
+    /// </summary>
+    public IAddonLifecycle AddonLifecycle { get; init; }
+
+    /// <summary>
     /// Gets the Universalis client used for accessing market board data.
     /// </summary>
     public UniversalisClient UniversalisClient { get; init; }
@@ -207,6 +223,11 @@ namespace MarketBoardPlugin
     /// Gets the FFXIVMT client used for accessing gilflux ranking data.
     /// </summary>
     public FFXIVMTClient FFXIVMTClient { get; init; }
+
+    /// <summary>
+    /// Gets the Market Board auto-search service.
+    /// </summary>
+    public MarketBoardAutoSearch AutoSearch { get; init; }
 
     /// <inheritdoc/>
     public void Dispose()
@@ -267,6 +288,9 @@ namespace MarketBoardPlugin
 
         // Dispose clients
         this.FFXIVMTClient.Dispose();
+
+        // Dispose the auto-search service
+        this.AutoSearch.Dispose();
       }
 
       this.isDisposed = true;
