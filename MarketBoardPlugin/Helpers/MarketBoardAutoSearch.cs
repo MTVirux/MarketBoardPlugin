@@ -5,6 +5,7 @@
 namespace MarketBoardPlugin.Helpers
 {
   using System;
+  using System.Diagnostics.CodeAnalysis;
   using System.Text;
   using Dalamud.Game.Addon.Lifecycle;
   using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -16,7 +17,7 @@ namespace MarketBoardPlugin.Helpers
   /// <summary>
   /// Automatically fills and runs the game's Market Board search after a plugin-initiated Lifestream travel completes.
   /// </summary>
-  public class MarketBoardAutoSearch : IDisposable
+  public sealed class MarketBoardAutoSearch : IDisposable
   {
     private const string AddonName = "ItemSearch";
     private const long PollSettleMs = 500;
@@ -108,6 +109,7 @@ namespace MarketBoardPlugin.Helpers
       GC.SuppressFinalize(this);
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Must never throw into the framework update loop")]
     private void OnFrameworkUpdate(IFramework framework)
     {
       if (this.state == State.Idle)
@@ -180,6 +182,7 @@ namespace MarketBoardPlugin.Helpers
       this.Fire((nint)args.Addon);
     }
 
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Failures must log and disarm, never propagate")]
     private unsafe void Fire(nint addonPtr)
     {
       var name = this.itemName;
