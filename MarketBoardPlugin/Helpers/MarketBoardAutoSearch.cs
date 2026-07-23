@@ -21,7 +21,6 @@ namespace MarketBoardPlugin.Helpers
   {
     private const string AddonName = "ItemSearch";
     private const long PollSettleMs = 500;
-    private const long GraceMs = 3000;
     private const long FallbackArmMs = 300000;
 
     private readonly IFramework framework;
@@ -34,8 +33,8 @@ namespace MarketBoardPlugin.Helpers
     private State state = State.Idle;
     private string itemName = string.Empty;
     private long pollStartTick;
-    private long graceEndTick;
     private long fallbackDeadlineTick;
+    private bool addonSeen;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardAutoSearch"/> class.
@@ -71,7 +70,7 @@ namespace MarketBoardPlugin.Helpers
     {
       Idle,
       Traveling,
-      Grace,
+      WaitingAddon,
     }
 
     /// <summary>
@@ -88,8 +87,10 @@ namespace MarketBoardPlugin.Helpers
       var now = Environment.TickCount64;
       this.itemName = name;
       this.state = State.Traveling;
+      this.addonSeen = false;
       this.pollStartTick = now + PollSettleMs;
       this.fallbackDeadlineTick = now + FallbackArmMs;
+      this.log.Debug($"Auto-search armed for \"{name}\"; waiting for travel to finish");
     }
 
     /// <summary>
@@ -99,6 +100,7 @@ namespace MarketBoardPlugin.Helpers
     {
       this.state = State.Idle;
       this.itemName = string.Empty;
+      this.addonSeen = false;
     }
 
     /// <summary>
@@ -146,6 +148,13 @@ namespace MarketBoardPlugin.Helpers
 
       var now = Environment.TickCount64;
 
+      if (now > this.fallbackDeadlineTick)
+      {
+        this.log.Debug($"Auto-search for \"{this.itemName}\" timed out before the Market Board was ready");
+        this.Disarm();
+        return;
+      }
+
       if (this.state == State.Traveling)
       {
         if (now < this.pollStartTick)
@@ -160,13 +169,8 @@ namespace MarketBoardPlugin.Helpers
         }
         catch
         {
-          // Lifestream IPC unavailable: flat timeout, firing only happens via PostSetup.
-          if (now > this.fallbackDeadlineTick)
-          {
-            this.Disarm();
-          }
-
-          return;
+          // Lifestream IPC unavailable: skip the busy-wait and just wait for the addon.
+          busy = false;
         }
 
         if (busy)
@@ -174,23 +178,31 @@ namespace MarketBoardPlugin.Helpers
           return;
         }
 
-        var addon = this.gameGui.GetAddonByName(AddonName);
-        if (addon != nint.Zero)
-        {
-          this.Fire(addon);
-          return;
-        }
+        this.state = State.WaitingAddon;
+        this.log.Debug("Travel finished; waiting for the Market Board to open and become ready");
+      }
 
-        this.state = State.Grace;
-        this.graceEndTick = now + GraceMs;
+      // WaitingAddon: fire only once the ItemSearch addon exists and is fully built.
+      // Firing earlier (e.g. at PostSetup) leaves the search text input unpopulated,
+      // so the text never lands and the board shows its default view instead.
+      var addonPtr = this.gameGui.GetAddonByName(AddonName);
+      if (addonPtr == nint.Zero)
+      {
         return;
       }
 
-      // Grace: waiting for the addon to open (PostSetup fires the search).
-      if (now > this.graceEndTick)
+      if (!this.IsItemSearchReady(addonPtr))
       {
-        this.Disarm();
+        if (!this.addonSeen)
+        {
+          this.addonSeen = true;
+          this.log.Debug("Market Board addon found but not ready yet; deferring auto-search");
+        }
+
+        return;
       }
+
+      this.Fire(addonPtr);
     }
 
     private void OnItemSearchPostSetup(AddonEvent type, AddonArgs args)
@@ -200,7 +212,22 @@ namespace MarketBoardPlugin.Helpers
         return;
       }
 
-      this.Fire((nint)args.Addon);
+      // The Market Board just opened. Switch to polling for readiness; the framework
+      // update fires the search once the addon is fully built. Firing here is too early.
+      this.state = State.WaitingAddon;
+    }
+
+    private unsafe bool IsItemSearchReady(nint addonPtr)
+    {
+      if (addonPtr == nint.Zero)
+      {
+        return false;
+      }
+
+      var addon = (AddonItemSearch*)addonPtr;
+      return addon->AtkUnitBase.IsFullyLoaded()
+        && addon->AtkUnitBase.IsReady
+        && addon->SearchTextInput != null;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Failures must log and disarm, never propagate")]
