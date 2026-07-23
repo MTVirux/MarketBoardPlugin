@@ -715,8 +715,14 @@ namespace MarketBoardPlugin.GUI
                   // Execute /li command when listing is clicked (if enabled)
                   if (this.plugin.Config.AutoTeleportToWorld)
                   {
-                    var worldName = listing.WorldName ?? string.Empty;
-                    this.plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
+                    // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
+                    var worldName = this.selectedWorld > 1
+                      ? this.worldList[this.selectedWorld].Item1
+                      : listing.WorldName ?? string.Empty;
+                    if (!string.IsNullOrEmpty(worldName))
+                    {
+                      this.plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
+                    }
                   }
 
                   // Auto-search: queue for after the travel, or fill the open Market Board immediately
