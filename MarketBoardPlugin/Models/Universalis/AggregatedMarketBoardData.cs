@@ -32,34 +32,4 @@ namespace MarketBoardPlugin.Models.Universalis
     [JsonPropertyName("worldUploadTimes")]
     public Dictionary<string, long> WorldUploadTimes { get; } = new Dictionary<string, long>();
   }
-
-  /// <summary>
-  /// Represents an aggregated result for a world / datacenter / region.
-  /// </summary>
-  public class AggregatedResult
-  {
-    [JsonPropertyName("worldName")]
-    public string? WorldName { get; set; }
-
-    [JsonPropertyName("dcName")]
-    public string? DcName { get; set; }
-
-    [JsonPropertyName("regionName")]
-    public string? RegionName { get; set; }
-
-    [JsonPropertyName("minListing")]
-    public long MinListing { get; set; }
-
-    [JsonPropertyName("medianListing")]
-    public long MedianListing { get; set; }
-
-    [JsonPropertyName("averageSalePrice")]
-    public double AverageSalePrice { get; set; }
-
-    [JsonPropertyName("dailySaleVelocity")]
-    public double DailySaleVelocity { get; set; }
-
-    [JsonPropertyName("lastUploadTime")]
-    public long LastUploadTime { get; set; }
-  }
 }
