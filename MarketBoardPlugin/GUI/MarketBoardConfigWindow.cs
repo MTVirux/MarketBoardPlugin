@@ -75,7 +75,7 @@ namespace MarketBoardPlugin
         ImGui.EndDisabled();
       }
 
-      this.Checkbox("Auto-search item on Market Board", "When clicking a listing, automatically type the item's name into the Market Board search and run it - after the auto-teleport completes (with Lifestream), or immediately if the Market Board window is already open", this.Plugin.Config.AutoSearchOnMarketBoard, (v) => this.Plugin.Config.AutoSearchOnMarketBoard = v);
+      this.Checkbox("Auto-search item on Market Board", "When clicking a listing, automatically type the item's name into the Market Board search when applicable.", this.Plugin.Config.AutoSearchOnMarketBoard, (v) => this.Plugin.Config.AutoSearchOnMarketBoard = v);
 
       ImGui.NewLine();
 
