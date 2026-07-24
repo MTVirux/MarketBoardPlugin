@@ -712,24 +712,28 @@ namespace MarketBoardPlugin.GUI
                 {
                   this.selectedListing = index;
 
+                  // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
+                  var worldName = this.selectedWorld > 1
+                    ? this.worldList[this.selectedWorld].Item1
+                    : listing.WorldName ?? string.Empty;
+
+                  // Skip travel when we're already at a Market Board in that world.
+                  var alreadyAtMarketBoard = this.plugin.GameGui.GetAddonByName("ItemSearch") != nint.Zero
+                    && string.Equals(worldName, this.plugin.PlayerState.CurrentWorld.Value.Name.ExtractText(), StringComparison.OrdinalIgnoreCase);
+                  var traveled = false;
+
                   // Execute /li command when listing is clicked (if enabled)
-                  if (this.plugin.Config.AutoTeleportToWorld)
+                  if (this.plugin.Config.AutoTeleportToWorld && !string.IsNullOrEmpty(worldName) && !alreadyAtMarketBoard)
                   {
-                    // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
-                    var worldName = this.selectedWorld > 1
-                      ? this.worldList[this.selectedWorld].Item1
-                      : listing.WorldName ?? string.Empty;
-                    if (!string.IsNullOrEmpty(worldName))
-                    {
-                      this.plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
-                    }
+                    this.plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
+                    traveled = true;
                   }
 
                   // Auto-search: queue for after the travel, or fill the open Market Board immediately
                   if (this.plugin.Config.AutoSearchOnMarketBoard && this.selectedItem.HasValue)
                   {
                     var autoSearchName = this.selectedItem.Value.Name.ExtractText();
-                    if (this.plugin.Config.AutoTeleportToWorld && this.plugin.IsLifestreamInstalled)
+                    if (traveled && this.plugin.IsLifestreamInstalled)
                     {
                       this.plugin.AutoSearch.Arm(autoSearchName);
                     }
