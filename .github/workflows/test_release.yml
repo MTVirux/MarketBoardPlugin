@@ -12,6 +12,22 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: recursive
+      - name: Validate ref
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          if ($env:REF_NAME -notmatch '^testing_[0-9A-Za-z._-]+$') {
+            Write-Error "Tag '$($env:REF_NAME)' contains unexpected characters."
+            exit 1
+          }
+          if ($env:COMMIT_SHA -notmatch '^[0-9a-f]{40}$') {
+            Write-Error "Commit sha '$($env:COMMIT_SHA)' is not a 40-character hash."
+            exit 1
+          }
+          "TAG=$($env:REF_NAME)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "VER=$($env:REF_NAME -replace '^testing_','')" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "SHA=$($env:COMMIT_SHA)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
@@ -24,11 +40,11 @@ jobs:
           Expand-Archive -Force latest.zip "$env:AppData\XIVLauncher\addon\Hooks\dev"
       - name: Build
         run: |
-          $ver = '${{ github.ref_name }}' -replace 'testing_'
-          invoke-expression 'dotnet build --no-restore --configuration Debug --nologo -p:Version=$ver -p:FileVersion=$ver -p:AssemblyVersion=$ver'
+          $ver = $env:VER
+          dotnet build --no-restore --configuration Debug --nologo -p:Version=$ver -p:FileVersion=$ver -p:AssemblyVersion=$ver
       - name: Verify repo.json matches tag
         run: |
-          $expected = '${{ github.ref_name }}' -replace 'testing_'
+          $expected = $env:VER
           $repo = (Get-Content -Raw './repo.json' | ConvertFrom-Json)[0]
           if ($repo.TestingAssemblyVersion -ne $expected) {
             Write-Error "repo.json TestingAssemblyVersion ($($repo.TestingAssemblyVersion)) does not match tag ($expected). Did testing.ps1 fail to commit?"
@@ -36,7 +52,7 @@ jobs:
           }
       - name: Generate bin manifest from repo.json
         run: |
-          $ver = '${{ github.ref_name }}' -replace 'testing_'
+          $ver = $env:VER
           $repo = Get-Content -Raw './repo.json' | ConvertFrom-Json
           $repo[0].AssemblyVersion = $ver
           $repo[0] | ConvertTo-Json -Depth 10 | Set-Content './MarketBoardPlugin/bin/x64/Debug/MarketTerror.json'
@@ -50,12 +66,12 @@ jobs:
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${{ github.ref_name }}" "./MarketTerror.zip" --title "MarketBoardPlugin ${{ github.ref_name }}"
+        run: gh release create "$env:TAG" "./MarketTerror.zip" --title "MarketBoardPlugin $env:TAG"
 
       - name: Write out repo.json
         run: |
-          $verT = '${{ github.ref_name }}'
-          $ver = $verT -replace 'testing_'
+          $verT = $env:TAG
+          $ver = $env:VER
           $path = './repo.json'
           $json = Get-Content -Raw $path | ConvertFrom-Json
           $json[0].TestingAssemblyVersion = $ver
@@ -69,8 +85,8 @@ jobs:
           git config --global user.name "Actions User"
           git config --global user.email "actions@github.com"
           git fetch origin develop
-          git branch -f develop ${{ github.sha }}
+          git branch -f develop $env:SHA
           git checkout develop
           git add repo.json
-          git commit -m "[CI] Updating repo.json for ${{ github.ref_name }}" || true
+          git commit -m "[CI] Updating repo.json for $env:TAG" || true
           git push origin develop
