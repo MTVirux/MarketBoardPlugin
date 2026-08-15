@@ -59,6 +59,7 @@ namespace MarketBoardPlugin
     /// <param name="contextMenu">The context menu.</param>
     /// <param name="playerState">The player state.</param>
     /// <param name="addonLifecycle">The addon lifecycle.</param>
+    /// <param name="objectTable">The object table.</param>
     public MBPlugin(
       IDalamudPluginInterface pluginInterface,
       IDataManager dataManager,
@@ -71,7 +72,8 @@ namespace MarketBoardPlugin
       IPluginLog log,
       IContextMenu contextMenu,
       IPlayerState playerState,
-      IAddonLifecycle addonLifecycle)
+      IAddonLifecycle addonLifecycle,
+      IObjectTable objectTable)
     {
       this.PluginInterface = pluginInterface;
       this.DataManager = dataManager;
@@ -85,6 +87,7 @@ namespace MarketBoardPlugin
       this.ContextMenu = contextMenu;
       this.PlayerState = playerState;
       this.AddonLifecycle = addonLifecycle;
+      this.ObjectTable = objectTable;
 
       this.UniversalisClient = new UniversalisClient(this);
       this.FFXIVMTClient = new FFXIVMTClient(this);
@@ -220,6 +223,11 @@ namespace MarketBoardPlugin
     /// Gets the addon lifecycle.
     /// </summary>
     public IAddonLifecycle AddonLifecycle { get; init; }
+
+    /// <summary>
+    /// Gets the object table.
+    /// </summary>
+    public IObjectTable ObjectTable { get; init; }
 
     /// <summary>
     /// Gets the Universalis client used for accessing market board data.

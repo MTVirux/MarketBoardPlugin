@@ -24,6 +24,7 @@ namespace MarketBoardPlugin.Helpers
     private const string AddonName = "ItemSearch";
     private const long PollSettleMs = 500;
     private const long FallbackArmMs = 300000;
+    private const long LocalBoardArmMs = 10000;
     private const long ResultsTimeoutMs = 5000;
 
     private readonly IFramework framework;
@@ -90,19 +91,23 @@ namespace MarketBoardPlugin.Helpers
     /// <param name="id">The row ID of the item, used to pick the matching result.</param>
     public void Arm(string name, uint id)
     {
-      if (string.IsNullOrWhiteSpace(name))
+      if (this.Arm(name, id, State.Traveling, FallbackArmMs))
       {
-        return;
+        this.log.Debug($"Auto-search armed for \"{name}\"; waiting for travel to finish");
       }
+    }
 
-      var now = Environment.TickCount64;
-      this.itemName = name;
-      this.itemId = id;
-      this.state = State.Traveling;
-      this.addonSeen = false;
-      this.pollStartTick = now + PollSettleMs;
-      this.fallbackDeadlineTick = now + FallbackArmMs;
-      this.log.Debug($"Auto-search armed for \"{name}\"; waiting for travel to finish");
+    /// <summary>
+    /// Arms a one-shot auto-search for a Market Board we just interacted with in-world, skipping the travel wait.
+    /// </summary>
+    /// <param name="name">The item name to search for.</param>
+    /// <param name="id">The row ID of the item, used to pick the matching result.</param>
+    public void ArmForLocalBoard(string name, uint id)
+    {
+      if (this.Arm(name, id, State.WaitingAddon, LocalBoardArmMs))
+      {
+        this.log.Debug($"Auto-search armed for \"{name}\"; waiting for the nearby Market Board to open");
+      }
     }
 
     /// <summary>
@@ -145,6 +150,23 @@ namespace MarketBoardPlugin.Helpers
       this.framework.Update -= this.OnFrameworkUpdate;
       this.addonLifecycle.UnregisterListener(AddonEvent.PostSetup, AddonName, this.OnItemSearchPostSetup);
       GC.SuppressFinalize(this);
+    }
+
+    private bool Arm(string name, uint id, State initialState, long timeoutMs)
+    {
+      if (string.IsNullOrWhiteSpace(name))
+      {
+        return false;
+      }
+
+      var now = Environment.TickCount64;
+      this.itemName = name;
+      this.itemId = id;
+      this.state = initialState;
+      this.addonSeen = false;
+      this.pollStartTick = now + PollSettleMs;
+      this.fallbackDeadlineTick = now + timeoutMs;
+      return true;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Must never throw into the framework update loop")]

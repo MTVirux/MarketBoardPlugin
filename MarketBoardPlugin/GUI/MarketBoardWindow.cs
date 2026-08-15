@@ -717,13 +717,21 @@ namespace MarketBoardPlugin.GUI
                     ? this.worldList[this.selectedWorld].Item1
                     : listing.WorldName ?? string.Empty;
 
-                  // Skip travel when we're already at a Market Board in that world.
-                  var alreadyAtMarketBoard = this.plugin.GameGui.GetAddonByName("ItemSearch") != nint.Zero
+                  var travelEnabled = this.plugin.Config.AutoTeleportToWorld && !string.IsNullOrEmpty(worldName);
+                  var sameWorld = this.plugin.PlayerState.IsLoaded
                     && string.Equals(worldName, this.plugin.PlayerState.CurrentWorld.Value.Name.ExtractText(), StringComparison.OrdinalIgnoreCase);
+
+                  // Skip travel when we're already at a Market Board in that world.
+                  var alreadyAtMarketBoard = sameWorld && this.plugin.GameGui.GetAddonByName("ItemSearch") != nint.Zero;
+
+                  // Right world already, and a board within reach: open that one instead of travelling.
+                  var openedLocalBoard = travelEnabled && sameWorld && !alreadyAtMarketBoard
+                    && MarketBoardInteraction.TryInteractWithNearbyBoard(this.plugin.ObjectTable, this.plugin.Log);
+
                   var traveled = false;
 
                   // Execute /li command when listing is clicked (if enabled)
-                  if (this.plugin.Config.AutoTeleportToWorld && !string.IsNullOrEmpty(worldName) && !alreadyAtMarketBoard)
+                  if (travelEnabled && !alreadyAtMarketBoard && !openedLocalBoard)
                   {
                     this.plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
                     traveled = true;
@@ -737,6 +745,10 @@ namespace MarketBoardPlugin.GUI
                     if (traveled && this.plugin.IsLifestreamInstalled)
                     {
                       this.plugin.AutoSearch.Arm(autoSearchName, autoSearchId);
+                    }
+                    else if (openedLocalBoard)
+                    {
+                      this.plugin.AutoSearch.ArmForLocalBoard(autoSearchName, autoSearchId);
                     }
                     else
                     {
