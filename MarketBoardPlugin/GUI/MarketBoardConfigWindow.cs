@@ -77,6 +77,21 @@ namespace MarketBoardPlugin
 
       this.Checkbox("Auto-search item on Market Board", "When clicking a listing, automatically type the item's name into the Market Board search when applicable.", this.Plugin.Config.AutoSearchOnMarketBoard, (v) => this.Plugin.Config.AutoSearchOnMarketBoard = v);
 
+      ImGui.Indent();
+      if (!this.Plugin.Config.AutoSearchOnMarketBoard)
+      {
+        ImGui.BeginDisabled();
+      }
+
+      this.Checkbox("Open the matching result", "Once the auto-search returns, select the searched item in the results so its listings open.", this.Plugin.Config.AutoOpenSearchResult, (v) => this.Plugin.Config.AutoOpenSearchResult = v);
+
+      if (!this.Plugin.Config.AutoSearchOnMarketBoard)
+      {
+        ImGui.EndDisabled();
+      }
+
+      ImGui.Unindent();
+
       ImGui.NewLine();
 
       // Clipboard

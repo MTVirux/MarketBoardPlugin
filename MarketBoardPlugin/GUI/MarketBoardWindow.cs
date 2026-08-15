@@ -733,13 +733,14 @@ namespace MarketBoardPlugin.GUI
                   if (this.plugin.Config.AutoSearchOnMarketBoard && this.selectedItem.HasValue)
                   {
                     var autoSearchName = this.selectedItem.Value.Name.ExtractText();
+                    var autoSearchId = this.selectedItem.Value.RowId;
                     if (traveled && this.plugin.IsLifestreamInstalled)
                     {
-                      this.plugin.AutoSearch.Arm(autoSearchName);
+                      this.plugin.AutoSearch.Arm(autoSearchName, autoSearchId);
                     }
                     else
                     {
-                      this.plugin.AutoSearch.TryFillNow(autoSearchName);
+                      this.plugin.AutoSearch.TryFillNow(autoSearchName, autoSearchId);
                     }
                   }
 

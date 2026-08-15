@@ -105,6 +105,11 @@ namespace MarketBoardPlugin
     public bool AutoSearchOnMarketBoard { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the matching result is automatically opened once the Market Board auto-search returns.
+    /// </summary>
+    public bool AutoOpenSearchResult { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the Oceania DC should be included in the Cross-DC filter.
     /// </summary>
     public bool IncludeOceaniaDC { get; set; } = true;
