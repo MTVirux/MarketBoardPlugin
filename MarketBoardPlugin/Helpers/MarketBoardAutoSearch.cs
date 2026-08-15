@@ -9,12 +9,14 @@ namespace MarketBoardPlugin.Helpers
   using System.Text;
   using Dalamud.Game.Addon.Lifecycle;
   using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+  using Dalamud.Game.Text.SeStringHandling;
+  using Dalamud.Game.Text.SeStringHandling.Payloads;
   using Dalamud.Plugin;
   using Dalamud.Plugin.Ipc;
   using Dalamud.Plugin.Services;
   using FFXIVClientStructs.FFXIV.Client.UI;
-  using FFXIVClientStructs.FFXIV.Client.UI.Agent;
   using FFXIVClientStructs.FFXIV.Component.GUI;
+  using InteropGenerator.Runtime;
 
   /// <summary>
   /// Automatically fills and runs the game's Market Board search after a plugin-initiated Lifestream travel completes.
@@ -27,6 +29,7 @@ namespace MarketBoardPlugin.Helpers
     private const long LocalBoardArmMs = 10000;
     private const long AddonSettleMs = 500;
     private const long ResultsTimeoutMs = 10000;
+    private const uint HqItemIdOffset = 1000000;
 
     private readonly IFramework framework;
     private readonly IGameGui gameGui;
@@ -362,22 +365,17 @@ namespace MarketBoardPlugin.Helpers
           return true;
         }
 
-        var agent = AgentItemSearch.Instance();
-        if (agent == null || agent->ItemBuffer == null || agent->ItemCount == 0)
-        {
-          return false;
-        }
-
         var addon = (AddonItemSearch*)addonPtr;
         var results = addon->ResultsList;
-        if (results == null || results->GetItemCount() < (int)agent->ItemCount)
+        if (results == null)
         {
           return false;
         }
 
-        for (var i = 0; i < (int)agent->ItemCount; i++)
+        var rowCount = results->GetItemCount();
+        for (var i = 0; i < rowCount; i++)
         {
-          if (agent->ItemBuffer[i] != this.itemId)
+          if (!this.RowMatchesItem(results->GetItemLabel(i)))
           {
             continue;
           }
@@ -387,13 +385,14 @@ namespace MarketBoardPlugin.Helpers
           results->SelectItem(i, true);
           results->DispatchItemEvent(i, AtkEventType.ListItemClick);
           this.log.Debug($"Opened \"{this.itemName}\" at result index {i} on the Market Board");
+          this.log.Information($"[MBDIAG] dispatched index={i} of {rowCount} for id {this.itemId}");
           return true;
         }
 
-        if (!this.resultsLogged)
+        if (rowCount > 0 && !this.resultsLogged)
         {
           this.resultsLogged = true;
-          this.log.Debug($"Market Board returned {agent->ItemCount} results, none of them id {this.itemId}");
+          this.log.Debug($"Market Board returned {rowCount} results, none of them id {this.itemId}");
         }
 
         return false;
@@ -403,6 +402,32 @@ namespace MarketBoardPlugin.Helpers
         this.log.Error(ex, "Failed to open the Market Board search result");
         return true;
       }
+    }
+
+    /// <summary>
+    /// Checks whether a results row is the item that was searched for. Rows carry an item link payload,
+    /// so the row's own item ID is matched first and the visible name is only a fallback.
+    /// </summary>
+    /// <param name="label">The raw label of the row.</param>
+    /// <returns>True when the row is the searched item.</returns>
+    private bool RowMatchesItem(CStringPointer label)
+    {
+      if (!label.HasValue)
+      {
+        return false;
+      }
+
+      var parsed = SeString.Parse(label.AsSpan());
+
+      foreach (var payload in parsed.Payloads)
+      {
+        if (payload is ItemPayload item && item.ItemId % HqItemIdOffset == this.itemId)
+        {
+          return true;
+        }
+      }
+
+      return string.Equals(parsed.TextValue.Trim(), this.itemName, StringComparison.OrdinalIgnoreCase);
     }
   }
 }
