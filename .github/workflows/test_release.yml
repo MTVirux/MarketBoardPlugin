@@ -55,18 +55,18 @@ jobs:
           $ver = $env:VER
           $repo = Get-Content -Raw './repo.json' | ConvertFrom-Json
           $repo[0].AssemblyVersion = $ver
-          $repo[0] | ConvertTo-Json -Depth 10 | Set-Content './MarketBoardPlugin/bin/x64/Debug/MarketTerror.json'
+          $repo[0] | ConvertTo-Json -Depth 10 | Set-Content './MarketTerror/bin/x64/Debug/MarketTerror.json'
       - name: Archive
-        run: Compress-Archive -Path MarketBoardPlugin/bin/x64/Debug/* -DestinationPath MarketTerror.zip
+        run: Compress-Archive -Path MarketTerror/bin/x64/Debug/* -DestinationPath MarketTerror.zip
       - name: Upload a Build Artifact
         uses: actions/upload-artifact@v7
         with:
           path: |
-            ./MarketBoardPlugin/bin/x64/Debug/*
+            ./MarketTerror/bin/x64/Debug/*
       - name: Create Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$env:TAG" "./MarketTerror.zip" --title "MarketBoardPlugin $env:TAG"
+        run: gh release create "$env:TAG" "./MarketTerror.zip" --title "MarketTerror $env:TAG"
 
       - name: Write out repo.json
         run: |

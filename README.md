@@ -3,6 +3,10 @@ Market board information plugin for XIVLauncher / Dalamud
 
 # THIS IS NOT THE ORIGINAL PLUGIN. THIS VERSION WAS MODDED BY MTVIRUX
 
+## Usage
+
+Open the window with `/pmb` or `/mt`, or from the plugin installer.
+
 ## Features
 
 - Click on market board listings to automatically execute `/li <world> mb` command (Requires [Lifestream](https://github.com/NightmareXIV/Lifestream?tab=readme-ov-file#installation))
