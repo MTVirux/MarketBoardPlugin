@@ -25,7 +25,8 @@ namespace MarketBoardPlugin.Helpers
     private const long PollSettleMs = 500;
     private const long FallbackArmMs = 300000;
     private const long LocalBoardArmMs = 10000;
-    private const long ResultsTimeoutMs = 5000;
+    private const long AddonSettleMs = 500;
+    private const long ResultsTimeoutMs = 10000;
 
     private readonly IFramework framework;
     private readonly IGameGui gameGui;
@@ -41,7 +42,9 @@ namespace MarketBoardPlugin.Helpers
     private long pollStartTick;
     private long fallbackDeadlineTick;
     private long resultsDeadlineTick;
+    private long addonSettleTick;
     private bool addonSeen;
+    private bool resultsLogged;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardAutoSearch"/> class.
@@ -119,6 +122,8 @@ namespace MarketBoardPlugin.Helpers
       this.itemName = string.Empty;
       this.itemId = 0;
       this.addonSeen = false;
+      this.addonSettleTick = 0;
+      this.resultsLogged = false;
     }
 
     /// <summary>
@@ -164,6 +169,7 @@ namespace MarketBoardPlugin.Helpers
       this.itemId = id;
       this.state = initialState;
       this.addonSeen = false;
+      this.addonSettleTick = 0;
       this.pollStartTick = now + PollSettleMs;
       this.fallbackDeadlineTick = now + timeoutMs;
       return true;
@@ -193,7 +199,7 @@ namespace MarketBoardPlugin.Helpers
         }
         else if (now > this.resultsDeadlineTick)
         {
-          this.log.Debug($"No Market Board result for \"{this.itemName}\" arrived in time; leaving the search as-is");
+          this.log.Debug($"No Market Board result for \"{this.itemName}\" (id {this.itemId}) arrived in time; leaving the search as-is");
           this.Disarm();
         }
 
@@ -254,6 +260,19 @@ namespace MarketBoardPlugin.Helpers
         return;
       }
 
+      // A board we just opened reports ready before it has finished talking to the server,
+      // and a search fired at that point comes back empty. Give it a moment first.
+      if (this.addonSettleTick == 0)
+      {
+        this.addonSettleTick = now + AddonSettleMs;
+        return;
+      }
+
+      if (now < this.addonSettleTick)
+      {
+        return;
+      }
+
       this.Fire(addonPtr);
     }
 
@@ -267,6 +286,7 @@ namespace MarketBoardPlugin.Helpers
       // The Market Board just opened. Switch to polling for readiness; the framework
       // update fires the search once the addon is fully built. Firing here is too early.
       this.state = State.WaitingAddon;
+      this.addonSettleTick = 0;
     }
 
     private unsafe bool IsItemSearchReady(nint addonPtr)
@@ -368,6 +388,12 @@ namespace MarketBoardPlugin.Helpers
           results->DispatchItemEvent(i, AtkEventType.ListItemClick);
           this.log.Debug($"Opened \"{this.itemName}\" at result index {i} on the Market Board");
           return true;
+        }
+
+        if (!this.resultsLogged)
+        {
+          this.resultsLogged = true;
+          this.log.Debug($"Market Board returned {agent->ItemCount} results, none of them id {this.itemId}");
         }
 
         return false;
