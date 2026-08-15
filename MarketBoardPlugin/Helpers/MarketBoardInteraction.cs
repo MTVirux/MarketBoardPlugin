@@ -11,6 +11,7 @@ namespace MarketBoardPlugin.Helpers
   using System.Numerics;
   using Dalamud.Plugin.Services;
   using FFXIVClientStructs.FFXIV.Client.Game.Control;
+  using Lumina.Excel.Sheets;
 
   using CSGameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
@@ -22,23 +23,27 @@ namespace MarketBoardPlugin.Helpers
     /// <summary>
     /// Kept below the game's own interaction range so an interaction we start always goes through.
     /// </summary>
-    private const float InteractRangeYalms = 4.5f;
+    private const float InteractRangeYalms = 5f;
 
-    private static readonly HashSet<uint> MarketBoardBaseIds = new()
-    {
-      2000073, 2000402, 2000440, 2000442, 2010285,
-    };
+    /// <summary>
+    /// EObj rows of Market Boards, used both directly and to resolve the board's name in the client's language.
+    /// </summary>
+    private static readonly uint[] KnownBoardIds = [2000073, 2000402, 2000440, 2000442, 2010285];
+
+    private static HashSet<string>? boardNames;
 
     /// <summary>
     /// Opens the closest Market Board within interaction range.
     /// </summary>
     /// <param name="objectTable">The object table.</param>
+    /// <param name="dataManager">The data manager.</param>
     /// <param name="log">The plugin log.</param>
     /// <returns>True if an interaction was started.</returns>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "A failed interaction must fall back to travel, never propagate")]
-    public static unsafe bool TryInteractWithNearbyBoard(IObjectTable objectTable, IPluginLog log)
+    public static unsafe bool TryInteractWithNearbyBoard(IObjectTable objectTable, IDataManager dataManager, IPluginLog log)
     {
       ArgumentNullException.ThrowIfNull(objectTable);
+      ArgumentNullException.ThrowIfNull(dataManager);
       ArgumentNullException.ThrowIfNull(log);
 
       try
@@ -49,21 +54,28 @@ namespace MarketBoardPlugin.Helpers
           return false;
         }
 
-        var board = objectTable.EventObjects
-          .Where(o => MarketBoardBaseIds.Contains(o.BaseId) && o.IsTargetable)
+        var names = GetBoardNames(dataManager, log);
+        var boards = objectTable
+          .Where(o => KnownBoardIds.Contains(o.BaseId) || names.Contains(o.Name.TextValue))
           .Select(o => (Object: o, Distance: Vector3.Distance(player.Position, o.Position) - o.HitboxRadius))
-          .Where(o => o.Distance <= InteractRangeYalms)
           .OrderBy(o => o.Distance)
-          .Select(o => o.Object)
-          .FirstOrDefault();
+          .ToList();
 
-        if (board == null)
+        if (boards.Count == 0)
         {
+          log.Debug("No Market Board found in the object table; falling back to travel");
           return false;
         }
 
-        TargetSystem.Instance()->InteractWithObject((CSGameObject*)board.Address, false);
-        log.Debug("Interacted with the Market Board next to us instead of travelling");
+        var closest = boards[0];
+        if (closest.Distance > InteractRangeYalms)
+        {
+          log.Debug($"Closest Market Board is {closest.Distance:F1} yalms away (limit {InteractRangeYalms}); falling back to travel");
+          return false;
+        }
+
+        TargetSystem.Instance()->InteractWithObject((CSGameObject*)closest.Object.Address, false);
+        log.Debug($"Interacted with the Market Board {closest.Distance:F1} yalms away instead of travelling");
         return true;
       }
       catch (Exception ex)
@@ -71,6 +83,30 @@ namespace MarketBoardPlugin.Helpers
         log.Error(ex, "Failed to interact with a nearby Market Board");
         return false;
       }
+    }
+
+    private static HashSet<string> GetBoardNames(IDataManager dataManager, IPluginLog log)
+    {
+      if (boardNames != null)
+      {
+        return boardNames;
+      }
+
+      var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+      var sheet = dataManager.Excel.GetSheet<EObjName>();
+
+      foreach (var id in KnownBoardIds)
+      {
+        var name = sheet?.GetRowOrDefault(id)?.Singular.ExtractText();
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+          names.Add(name);
+        }
+      }
+
+      log.Debug($"Market Board object names: {string.Join(", ", names)}");
+      boardNames = names;
+      return names;
     }
   }
 }

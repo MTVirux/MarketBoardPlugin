@@ -726,7 +726,9 @@ namespace MarketBoardPlugin.GUI
 
                   // Right world already, and a board within reach: open that one instead of travelling.
                   var openedLocalBoard = travelEnabled && sameWorld && !alreadyAtMarketBoard
-                    && MarketBoardInteraction.TryInteractWithNearbyBoard(this.plugin.ObjectTable, this.plugin.Log);
+                    && MarketBoardInteraction.TryInteractWithNearbyBoard(this.plugin.ObjectTable, this.plugin.DataManager, this.plugin.Log);
+
+                  this.plugin.Log.Debug($"Listing click: world \"{worldName}\", sameWorld {sameWorld}, boardOpen {alreadyAtMarketBoard}, usedLocalBoard {openedLocalBoard}");
 
                   var traveled = false;
 
