@@ -1,0 +1,20 @@
+{
+  "_comment": "Local-dev stub. CI overwrites this with repo.json content at release time. Edit repo.json (the single source of truth); this file only exists so local debug builds load with sensible metadata.",
+  "Author": "MTVirux",
+  "Name": "Market Terror",
+  "Punchline": "Custom build of Market Board Plugin",
+  "Description": "Custom build of Market Board Plugin with Lifestream and FFXIVMT sales data. /pmb to open",
+  "InternalName": "MarketTerror",
+  "AssemblyVersion": "1.0.1.8",
+  "RepoUrl": "https://github.com/MTVirux/MarketTerror",
+  "ApplicableVersion": "any",
+  "DalamudApiLevel": 15,
+  "Tags": [
+    "market",
+    "board",
+    "marketboard",
+    "market board",
+    "Terror",
+    "Sea Of Terror"
+  ]
+}
