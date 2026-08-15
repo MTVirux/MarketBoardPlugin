@@ -13,6 +13,8 @@ namespace MarketBoardPlugin.Helpers
   using Dalamud.Plugin.Ipc;
   using Dalamud.Plugin.Services;
   using FFXIVClientStructs.FFXIV.Client.UI;
+  using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+  using FFXIVClientStructs.FFXIV.Component.GUI;
 
   /// <summary>
   /// Automatically fills and runs the game's Market Board search after a plugin-initiated Lifestream travel completes.
@@ -22,18 +24,22 @@ namespace MarketBoardPlugin.Helpers
     private const string AddonName = "ItemSearch";
     private const long PollSettleMs = 500;
     private const long FallbackArmMs = 300000;
+    private const long ResultsTimeoutMs = 5000;
 
     private readonly IFramework framework;
     private readonly IGameGui gameGui;
     private readonly IAddonLifecycle addonLifecycle;
     private readonly IPluginLog log;
     private readonly Func<bool> isEnabled;
+    private readonly Func<bool> isOpenResultEnabled;
     private readonly ICallGateSubscriber<bool> lifestreamIsBusy;
 
     private State state = State.Idle;
     private string itemName = string.Empty;
+    private uint itemId;
     private long pollStartTick;
     private long fallbackDeadlineTick;
+    private long resultsDeadlineTick;
     private bool addonSeen;
 
     /// <summary>
@@ -45,13 +51,15 @@ namespace MarketBoardPlugin.Helpers
     /// <param name="addonLifecycle">The addon lifecycle.</param>
     /// <param name="log">The plugin log.</param>
     /// <param name="isEnabled">Returns whether the auto-search feature is currently enabled.</param>
+    /// <param name="isOpenResultEnabled">Returns whether the matching result should be opened once the search returns.</param>
     public MarketBoardAutoSearch(
       IDalamudPluginInterface pluginInterface,
       IFramework framework,
       IGameGui gameGui,
       IAddonLifecycle addonLifecycle,
       IPluginLog log,
-      Func<bool> isEnabled)
+      Func<bool> isEnabled,
+      Func<bool> isOpenResultEnabled)
     {
       ArgumentNullException.ThrowIfNull(pluginInterface);
       this.framework = framework ?? throw new ArgumentNullException(nameof(framework));
@@ -59,6 +67,7 @@ namespace MarketBoardPlugin.Helpers
       this.addonLifecycle = addonLifecycle ?? throw new ArgumentNullException(nameof(addonLifecycle));
       this.log = log ?? throw new ArgumentNullException(nameof(log));
       this.isEnabled = isEnabled ?? throw new ArgumentNullException(nameof(isEnabled));
+      this.isOpenResultEnabled = isOpenResultEnabled ?? throw new ArgumentNullException(nameof(isOpenResultEnabled));
 
       this.lifestreamIsBusy = pluginInterface.GetIpcSubscriber<bool>("Lifestream.IsBusy");
 
@@ -71,13 +80,15 @@ namespace MarketBoardPlugin.Helpers
       Idle,
       Traveling,
       WaitingAddon,
+      WaitingResults,
     }
 
     /// <summary>
-    /// Arms a one-shot auto-search for the given item name. A subsequent call replaces the previous one.
+    /// Arms a one-shot auto-search for the given item. A subsequent call replaces the previous one.
     /// </summary>
     /// <param name="name">The item name to search for.</param>
-    public void Arm(string name)
+    /// <param name="id">The row ID of the item, used to pick the matching result.</param>
+    public void Arm(string name, uint id)
     {
       if (string.IsNullOrWhiteSpace(name))
       {
@@ -86,6 +97,7 @@ namespace MarketBoardPlugin.Helpers
 
       var now = Environment.TickCount64;
       this.itemName = name;
+      this.itemId = id;
       this.state = State.Traveling;
       this.addonSeen = false;
       this.pollStartTick = now + PollSettleMs;
@@ -100,6 +112,7 @@ namespace MarketBoardPlugin.Helpers
     {
       this.state = State.Idle;
       this.itemName = string.Empty;
+      this.itemId = 0;
       this.addonSeen = false;
     }
 
@@ -107,7 +120,8 @@ namespace MarketBoardPlugin.Helpers
     /// Fills and runs the Market Board search immediately if its window is currently open. Does nothing otherwise.
     /// </summary>
     /// <param name="name">The item name to search for.</param>
-    public void TryFillNow(string name)
+    /// <param name="id">The row ID of the item, used to pick the matching result.</param>
+    public void TryFillNow(string name, uint id)
     {
       if (string.IsNullOrWhiteSpace(name))
       {
@@ -121,6 +135,7 @@ namespace MarketBoardPlugin.Helpers
       }
 
       this.itemName = name;
+      this.itemId = id;
       this.Fire(addon);
     }
 
@@ -147,6 +162,21 @@ namespace MarketBoardPlugin.Helpers
       }
 
       var now = Environment.TickCount64;
+
+      if (this.state == State.WaitingResults)
+      {
+        if (this.TryOpenResult())
+        {
+          this.Disarm();
+        }
+        else if (now > this.resultsDeadlineTick)
+        {
+          this.log.Debug($"No Market Board result for \"{this.itemName}\" arrived in time; leaving the search as-is");
+          this.Disarm();
+        }
+
+        return;
+      }
 
       if (now > this.fallbackDeadlineTick)
       {
@@ -234,6 +264,7 @@ namespace MarketBoardPlugin.Helpers
     private unsafe void Fire(nint addonPtr)
     {
       var name = this.itemName;
+      var id = this.itemId;
       this.Disarm();
 
       if (addonPtr == nint.Zero)
@@ -258,10 +289,71 @@ namespace MarketBoardPlugin.Helpers
 
         addon->RunSearch();
         this.log.Debug($"Auto-searched \"{name}\" on the Market Board");
+
+        if (id != 0 && this.isOpenResultEnabled())
+        {
+          this.itemName = name;
+          this.itemId = id;
+          this.state = State.WaitingResults;
+          this.resultsDeadlineTick = Environment.TickCount64 + ResultsTimeoutMs;
+        }
       }
       catch (Exception ex)
       {
         this.log.Error(ex, "Failed to auto-search item on the Market Board");
+      }
+    }
+
+    /// <summary>
+    /// Selects the searched item in the results once the server has answered.
+    /// </summary>
+    /// <returns>True once the result has been opened, or when it can never be.</returns>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Must never throw into the framework update loop")]
+    private unsafe bool TryOpenResult()
+    {
+      try
+      {
+        nint addonPtr = this.gameGui.GetAddonByName(AddonName);
+        if (addonPtr == nint.Zero)
+        {
+          this.log.Debug("Market Board closed before its results arrived; dropping the pending result selection");
+          return true;
+        }
+
+        var agent = AgentItemSearch.Instance();
+        if (agent == null || agent->ItemBuffer == null || agent->ItemCount == 0)
+        {
+          return false;
+        }
+
+        var addon = (AddonItemSearch*)addonPtr;
+        var results = addon->ResultsList;
+        if (results == null || results->GetItemCount() < (int)agent->ItemCount)
+        {
+          return false;
+        }
+
+        for (var i = 0; i < (int)agent->ItemCount; i++)
+        {
+          if (agent->ItemBuffer[i] != this.itemId)
+          {
+            continue;
+          }
+
+          // SelectItem only moves the highlight; the addon requests the listings off the dispatched click.
+          results->ScrollToItem((short)i);
+          results->SelectItem(i, true);
+          results->DispatchItemEvent(i, AtkEventType.ListItemClick);
+          this.log.Debug($"Opened \"{this.itemName}\" at result index {i} on the Market Board");
+          return true;
+        }
+
+        return false;
+      }
+      catch (Exception ex)
+      {
+        this.log.Error(ex, "Failed to open the Market Board search result");
+        return true;
       }
     }
   }

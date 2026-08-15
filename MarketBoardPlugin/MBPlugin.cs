@@ -97,7 +97,8 @@ namespace MarketBoardPlugin
         this.GameGui,
         this.AddonLifecycle,
         this.Log,
-        () => this.Config.AutoSearchOnMarketBoard);
+        () => this.Config.AutoSearchOnMarketBoard,
+        () => this.Config.AutoOpenSearchResult);
 
       this.marketBoardWindow = new MarketBoardWindow(this);
       this.marketBoardConfigWindow = new MarketBoardConfigWindow(this);
