@@ -231,8 +231,7 @@ namespace MarketTerror.GUI
       {
         this.Plugin.ShoppingListBulkAdd.StartRefresh(
           this.Plugin.ShoppingList.Select(i => i.SourceItem).ToArray(),
-          worlds.QueryTarget,
-          worlds.SelectedIndex);
+          worlds.QueryTarget);
       }
 
       ImGui.EndDisabled();

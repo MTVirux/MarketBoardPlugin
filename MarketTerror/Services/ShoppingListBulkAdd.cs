@@ -22,18 +22,19 @@ namespace MarketTerror.Services
   /// </summary>
   /// <remarks>
   /// Only one job runs at a time. A chunk arrives all at once but its rows are shown one at a time
-  /// over the time the next chunk is expected to take, so the list fills gradually. On Cross-DC with
-  /// the Oceania DC included, each chunk is asked for both regions in turn and a row is only priced
-  /// once both answers are in, so it can show the cheaper of the two.
+  /// over the time the next chunk is expected to take, so the list fills gradually.
   /// </remarks>
   public sealed class ShoppingListBulkAdd : IDisposable
   {
     /// <summary>
-    /// The pause between two requests. Universalis documents no rate limit, so this is a courtesy margin.
+    /// The pause between two chunk requests. Universalis documents no rate limit, so this is a courtesy margin.
     /// </summary>
     private const int ChunkDelayMilliseconds = 1000;
 
-    private const string OceaniaRegion = "Oceania";
+    /// <summary>
+    /// How long the first request is assumed to take. Later chunks use the time the previous one took.
+    /// </summary>
+    private const double FirstRequestGuessMilliseconds = 700;
 
     private readonly MarketTerrorPlugin plugin;
 
@@ -91,10 +92,9 @@ namespace MarketTerror.Services
     /// <param name="categoryName">The name of the category, shown while the job runs.</param>
     /// <param name="items">The items to add.</param>
     /// <param name="queryTarget">The world, data centre or region to price the items against.</param>
-    /// <param name="selectedWorldIndex">The index of the selected world, used to decide whether the Oceania data centre is merged in.</param>
-    public void Start(string categoryName, IReadOnlyList<Item> items, string queryTarget, int selectedWorldIndex)
+    public void Start(string categoryName, IReadOnlyList<Item> items, string queryTarget)
     {
-      this.StartJob(categoryName, items, queryTarget, selectedWorldIndex, false);
+      this.StartJob(categoryName, items, queryTarget, false);
     }
 
     /// <summary>
@@ -102,10 +102,9 @@ namespace MarketTerror.Services
     /// </summary>
     /// <param name="items">The items to price again.</param>
     /// <param name="queryTarget">The world, data centre or region to price the items against.</param>
-    /// <param name="selectedWorldIndex">The index of the selected world, used to decide whether the Oceania data centre is merged in.</param>
-    public void StartRefresh(IReadOnlyList<Item> items, string queryTarget, int selectedWorldIndex)
+    public void StartRefresh(IReadOnlyList<Item> items, string queryTarget)
     {
-      this.StartJob("the shopping list", items, queryTarget, selectedWorldIndex, true);
+      this.StartJob("the shopping list", items, queryTarget, true);
     }
 
     /// <summary>
@@ -133,7 +132,7 @@ namespace MarketTerror.Services
       this.isDisposed = true;
     }
 
-    private void StartJob(string categoryName, IReadOnlyList<Item> items, string queryTarget, int selectedWorldIndex, bool refresh)
+    private void StartJob(string categoryName, IReadOnlyList<Item> items, string queryTarget, bool refresh)
     {
       ArgumentNullException.ThrowIfNull(items);
 
@@ -159,20 +158,13 @@ namespace MarketTerror.Services
         this.plugin.ShoppingList.MarkRefreshing();
       }
 
-      var includeOceania = selectedWorldIndex == 0
-        && this.plugin.Config.IncludeOceaniaDC
-        && queryTarget != OceaniaRegion;
-
-      var targets = includeOceania
-        ? new[] { queryTarget, OceaniaRegion }
-        : new[] { queryTarget };
-
-      this.job = Task.Run(() => this.Run(queued, targets, token), token);
+      this.job = Task.Run(() => this.Run(queued, queryTarget, token), token);
     }
 
-    private async Task Run(IReadOnlyList<Item> items, string[] targets, CancellationToken token)
+    private async Task Run(IReadOnlyList<Item> items, string queryTarget, CancellationToken token)
     {
-      var firstRequest = true;
+      var firstChunk = true;
+      var requestGuess = FirstRequestGuessMilliseconds;
 
       try
       {
@@ -180,78 +172,61 @@ namespace MarketTerror.Services
         {
           token.ThrowIfCancellationRequested();
 
-          var ids = chunk.Select(i => i.RowId).ToArray();
-          var cooldowns = firstRequest ? targets.Length - 1 : targets.Length;
+          var cooldown = firstChunk ? 0 : ChunkDelayMilliseconds;
           var startedUtc = DateTime.UtcNow;
-          var answers = new List<(string Target, IReadOnlyDictionary<uint, MarketDataResponse> Prices)>();
 
-          // Both regions are asked before anything is priced, so a row can show the cheaper of the two.
-          foreach (var target in targets)
+          if (!firstChunk)
           {
-            if (!firstRequest)
-            {
-              await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
-            }
+            await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
+          }
 
-            firstRequest = false;
+          firstChunk = false;
 
-            answers.Add((target, await this.Fetch(ids, target, token).ConfigureAwait(false)));
+          IReadOnlyDictionary<uint, MarketDataResponse> prices;
+
+          try
+          {
+            prices = await this.plugin.UniversalisClient
+              .GetCheapestListings(chunk.Select(i => i.RowId).ToArray(), queryTarget, token)
+              .ConfigureAwait(false);
+          }
+          catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+          {
+            // One bad chunk should not abandon the rest of the category, its items keep the price they had.
+            this.plugin.Log.Warning(ex, $"Skipped {chunk.Length} items while adding {this.CategoryName} to the buy list.");
+            prices = new Dictionary<uint, MarketDataResponse>();
           }
 
           var entries = new List<SavedItem>();
 
           foreach (var item in chunk)
           {
-            SavedItem? cheapest = null;
+            var entry = SavedItem.FromCheapestListing(
+              item,
+              prices.GetValueOrDefault(item.RowId),
+              !this.plugin.Config.NoGilSalesTax,
+              queryTarget);
 
-            foreach (var (target, prices) in answers)
+            if (entry != null)
             {
-              var entry = SavedItem.FromCheapestListing(
-                item,
-                prices.GetValueOrDefault(item.RowId),
-                !this.plugin.Config.NoGilSalesTax,
-                target);
-
-              if (entry != null && (cheapest == null || entry.Price < cheapest.Price))
-              {
-                cheapest = entry;
-              }
-            }
-
-            if (cheapest != null)
-            {
-              entries.Add(cheapest);
+              entries.Add(entry);
             }
           }
 
           token.ThrowIfCancellationRequested();
 
-          // How long this chunk's requests really took, so the rows are shown over the time the next one needs.
-          var requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - (cooldowns * ChunkDelayMilliseconds));
+          // How long this chunk really took, so the rows are shown over the time the next one needs.
+          requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - cooldown);
 
           // The buy list is read while the window draws, so it may only be touched on the framework thread.
           await this.plugin.Framework
-            .RunOnFrameworkThread(() => this.Apply(entries, chunk, (targets.Length * ChunkDelayMilliseconds) + requestGuess))
+            .RunOnFrameworkThread(() => this.Apply(entries, chunk, ChunkDelayMilliseconds + requestGuess))
             .ConfigureAwait(false);
         }
       }
       catch (OperationCanceledException)
       {
         this.plugin.Log.Debug($"Cancelled adding {this.CategoryName} to the buy list.");
-      }
-    }
-
-    private async Task<IReadOnlyDictionary<uint, MarketDataResponse>> Fetch(uint[] ids, string target, CancellationToken token)
-    {
-      try
-      {
-        return await this.plugin.UniversalisClient.GetCheapestListings(ids, target, token).ConfigureAwait(false);
-      }
-      catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
-      {
-        // One bad request should not abandon the rest of the category, its items keep the price they had.
-        this.plugin.Log.Warning(ex, $"Skipped {ids.Length} items on {target} while adding {this.CategoryName} to the buy list.");
-        return new Dictionary<uint, MarketDataResponse>();
       }
     }
 
