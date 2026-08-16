@@ -217,9 +217,7 @@ namespace MarketTerror.GUI.Components
         return;
       }
 
-      Text(
-        unlocked.Value ? "Already unlocked" : "Not unlocked",
-        unlocked.Value ? this.context.Theme.Accent : this.context.Theme.Text);
+      Text(unlocked.Value ? "Already unlocked" : "Not unlocked", this.context.Theme.TextBright);
     }
 
     private void DrawLevels(Item item)
