@@ -18,9 +18,6 @@ namespace MarketTerror.GUI.Components
   /// </summary>
   public sealed class HistoryTable
   {
-    /// <summary>How much of the table's width the line under the heading covers.</summary>
-    private const float HeadingUnderlineWidth = 0.95f;
-
     private readonly MarketBoardContext context;
 
     /// <summary>
@@ -44,7 +41,7 @@ namespace MarketTerror.GUI.Components
       ImGui.Text("Recent history");
       this.context.TitleFont.Pop();
 
-      DrawHeadingUnderline(ImGui.GetContentRegionAvail().X * HeadingUnderlineWidth);
+      ImGui.Separator();
 
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
@@ -78,19 +75,6 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndTable();
-    }
-
-    private static void DrawHeadingUnderline(float width)
-    {
-      var available = ImGui.GetContentRegionAvail().X;
-      var start = ImGui.GetCursorScreenPos() + new Vector2((available - width) * 0.5f, 0.0f);
-
-      ImGui.GetWindowDrawList().AddLine(
-        start,
-        start + new Vector2(width, 0.0f),
-        ImGui.GetColorU32(ImGuiCol.Separator));
-
-      ImGui.Dummy(new Vector2(available, 1.0f));
     }
 
     private static void DrawRightAligned(string text)
