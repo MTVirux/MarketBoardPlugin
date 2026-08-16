@@ -58,6 +58,8 @@ namespace MarketTerror.GUI
 
     private readonly TitleBarButton integrationsButton;
 
+    private readonly TitleBarButton shoppingListButton;
+
     private IDisposable? themeScope;
 
     private bool isDisposed;
@@ -142,6 +144,9 @@ namespace MarketTerror.GUI
       this.integrationsButton = IntegrationsButton.Build(this.context);
       this.TitleBarButtons.Add(this.integrationsButton);
 
+      this.shoppingListButton = ShoppingListButton.Build(this.context);
+      this.TitleBarButtons.Add(this.shoppingListButton);
+
       this.TitleBarButtons.Add(new TitleBarButton
       {
         Icon = FontAwesomeIcon.Heart,
@@ -209,6 +214,7 @@ namespace MarketTerror.GUI
     public override void PreDraw()
     {
       IntegrationsButton.Refresh(this.integrationsButton, this.context);
+      ShoppingListButton.Refresh(this.shoppingListButton, this.context);
       this.themeScope = this.theme.Push();
     }
 

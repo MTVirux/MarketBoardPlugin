@@ -53,6 +53,11 @@ namespace MarketTerror
     private const string LifestreamInternalName = "Lifestream";
 
     /// <summary>
+    /// The item buffer timeout configs written before version 2 defaulted to.
+    /// </summary>
+    private const int LegacyItemRefreshTimeout = 30000;
+
+    /// <summary>
     /// The chat commands that open the main window.
     /// </summary>
     private static readonly string[] OpenCommands = { "/pmb", "/mt", "/marketterror" };
@@ -133,6 +138,10 @@ namespace MarketTerror
 
       this.Config = this.PluginInterface.GetPluginConfig() as MarketTerrorConfig ?? new MarketTerrorConfig();
 
+      this.MigrateConfig();
+
+      this.ShoppingList = new ShoppingListStore(this);
+
       this.AutoSearch = new MarketBoardAutoSearch(
         this.PluginInterface,
         this.Framework,
@@ -208,7 +217,7 @@ namespace MarketTerror
     /// <summary>
     /// Gets the shopping list.
     /// </summary>
-    public IList<SavedItem> ShoppingList { get; init; } = new List<SavedItem>();
+    public ShoppingListStore ShoppingList { get; init; }
 
     /// <summary>
     /// Gets the service that adds a whole category to the shopping list.
@@ -348,6 +357,14 @@ namespace MarketTerror
     }
 
     /// <summary>
+    /// Shows the shopping list window, or hides it when it is already shown.
+    /// </summary>
+    public void ToggleShoppingList()
+    {
+      this.marketBoardShoppingListWindow.ToggleShown();
+    }
+
+    /// <summary>
     /// Protected implementation of Dispose pattern.
     /// </summary>
     /// <param name="disposing">A value indicating whether we are disposing.</param>
@@ -424,6 +441,26 @@ namespace MarketTerror
       {
         log.Error(ex, "Failed to migrate the saved configuration; settings will fall back to defaults.");
       }
+    }
+
+    /// <summary>
+    /// Brings a configuration written by an older build up to the current version.
+    /// </summary>
+    private void MigrateConfig()
+    {
+      if (this.Config.Version >= MarketTerrorConfig.CurrentVersion)
+      {
+        return;
+      }
+
+      // The old 30s buffer left prices looking stale, so anyone still on it follows the new default.
+      if (this.Config.ItemRefreshTimeout == LegacyItemRefreshTimeout)
+      {
+        this.Config.ItemRefreshTimeout = MarketTerrorConfig.DefaultItemRefreshTimeout;
+      }
+
+      this.Config.Version = MarketTerrorConfig.CurrentVersion;
+      this.PluginInterface.SavePluginConfig(this.Config);
     }
 
     /// <summary>
@@ -523,7 +560,7 @@ namespace MarketTerror
       {
         if (BuyListCommands.Contains(arguments.Trim(), StringComparer.OrdinalIgnoreCase))
         {
-          this.marketBoardShoppingListWindow.ToggleForceShown();
+          this.marketBoardShoppingListWindow.ToggleShown();
         }
         else if (uint.TryParse(arguments, out var itemId))
         {

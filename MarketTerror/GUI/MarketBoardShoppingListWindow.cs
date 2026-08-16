@@ -32,6 +32,10 @@ namespace MarketTerror.GUI
 
     private bool forceShown;
 
+    private bool hidden;
+
+    private int lastCount;
+
     private int sortColumn = -1;
 
     private bool sortAscending = true;
@@ -60,14 +64,22 @@ namespace MarketTerror.GUI
       this.theme = new TerrorTheme(this.Plugin.Config);
     }
 
+    /// <summary>
+    /// Gets a value indicating whether the window is currently on screen.
+    /// </summary>
+    public bool IsShown =>
+      !this.hidden && (this.Plugin.ShoppingList.Count > 0 || this.forceShown || this.Plugin.ShoppingListBulkAdd.IsRunning);
+
     private MarketTerrorPlugin Plugin { get; init; }
 
     /// <summary>
-    /// Toggles whether the window is shown while the buy list is empty.
+    /// Shows the window, or hides it when it is already shown.
     /// </summary>
-    public void ToggleForceShown()
+    /// <remarks>The window is always open; what it draws is decided by <see cref="DrawConditions"/>.</remarks>
+    public void ToggleShown()
     {
-      this.forceShown = !this.forceShown;
+      this.hidden = this.IsShown;
+      this.forceShown = !this.hidden;
     }
 
     /// <inheritdoc/>
@@ -84,8 +96,20 @@ namespace MarketTerror.GUI
     }
 
     /// <inheritdoc/>
-    public override bool DrawConditions() =>
-      this.Plugin.ShoppingList.Count > 0 || this.forceShown || this.Plugin.ShoppingListBulkAdd.IsRunning;
+    public override bool DrawConditions()
+    {
+      var count = this.Plugin.ShoppingList.Count;
+
+      // A newly added item brings the window back even after it was hidden.
+      if (count > this.lastCount)
+      {
+        this.hidden = false;
+      }
+
+      this.lastCount = count;
+
+      return this.IsShown;
+    }
 
     /// <inheritdoc/>
     public override void Draw()

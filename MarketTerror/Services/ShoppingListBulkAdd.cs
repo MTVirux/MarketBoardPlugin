@@ -184,13 +184,7 @@ namespace MarketTerror.Services
     {
       var listed = this.plugin.ShoppingList.Select(s => s.SourceItem.RowId).ToHashSet();
 
-      foreach (var entry in entries)
-      {
-        if (listed.Add(entry.SourceItem.RowId))
-        {
-          this.plugin.ShoppingList.Add(entry);
-        }
-      }
+      this.plugin.ShoppingList.AddRange(entries.Where(e => listed.Add(e.SourceItem.RowId)));
     }
   }
 }

@@ -7,6 +7,7 @@ namespace MarketTerror
   using System.Collections.Generic;
   using System.Diagnostics.CodeAnalysis;
   using Dalamud.Configuration;
+  using MarketTerror.Models.ShoppingList;
 
   /// <summary>
   /// Configuration for MarketTerrorPlugin.
@@ -14,9 +15,19 @@ namespace MarketTerror
   public class MarketTerrorConfig : IPluginConfiguration
   {
     /// <summary>
+    /// The number of ms an item is cached for before it is fetched again.
+    /// </summary>
+    public const int DefaultItemRefreshTimeout = 2000;
+
+    /// <summary>
+    /// The version this build writes.
+    /// </summary>
+    public const int CurrentVersion = 2;
+
+    /// <summary>
     /// Gets or sets the version of the config file.
     /// </summary>
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = CurrentVersion;
 
     /// <summary>
     /// Gets or sets a value indicating whether cross data center was selected.
@@ -57,7 +68,7 @@ namespace MarketTerror
     /// <summary>
     ///  Gets or sets a value indicating the number of ms an item can be cached.
     /// </summary>
-    public int ItemRefreshTimeout { get; set; } = 30000;
+    public int ItemRefreshTimeout { get; set; } = DefaultItemRefreshTimeout;
 
     /// <summary>
     ///  Gets or sets a value indicating whether the recent history menu is disabled or not.
@@ -78,6 +89,12 @@ namespace MarketTerror
     /// Gets the favorite items.
     /// </summary>
     public ICollection<uint> Favorites { get; } = new List<uint>();
+
+    /// <summary>
+    /// Gets the saved shopping list, so it survives a plugin reload.
+    /// </summary>
+    [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale whenever the shopping list changes")]
+    public List<StoredItem> ShoppingList { get; } = new List<StoredItem>();
 
     /// <summary>
     /// Gets or sets the number of listings to retrieve.

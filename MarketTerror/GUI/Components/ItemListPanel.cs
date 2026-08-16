@@ -381,10 +381,7 @@ namespace MarketTerror.GUI.Components
       {
         var ids = items.Select(i => i.RowId).ToHashSet();
 
-        foreach (var entry in buyList.Where(s => ids.Contains(s.SourceItem.RowId)).ToArray())
-        {
-          buyList.Remove(entry);
-        }
+        buyList.RemoveAll(s => ids.Contains(s.SourceItem.RowId));
       }
     }
   }
