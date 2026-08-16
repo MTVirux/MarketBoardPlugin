@@ -214,46 +214,7 @@ namespace MarketTerror.GUI.Components
         ? this.context.Worlds.Worlds[selectedWorld].Query
         : listing.WorldName ?? string.Empty;
 
-      var travelEnabled = this.context.Config.AutoTeleportToWorld && !string.IsNullOrEmpty(worldName);
-      var sameWorld = plugin.PlayerState.IsLoaded
-        && string.Equals(worldName, plugin.PlayerState.CurrentWorld.Value.Name.ExtractText(), StringComparison.OrdinalIgnoreCase);
-
-      // Skip travel when we're already at a Market Board in that world.
-      var alreadyAtMarketBoard = sameWorld && plugin.GameGui.GetAddonByName("ItemSearch") != nint.Zero;
-
-      // Right world already, and a board within reach: open that one instead of travelling.
-      var openedLocalBoard = travelEnabled && sameWorld && !alreadyAtMarketBoard
-        && MarketBoardInteraction.TryInteractWithNearbyBoard(plugin.ObjectTable, plugin.DataManager, plugin.Log);
-
-      plugin.Log.Debug($"Listing click: world \"{worldName}\", sameWorld {sameWorld}, boardOpen {alreadyAtMarketBoard}, usedLocalBoard {openedLocalBoard}");
-
-      var traveled = false;
-
-      if (travelEnabled && !alreadyAtMarketBoard && !openedLocalBoard)
-      {
-        plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
-        traveled = true;
-      }
-
-      // Auto-search: queue for after the travel, or fill the open Market Board immediately.
-      if (this.context.Config.AutoSearchOnMarketBoard && this.context.SelectedItem.HasValue)
-      {
-        var autoSearchName = this.context.SelectedItem.Value.Name.ExtractText();
-        var autoSearchId = this.context.SelectedItem.Value.RowId;
-
-        if (traveled && plugin.IsLifestreamAvailable)
-        {
-          plugin.AutoSearch.Arm(autoSearchName, autoSearchId);
-        }
-        else if (openedLocalBoard)
-        {
-          plugin.AutoSearch.ArmForLocalBoard(autoSearchName, autoSearchId);
-        }
-        else
-        {
-          plugin.AutoSearch.TryFillNow(autoSearchName, autoSearchId);
-        }
-      }
+      this.context.GoToMarketBoard(worldName, this.context.SelectedItem, this.context.Config.AutoTeleportToWorld);
 
       if (this.context.Config.CopyItemNameOnListingClick && this.context.SelectedItem.HasValue)
       {

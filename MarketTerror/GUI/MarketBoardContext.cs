@@ -315,6 +315,58 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// Goes to a world's Market Board and, when enabled, searches an item on the board that ends up open.
+    /// </summary>
+    /// <param name="worldName">The world to go to, or an empty string when it is unknown.</param>
+    /// <param name="item">The item to search for, or null to only travel.</param>
+    /// <param name="allowTravel">False to stay put and only fill a board that is already open.</param>
+    public void GoToMarketBoard(string worldName, Item? item, bool allowTravel)
+    {
+      var plugin = this.Plugin;
+
+      var travelEnabled = allowTravel && !string.IsNullOrEmpty(worldName);
+      var sameWorld = plugin.PlayerState.IsLoaded
+        && string.Equals(worldName, plugin.PlayerState.CurrentWorld.Value.Name.ExtractText(), StringComparison.OrdinalIgnoreCase);
+
+      // Skip travel when we're already at a Market Board in that world.
+      var alreadyAtMarketBoard = sameWorld && plugin.GameGui.GetAddonByName("ItemSearch") != nint.Zero;
+
+      // Right world already, and a board within reach: open that one instead of travelling.
+      var openedLocalBoard = travelEnabled && sameWorld && !alreadyAtMarketBoard
+        && MarketBoardInteraction.TryInteractWithNearbyBoard(plugin.ObjectTable, plugin.DataManager, plugin.Log);
+
+      plugin.Log.Debug($"Market board travel: world \"{worldName}\", sameWorld {sameWorld}, boardOpen {alreadyAtMarketBoard}, usedLocalBoard {openedLocalBoard}");
+
+      var traveled = false;
+
+      if (travelEnabled && !alreadyAtMarketBoard && !openedLocalBoard)
+      {
+        plugin.CommandManager.ProcessCommand($"/li {worldName} mb");
+        traveled = true;
+      }
+
+      // Auto-search: queue for after the travel, or fill the open Market Board immediately.
+      if (this.Config.AutoSearchOnMarketBoard && item.HasValue)
+      {
+        var autoSearchName = item.Value.Name.ExtractText();
+        var autoSearchId = item.Value.RowId;
+
+        if (traveled && plugin.IsLifestreamAvailable)
+        {
+          plugin.AutoSearch.Arm(autoSearchName, autoSearchId);
+        }
+        else if (openedLocalBoard)
+        {
+          plugin.AutoSearch.ArmForLocalBoard(autoSearchName, autoSearchId);
+        }
+        else
+        {
+          plugin.AutoSearch.TryFillNow(autoSearchName, autoSearchId);
+        }
+      }
+    }
+
+    /// <summary>
     /// Copies text to the clipboard and, when enabled, announces it in chat.
     /// </summary>
     /// <param name="text">The text to copy.</param>

@@ -142,7 +142,10 @@ namespace MarketTerror.GUI
       ImGui.TableSetupColumn("Name");
       ImGui.TableSetupColumn("Price");
       ImGui.TableSetupColumn("World");
-      ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.NoSort);
+      ImGui.TableSetupColumn(
+        "Action",
+        ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed,
+        (72 * ImGui.GetIO().FontGlobalScale) + ImGui.GetStyle().ItemSpacing.X);
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
       ImGui.TableHeadersRow();
@@ -179,14 +182,33 @@ namespace MarketTerror.GUI
         ImGui.TableSetColumnIndex(2);
         ImGui.Text(item.World);
 
+        var buttonSize = new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
+
         ImGui.TableSetColumnIndex(3);
+
+        ImGui.BeginDisabled(string.IsNullOrEmpty(item.World));
         ImGui.PushFont(UiBuilder.IconFont);
-        if (ImGui.Button($"{(char)FontAwesomeIcon.TrashAlt}##shoplist" + k, new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y)))
+        var travel = ImGui.Button($"{(char)FontAwesomeIcon.Store}##shoplistgo" + k, buttonSize);
+        ImGui.PopFont();
+        ImGui.EndDisabled();
+        Utilities.HoverTooltip($"Go to the market board on {item.World}.");
+
+        ImGui.SameLine();
+
+        ImGui.PushFont(UiBuilder.IconFont);
+        if (ImGui.Button($"{(char)FontAwesomeIcon.TrashAlt}##shoplist" + k, buttonSize))
         {
           todel.Add(item);
         }
 
         ImGui.PopFont();
+        Utilities.HoverTooltip("Remove from the list.");
+
+        if (travel)
+        {
+          this.Plugin.MarketBoardContext.GoToMarketBoard(item.World, item.SourceItem, true);
+        }
+
         k += 1;
       }
 
