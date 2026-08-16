@@ -397,7 +397,7 @@ namespace MarketTerror.GUI
         ImGui.EndCombo();
       }
 
-      Utilities.HoverTooltip("The world you are shopping from.");
+      Utilities.HoverTooltip("Your world");
     }
 
     private void DrawActionBar()
