@@ -32,12 +32,12 @@ namespace MarketTerror.GUI.Components
     }
 
     /// <summary>
-    /// Draws the current listings card: its heading and table.
+    /// Draws the current listings heading and table.
     /// </summary>
-    /// <param name="cardHeight">The height of the card, as computed by the window.</param>
-    public void Draw(float cardHeight)
+    /// <param name="sectionHeight">The height of the heading and table together, as computed by the window.</param>
+    public void Draw(float sectionHeight)
     {
-      ImGui.BeginChild("currentListingsCard", new Vector2(0.0f, cardHeight), true, ImGuiWindowFlags.NoScrollbar);
+      var top = ImGui.GetCursorPosY();
 
       this.context.TitleFont.Push();
       ImGui.Text("Current listings (Includes 5% GST)");
@@ -47,10 +47,10 @@ namespace MarketTerror.GUI.Components
 
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
+      var tableHeight = sectionHeight - (ImGui.GetCursorPosY() - top);
 
-      if (!ImGui.BeginTable("currentListings", 5, flags, new Vector2(0.0f, ImGui.GetContentRegionAvail().Y)))
+      if (!ImGui.BeginTable("currentListings", 5, flags, new Vector2(0.0f, tableHeight)))
       {
-        ImGui.EndChild();
         return;
       }
 
@@ -76,7 +76,6 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndTable();
-      ImGui.EndChild();
     }
 
     private static void DrawRightAligned(string text)

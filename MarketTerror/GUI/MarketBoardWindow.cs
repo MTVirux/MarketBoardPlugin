@@ -307,7 +307,7 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Draws the listings and history cards, split by a bar the user can drag to resize them.
+    /// Draws the listings and history sections, split by a bar the user can drag to resize them.
     /// </summary>
     /// <param name="scale">The current UI scale.</param>
     private void DrawMarketData(float scale)
@@ -323,7 +323,7 @@ namespace MarketTerror.GUI
 
       var splitterHeight = ImGui.GetTextLineHeight() * 0.5f;
 
-      // The splitter sits flush between the cards, so only the spacing below the last one is left over.
+      // The splitter sits flush between the sections, so only the spacing below the last one is left over.
       var usable = available - splitterHeight - spacing;
 
       if (usable <= 0.0f)
@@ -331,14 +331,14 @@ namespace MarketTerror.GUI
         return;
       }
 
-      // Keep enough room in either card for its heading, its column labels and a couple of entries.
-      var minRatio = Math.Min(0.4f, this.MinCardHeight(spacing) / usable);
+      // Keep enough room in either section for its heading, its column labels and a couple of entries.
+      var minRatio = Math.Min(0.4f, this.MinSectionHeight(spacing) / usable);
       var ratio = Math.Clamp(this.plugin.Config.MarketDataSplitRatio, minRatio, 1.0f - minRatio);
       var listingsHeight = usable * ratio;
 
       this.listingsTable.Draw(listingsHeight);
 
-      // Close the item spacing on either side of the splitter so the cards sit right against it.
+      // Close the item spacing on either side of the splitter so the sections sit right against it.
       ImGui.SetCursorPosY(ImGui.GetCursorPosY() - spacing);
 
       var drag = this.DrawSplitter(
@@ -364,19 +364,17 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// The height a card needs for its border, heading, separator and a few rows of its table.
+    /// The height a section needs for its heading, separator and a few rows of its table.
     /// </summary>
     /// <param name="spacing">The vertical item spacing.</param>
-    /// <returns>The minimum card height in pixels.</returns>
-    private float MinCardHeight(float spacing)
+    /// <returns>The minimum section height in pixels.</returns>
+    private float MinSectionHeight(float spacing)
     {
       this.titleFontHandle.Push();
       var height = ImGui.GetTextLineHeightWithSpacing();
       this.titleFontHandle.Pop();
 
-      return height + 1.0f + spacing
-        + (ImGui.GetTextLineHeightWithSpacing() * 3.0f)
-        + (ImGui.GetStyle().WindowPadding.Y * 2.0f);
+      return height + 1.0f + spacing + (ImGui.GetTextLineHeightWithSpacing() * 3.0f);
     }
 
     /// <summary>
