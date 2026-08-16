@@ -166,7 +166,7 @@ namespace MarketTerror.GUI
 
       this.DrawActionBar();
 
-      // The total keeps its own row pinned under the table, so it stays put while the list scrolls.
+      // The footer keeps its own row pinned under the table, so it stays put while the list scrolls.
       var footerHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y;
 
       if (!ImGui.BeginTable("shoppingList", 4, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
@@ -268,7 +268,7 @@ namespace MarketTerror.GUI
       ImGui.EndTable();
 
       ImGui.Separator();
-      this.DrawTotal();
+      this.DrawFooter();
 
       foreach (var item in todel)
       {
@@ -338,6 +338,25 @@ namespace MarketTerror.GUI
         MarketScope.DataCentre => "Data Centre",
         _ => "World",
       };
+    }
+
+    /// <summary>
+    /// Sums up the last pricing job, or an empty string while none has run.
+    /// </summary>
+    /// <param name="stats">The stats of the last finished job.</param>
+    /// <returns>The summary text.</returns>
+    private static string QuerySummary(QueryStats? stats)
+    {
+      if (stats == null || stats.Items == 0)
+      {
+        return string.Empty;
+      }
+
+      var items = stats.Items == 1 ? "1 item" : $"{stats.Items.ToString("N0", CultureInfo.CurrentCulture)} items";
+      var queries = stats.Queries == 1 ? "1 query" : $"{stats.Queries.ToString("N0", CultureInfo.CurrentCulture)} queries";
+      var milliseconds = stats.Milliseconds.ToString("N0", CultureInfo.CurrentCulture);
+
+      return $"Got info for {items} over {queries} scoped to {stats.Scope} in {milliseconds} ms";
     }
 
     /// <summary>
@@ -534,20 +553,34 @@ namespace MarketTerror.GUI
         : item.Price.ToString("N0", CultureInfo.CurrentCulture);
     }
 
-    private void DrawTotal()
+    private void DrawFooter()
     {
       var total = this.Plugin.ShoppingList.Sum(i => i.Price);
       var text = "Total Cost: " + (this.Plugin.Config.PriceIconShown
         ? total.ToString("C", this.Plugin.NumberFormatInfo)
         : total.ToString("N0", CultureInfo.CurrentCulture));
 
-      var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(text).X;
+      var totalWidth = ImGui.CalcTextSize(text).X;
+      var summary = QuerySummary(this.Plugin.Config.ShoppingListLastQuery);
+
+      ImGui.AlignTextToFramePadding();
+
+      // The total keeps the row to itself rather than being pushed off it when both do not fit.
+      if (summary.Length > 0 &&
+          ImGui.CalcTextSize(summary).X + ImGui.GetStyle().ItemSpacing.X + totalWidth <= ImGui.GetContentRegionAvail().X)
+      {
+        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+        ImGui.Text(summary);
+        ImGui.PopStyleColor();
+        ImGui.SameLine();
+      }
+
+      var padding = ImGui.GetContentRegionAvail().X - totalWidth;
       if (padding > 0)
       {
         ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
       }
 
-      ImGui.AlignTextToFramePadding();
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.GilText);
       ImGui.Text(text);
       ImGui.PopStyleColor();
