@@ -133,6 +133,15 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
+    /// Selects the character's home world, when it is known.
+    /// </summary>
+    public void SelectHomeWorld()
+    {
+      this.EnsureLoaded();
+      this.ApplyHomeWorldDefault();
+    }
+
+    /// <summary>
     /// Sets how wide the price queries reach around the selected world.
     /// </summary>
     /// <param name="scope">The scope to query at.</param>

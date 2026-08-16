@@ -367,7 +367,10 @@ namespace MarketTerror.GUI
     {
       var selected = scope.SelectedWorld;
 
-      if (ImGui.BeginCombo("##shoppingListWorld", selected.Length > 0 ? selected : "Pick a world"))
+      var open = ImGui.BeginCombo("##shoppingListWorld", selected.Length > 0 ? selected : "Pick a world");
+      var resetToHome = ImGui.IsItemClicked(ImGuiMouseButton.Right);
+
+      if (open)
       {
         if (ImGui.IsWindowAppearing())
         {
@@ -425,6 +428,11 @@ namespace MarketTerror.GUI
         }
 
         ImGui.EndCombo();
+      }
+
+      if (resetToHome)
+      {
+        scope.SelectHomeWorld();
       }
 
       Utilities.HoverTooltip("Your world");
