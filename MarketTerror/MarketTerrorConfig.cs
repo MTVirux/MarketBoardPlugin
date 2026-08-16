@@ -70,6 +70,11 @@ namespace MarketTerror
     public bool RecentHistoryDisabled { get; set; }
 
     /// <summary>
+    ///  Gets or sets the share of the Market Data tab given to the current listings, the rest going to recent history.
+    /// </summary>
+    public float MarketDataSplitRatio { get; set; } = 0.5f;
+
+    /// <summary>
     /// Gets the favorite items.
     /// </summary>
     public ICollection<uint> Favorites { get; } = new List<uint>();

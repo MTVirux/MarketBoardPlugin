@@ -221,20 +221,7 @@ namespace MarketTerror.GUI
         {
           if (ImGui.BeginTabItem("Market Data##marketDataTab"))
           {
-            float tableHeight;
-
-            this.titleFontHandle.Push();
-            var usedTile = this.plugin.Config.RecentHistoryDisabled ? 1 : 2;
-            tableHeight = (ImGui.GetContentRegionAvail().Y / usedTile) - (ImGui.GetTextLineHeightWithSpacing() * 2);
-            this.titleFontHandle.Pop();
-
-            this.listingsTable.Draw(tableHeight);
-
-            if (!this.plugin.Config.RecentHistoryDisabled)
-            {
-              this.historyTable.Draw(tableHeight);
-            }
-
+            this.DrawMarketData(scale);
             ImGui.EndTabItem();
           }
 
@@ -287,6 +274,85 @@ namespace MarketTerror.GUI
       }
 
       this.isDisposed = true;
+    }
+
+    /// <summary>
+    /// Draws the listings and history tables, split by a bar the user can drag to resize them.
+    /// </summary>
+    /// <param name="scale">The current UI scale.</param>
+    private void DrawMarketData(float scale)
+    {
+      this.titleFontHandle.Push();
+      var headingHeight = ImGui.GetTextLineHeightWithSpacing() * 2;
+      this.titleFontHandle.Pop();
+
+      var available = ImGui.GetContentRegionAvail().Y;
+
+      if (this.plugin.Config.RecentHistoryDisabled)
+      {
+        this.listingsTable.Draw(available - headingHeight);
+        return;
+      }
+
+      var splitterHeight = ImGui.GetTextLineHeight() * 0.5f;
+      var usable = available - (headingHeight * 2) - splitterHeight;
+
+      if (usable <= 0.0f)
+      {
+        return;
+      }
+
+      // Keep enough room in either table for its header row and a couple of entries.
+      var minRatio = Math.Min(0.4f, ImGui.GetTextLineHeightWithSpacing() * 3.0f / usable);
+      var ratio = Math.Clamp(this.plugin.Config.MarketDataSplitRatio, minRatio, 1.0f - minRatio);
+      var listingsHeight = usable * ratio;
+
+      this.listingsTable.Draw(listingsHeight);
+
+      var drag = this.DrawSplitter(splitterHeight, scale);
+
+      if (drag != 0.0f)
+      {
+        this.plugin.Config.MarketDataSplitRatio = Math.Clamp(ratio + (drag / usable), minRatio, 1.0f - minRatio);
+      }
+
+      if (ImGui.IsItemDeactivated())
+      {
+        this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+      }
+
+      this.historyTable.Draw(usable - listingsHeight);
+    }
+
+    /// <summary>
+    /// Draws the bar between the two tables.
+    /// </summary>
+    /// <param name="height">The height of the grab area.</param>
+    /// <param name="scale">The current UI scale.</param>
+    /// <returns>The distance the bar was dragged this frame, in pixels.</returns>
+    private float DrawSplitter(float height, float scale)
+    {
+      ImGui.InvisibleButton("marketDataSplitter", new Vector2(ImGui.GetContentRegionAvail().X, height));
+
+      var active = ImGui.IsItemActive();
+      var hovered = active || ImGui.IsItemHovered();
+
+      if (hovered)
+      {
+        ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
+      }
+
+      var min = ImGui.GetItemRectMin();
+      var max = ImGui.GetItemRectMax();
+      var middle = (min.Y + max.Y) * 0.5f;
+
+      ImGui.GetWindowDrawList().AddLine(
+        new Vector2(min.X, middle),
+        new Vector2(max.X, middle),
+        hovered ? this.theme.AccentHover : this.theme.Border,
+        (hovered ? 2.0f : 1.0f) * scale);
+
+      return active ? ImGui.GetIO().MouseDelta.Y : 0.0f;
     }
   }
 }

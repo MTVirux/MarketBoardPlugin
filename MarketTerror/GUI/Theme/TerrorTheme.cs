@@ -76,6 +76,11 @@ namespace MarketTerror.GUI.Theme
     public uint AccentDim => this.Resolve(ThemeColor.AccentDim, ImGuiCol.Header);
 
     /// <summary>
+    /// Gets the hovered accent colour, used for hovered rows and tabs and the market data resize bar.
+    /// </summary>
+    public uint AccentHover => this.Resolve(ThemeColor.AccentHover, ImGuiCol.HeaderHovered);
+
+    /// <summary>
     /// Gets the alternating table row colour.
     /// </summary>
     public uint RowAlt => this.Resolve(ThemeColor.RowAlt, ImGuiCol.TableRowBgAlt);
