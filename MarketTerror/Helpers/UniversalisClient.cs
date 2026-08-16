@@ -6,6 +6,8 @@ namespace MarketTerror.Helpers
 {
   using System;
   using System.Collections.Generic;
+  using System.Globalization;
+  using System.Linq;
   using System.Net.Http;
   using System.Text.Json;
   using System.Threading;
@@ -21,6 +23,23 @@ namespace MarketTerror.Helpers
   /// </remarks>
   public class UniversalisClient : IDisposable
   {
+    /// <summary>
+    /// The number of item ids Universalis accepts in one request.
+    /// </summary>
+    /// <remarks>
+    /// Ids past this limit are dropped silently: the response still comes back as a 200 and mentions
+    /// neither the extra ids nor that anything was left out, so the caller has to do the chunking.
+    /// </remarks>
+    public const int MaxItemsPerRequest = 100;
+
+    /// <summary>
+    /// The response fields a shopping list entry is built from. The retainer and listing ids are only in
+    /// there because <see cref="MarketDataListing"/> marks them required, so leaving them out fails the parse.
+    /// </summary>
+    private const string CheapestListingFields =
+      "items.listings.pricePerUnit,items.listings.quantity,items.listings.tax,items.listings.worldName," +
+      "items.listings.listingID,items.listings.retainerID,items.listings.retainerName";
+
     private readonly MarketTerrorPlugin plugin;
 
     private readonly HttpClient client;
@@ -93,6 +112,85 @@ namespace MarketTerror.Helpers
       catch (JsonException ex)
       {
         this.plugin.Log.Warning(ex, $"Failed to parse market data for item {itemId} on world {worldName}.");
+        throw;
+      }
+    }
+
+    /// <summary>
+    /// Retrieves the cheapest current listing of several items in a single request.
+    /// </summary>
+    /// <param name="itemIds">The item ids to retrieve listings for, at most <see cref="MaxItemsPerRequest"/> of them.</param>
+    /// <param name="worldName">The world, data centre or region to retrieve market data from.</param>
+    /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+    /// <returns>The market data of the items that resolved, keyed by item id. Items with no listings are left out.</returns>
+    /// <exception cref="ArgumentException">More ids than <see cref="MaxItemsPerRequest"/> were passed.</exception>
+    public async Task<IReadOnlyDictionary<uint, MarketDataResponse>> GetCheapestListings(
+      IReadOnlyCollection<uint> itemIds,
+      string worldName,
+      CancellationToken cancellationToken)
+    {
+      ArgumentNullException.ThrowIfNull(itemIds);
+
+      if (itemIds.Count > MaxItemsPerRequest)
+      {
+        throw new ArgumentException(
+          $"Universalis silently drops ids past {MaxItemsPerRequest} per request, so the caller has to chunk.",
+          nameof(itemIds));
+      }
+
+      if (itemIds.Count == 0)
+      {
+        return new Dictionary<uint, MarketDataResponse>();
+      }
+
+      // A lone id makes Universalis answer with the single item shape, which has no "items" map to read.
+      if (itemIds.Count == 1)
+      {
+        var onlyId = itemIds.First();
+        var single = await this.GetMarketData(onlyId, worldName, 1, 0, cancellationToken).ConfigureAwait(false);
+
+        return new Dictionary<uint, MarketDataResponse> { [onlyId] = single };
+      }
+
+      var ids = string.Join(',', itemIds);
+
+      try
+      {
+        using var content = await this.resiliencePipeline.ExecuteAsync(
+            async (ct) =>
+              await this.client.GetStreamAsync(
+                new Uri($"{worldName}/{ids}?listings=1&entries=0&fields={CheapestListingFields}", UriKind.Relative), ct)
+                .ConfigureAwait(false),
+            cancellationToken)
+          .ConfigureAwait(false);
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var parsedRes = await JsonSerializer
+          .DeserializeAsync<MultiItemMarketDataResponse>(content, cancellationToken: cancellationToken)
+          .ConfigureAwait(false)
+          ?? throw new InvalidOperationException($"Failed to parse market data for {itemIds.Count} items on world {worldName}.");
+
+        var byId = new Dictionary<uint, MarketDataResponse>(parsedRes.Items.Count);
+
+        foreach (var entry in parsedRes.Items)
+        {
+          if (uint.TryParse(entry.Key, CultureInfo.InvariantCulture, out var itemId))
+          {
+            byId[itemId] = entry.Value;
+          }
+        }
+
+        return byId;
+      }
+      catch (HttpRequestException ex)
+      {
+        this.plugin.Log.Warning(ex, $"Failed to fetch market data for {itemIds.Count} items on world {worldName}.");
+        throw;
+      }
+      catch (JsonException ex)
+      {
+        this.plugin.Log.Warning(ex, $"Failed to parse market data for {itemIds.Count} items on world {worldName}.");
         throw;
       }
     }

@@ -5,6 +5,7 @@
 namespace MarketTerror.GUI.Components
 {
   using System;
+  using System.Collections.Generic;
   using System.Linq;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
@@ -224,7 +225,14 @@ namespace MarketTerror.GUI.Components
           ImGui.SetNextItemOpen(true, ImGuiCond.Always);
         }
 
-        if (ImGui.TreeNode(category.Key.Name.ExtractText() + "##cat" + category.Key.RowId))
+        var categoryName = category.Key.Name.ExtractText();
+
+        // The popup has to be bound while the tree node is still the last item, open or not.
+        var categoryOpen = ImGui.TreeNode(categoryName + "##cat" + category.Key.RowId);
+
+        this.DrawCategoryContextMenu(categoryName, category.Key.RowId, category.Value);
+
+        if (categoryOpen)
         {
           ImGui.Unindent(ImGui.GetTreeNodeToLabelSpacing());
 
@@ -272,7 +280,7 @@ namespace MarketTerror.GUI.Components
               this.context.SelectItem(item.RowId);
             }
 
-            if (ImGui.BeginPopupContextItem("itemContextMenu" + category.Key.Name.ExtractText() + i))
+            if (ImGui.BeginPopupContextItem("itemContextMenu" + categoryName + i))
             {
               if (this.context.SelectedItem != null && this.context.SelectedItem.Value.RowId != item.RowId)
               {
@@ -292,11 +300,90 @@ namespace MarketTerror.GUI.Components
               ImGui.EndPopup();
             }
 
-            ImGui.OpenPopupOnItemClick("itemContextMenu" + category.Key.Name.ExtractText() + i, ImGuiPopupFlags.MouseButtonRight);
+            ImGui.OpenPopupOnItemClick("itemContextMenu" + categoryName + i, ImGuiPopupFlags.MouseButtonRight);
           }
 
           ImGui.Indent(ImGui.GetTreeNodeToLabelSpacing());
           ImGui.TreePop();
+        }
+      }
+    }
+
+    private void DrawCategoryContextMenu(string categoryName, uint categoryId, List<Item> items)
+    {
+      var popupId = "catContextMenu" + categoryId;
+
+      if (ImGui.BeginPopupContextItem(popupId))
+      {
+        // Only the open category pays for these, and a category can hold thousands of items.
+        var favorites = this.context.Config.Favorites.ToHashSet();
+        var buyList = this.context.Plugin.ShoppingList;
+        var listed = buyList.Select(s => s.SourceItem.RowId).ToHashSet();
+
+        var missingFavorites = items.Where(i => !favorites.Contains(i.RowId)).ToArray();
+        var missingFromBuyList = items.Where(i => !listed.Contains(i.RowId)).ToArray();
+
+        if (missingFavorites.Length > 0 && ImGui.Selectable("Add all to the favorites"))
+        {
+          foreach (var item in missingFavorites)
+          {
+            this.context.Config.Favorites.Add(item.RowId);
+          }
+
+          this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
+        }
+
+        if (missingFavorites.Length < items.Count && ImGui.Selectable("Remove all from the favorites"))
+        {
+          foreach (var item in items)
+          {
+            this.context.Config.Favorites.Remove(item.RowId);
+          }
+
+          this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
+        }
+
+        this.DrawCategoryBuyListEntries(categoryName, items, missingFromBuyList);
+
+        ImGui.EndPopup();
+      }
+
+      ImGui.OpenPopupOnItemClick(popupId, ImGuiPopupFlags.MouseButtonRight);
+    }
+
+    private void DrawCategoryBuyListEntries(string categoryName, List<Item> items, Item[] missing)
+    {
+      var bulkAdd = this.context.Plugin.ShoppingListBulkAdd;
+      var buyList = this.context.Plugin.ShoppingList;
+
+      if (missing.Length > 0)
+      {
+        // The prices come from Universalis a chunk at a time, so only one category can be added at once.
+        var busy = bulkAdd.IsRunning || !this.context.Worlds.HasSelection;
+
+        if (busy)
+        {
+          ImGui.BeginDisabled();
+        }
+
+        if (ImGui.Selectable("Add all to the shopping list"))
+        {
+          bulkAdd.Start(categoryName, missing, this.context.Worlds.QueryTarget);
+        }
+
+        if (busy)
+        {
+          ImGui.EndDisabled();
+        }
+      }
+
+      if (missing.Length < items.Count && ImGui.Selectable("Remove all from the shopping list"))
+      {
+        var ids = items.Select(i => i.RowId).ToHashSet();
+
+        foreach (var entry in buyList.Where(s => ids.Contains(s.SourceItem.RowId)).ToArray())
+        {
+          buyList.Remove(entry);
         }
       }
     }

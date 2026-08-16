@@ -297,27 +297,21 @@ namespace MarketTerror.GUI
     /// </param>
     public void TryAddCheapestToShoppingList(Item item, bool fallbackToSelectedWorld)
     {
-      var marketData = this.MarketData.MarketData;
-
-      if (marketData == null || !this.Worlds.HasSelection)
+      if (!this.Worlds.HasSelection)
       {
         return;
       }
 
-      var listingsSnapshot = marketData.Listings.ToArray();
+      var entry = SavedItem.FromCheapestListing(
+        item,
+        this.MarketData.MarketData,
+        !this.Config.NoGilSalesTax,
+        fallbackToSelectedWorld ? this.Worlds.QueryTarget : string.Empty);
 
-      if (listingsSnapshot.Length == 0)
+      if (entry != null)
       {
-        return;
+        this.Plugin.ShoppingList.Add(entry);
       }
-
-      var cheapest = listingsSnapshot.OrderBy(l => l.PricePerUnit).First();
-      var price = this.Config.NoGilSalesTax
-        ? cheapest.PricePerUnit
-        : cheapest.PricePerUnit + (cheapest.Tax / cheapest.Quantity);
-      var world = cheapest.WorldName ?? (fallbackToSelectedWorld ? this.Worlds.QueryTarget : string.Empty);
-
-      this.Plugin.ShoppingList.Add(new SavedItem(item, price, world));
     }
 
     /// <summary>

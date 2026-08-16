@@ -24,6 +24,7 @@ namespace MarketTerror
   using MarketTerror.GUI;
   using MarketTerror.Helpers;
   using MarketTerror.Models.ShoppingList;
+  using MarketTerror.Services;
 
   /// <summary>
   /// The entry point of the plugin.
@@ -126,6 +127,7 @@ namespace MarketTerror
 
       this.UniversalisClient = new UniversalisClient(this);
       this.FFXIVMTClient = new FFXIVMTClient(this);
+      this.ShoppingListBulkAdd = new ShoppingListBulkAdd(this);
 
       MigrateLegacyConfigTypeName(this.PluginInterface, this.Log);
 
@@ -207,6 +209,11 @@ namespace MarketTerror
     /// Gets the shopping list.
     /// </summary>
     public IList<SavedItem> ShoppingList { get; init; } = new List<SavedItem>();
+
+    /// <summary>
+    /// Gets the service that adds a whole category to the shopping list.
+    /// </summary>
+    public ShoppingListBulkAdd ShoppingListBulkAdd { get; init; }
 
     /// <summary>
     /// Gets the number format info.
@@ -374,6 +381,9 @@ namespace MarketTerror
 
         // Dispose the auto-search service
         this.AutoSearch.Dispose();
+
+        // Stop any category still being added to the shopping list
+        this.ShoppingListBulkAdd.Dispose();
       }
 
       this.isDisposed = true;
