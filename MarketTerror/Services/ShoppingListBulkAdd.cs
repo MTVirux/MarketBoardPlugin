@@ -28,7 +28,7 @@ namespace MarketTerror.Services
     /// <summary>
     /// The pause between two chunk requests. Universalis documents no rate limit, so this is a courtesy margin.
     /// </summary>
-    private const int ChunkDelayMilliseconds = 5000;
+    private const int ChunkDelayMilliseconds = 1000;
 
     private readonly MarketTerrorPlugin plugin;
 
