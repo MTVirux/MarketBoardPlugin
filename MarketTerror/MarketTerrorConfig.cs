@@ -123,5 +123,11 @@ namespace MarketTerror
     /// Gets or sets a value indicating whether the Terror skin is applied to the plugin's windows.
     /// </summary>
     public bool TerrorSkinEnabled { get; set; } = true;
+
+    /// <summary>
+    /// Gets the Terror skin colours that have been changed from their defaults, keyed by colour name.
+    /// </summary>
+    /// <remarks>Colours left at their default are not stored, so shipped defaults can change freely.</remarks>
+    public Dictionary<string, uint> ThemeOverrides { get; } = new Dictionary<string, uint>();
   }
 }

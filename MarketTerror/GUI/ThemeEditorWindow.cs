@@ -84,15 +84,21 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void Draw()
     {
-      var skinEnabled = this.Plugin.Config.TerrorSkinEnabled;
-
-      if (!skinEnabled)
+      if (!this.Plugin.Config.TerrorSkinEnabled)
       {
         ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
-        ImGui.TextWrapped("The Terror skin is off - these colours will not show until you turn it back on.");
+        ImGui.TextWrapped("The Terror skin is off, so these colours only show in the preview below.");
         ImGui.PopStyleColor();
+
+        ImGui.SameLine();
+
+        if (ImGui.SmallButton("Turn it on"))
+        {
+          this.Plugin.Config.TerrorSkinEnabled = true;
+          this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
+        }
+
         ImGui.Separator();
-        ImGui.BeginDisabled();
       }
 
       var footerHeight = (ImGui.GetTextLineHeightWithSpacing() * FooterLines) + ImGui.GetFrameHeightWithSpacing();
@@ -121,11 +127,6 @@ namespace MarketTerror.GUI
       {
         this.theme.ResetAll();
         this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
-      }
-
-      if (!skinEnabled)
-      {
-        ImGui.EndDisabled();
       }
     }
 

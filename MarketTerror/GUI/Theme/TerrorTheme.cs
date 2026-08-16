@@ -5,6 +5,8 @@
 namespace MarketTerror.GUI.Theme
 {
   using System;
+  using System.Collections.Generic;
+  using System.Globalization;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
 
@@ -15,6 +17,7 @@ namespace MarketTerror.GUI.Theme
   /// Push the skin from <see cref="Dalamud.Interface.Windowing.Window.PreDraw"/> and dispose it in
   /// <see cref="Dalamud.Interface.Windowing.Window.PostDraw"/>, so window and title bar colours are in
   /// place before ImGui begins the window and are removed before any other plugin draws.
+  /// Every colour can be overridden from the configuration; unset colours fall back to the defaults here.
   /// </remarks>
   public sealed class TerrorTheme
   {
@@ -24,29 +27,34 @@ namespace MarketTerror.GUI.Theme
 
     private const uint TransparentColor = 0u;
 
-    private static readonly uint WindowBgColor = Rgb(0x0A, 0x0A, 0x0B);
-    private static readonly uint PanelBgColor = Rgb(0x12, 0x12, 0x13);
-    private static readonly uint FrameBgColor = Rgb(0x1A, 0x1A, 0x1C);
-    private static readonly uint FrameBgHoveredColor = Rgb(0x24, 0x1A, 0x1A);
-    private static readonly uint FrameBgActiveColor = Rgb(0x2E, 0x20, 0x20);
-    private static readonly uint BorderColor = Rgb(0x3A, 0x2C, 0x2C);
-    private static readonly uint AccentColor = Rgb(0xB3, 0x27, 0x1F);
-    private static readonly uint AccentDimColor = Rgb(0x4A, 0x13, 0x10);
-    private static readonly uint AccentHoverColor = Rgb(0x8A, 0x1E, 0x18);
-    private static readonly uint RowAltColor = Rgb(0x0E, 0x0E, 0x0F);
-    private static readonly uint TextColor = Rgb(0xE8, 0xE6, 0xE3);
-    private static readonly uint TextDimColor = Rgb(0x83, 0x80, 0x81);
-    private static readonly uint TextBrightColor = Rgb(0xF4, 0xF2, 0xEF);
-    private static readonly uint GilTextColor = Rgb(0xE0, 0xB3, 0x41);
-    private static readonly uint TabColor = Rgb(0x1A, 0x1A, 0x1C);
-    private static readonly uint TabActiveColor = Rgb(0x24, 0x1A, 0x1A);
+    private static readonly Dictionary<ThemeColor, uint> Defaults = new()
+    {
+      { ThemeColor.WindowBg, Rgb(0x0A, 0x0A, 0x0B) },
+      { ThemeColor.PanelBg, Rgb(0x12, 0x12, 0x13) },
+      { ThemeColor.FrameBg, Rgb(0x1A, 0x1A, 0x1C) },
+      { ThemeColor.FrameBgHovered, Rgb(0x24, 0x1A, 0x1A) },
+      { ThemeColor.FrameBgActive, Rgb(0x2E, 0x20, 0x20) },
+      { ThemeColor.TitleBg, Rgb(0x18, 0x12, 0x12) },
+      { ThemeColor.TitleBgActive, Rgb(0x6B, 0x1C, 0x16) },
+      { ThemeColor.Border, Rgb(0x3A, 0x2C, 0x2C) },
+      { ThemeColor.Accent, Rgb(0xB3, 0x27, 0x1F) },
+      { ThemeColor.AccentDim, Rgb(0x4A, 0x13, 0x10) },
+      { ThemeColor.AccentHover, Rgb(0x8A, 0x1E, 0x18) },
+      { ThemeColor.RowAlt, Rgb(0x0E, 0x0E, 0x0F) },
+      { ThemeColor.Text, Rgb(0xE8, 0xE6, 0xE3) },
+      { ThemeColor.TextDim, Rgb(0x83, 0x80, 0x81) },
+      { ThemeColor.TextBright, Rgb(0xF4, 0xF2, 0xEF) },
+      { ThemeColor.GilText, Rgb(0xE0, 0xB3, 0x41) },
+      { ThemeColor.Tab, Rgb(0x1A, 0x1A, 0x1C) },
+      { ThemeColor.TabActive, Rgb(0x24, 0x1A, 0x1A) },
+    };
 
     private readonly MarketTerrorConfig config;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TerrorTheme"/> class.
     /// </summary>
-    /// <param name="config">The plugin configuration the skin toggle is read from.</param>
+    /// <param name="config">The plugin configuration the skin toggle and colour overrides are read from.</param>
     public TerrorTheme(MarketTerrorConfig config)
     {
       this.config = config ?? throw new ArgumentNullException(nameof(config));
@@ -60,47 +68,162 @@ namespace MarketTerror.GUI.Theme
     /// <summary>
     /// Gets the accent colour, used for selection, the active tab and the high quality marker.
     /// </summary>
-    public uint Accent => this.Enabled ? AccentColor : ImGui.GetColorU32(ImGuiCol.CheckMark);
+    public uint Accent => this.Resolve(ThemeColor.Accent, ImGuiCol.CheckMark);
 
     /// <summary>
     /// Gets the dimmed accent colour, used as the background of a selected row.
     /// </summary>
-    public uint AccentDim => this.Enabled ? AccentDimColor : ImGui.GetColorU32(ImGuiCol.Header);
+    public uint AccentDim => this.Resolve(ThemeColor.AccentDim, ImGuiCol.Header);
 
     /// <summary>
     /// Gets the alternating table row colour.
     /// </summary>
-    public uint RowAlt => this.Enabled ? RowAltColor : ImGui.GetColorU32(ImGuiCol.TableRowBgAlt);
+    public uint RowAlt => this.Resolve(ThemeColor.RowAlt, ImGuiCol.TableRowBgAlt);
 
     /// <summary>
     /// Gets the body text colour.
     /// </summary>
-    public uint Text => this.Enabled ? TextColor : ImGui.GetColorU32(ImGuiCol.Text);
+    public uint Text => this.Resolve(ThemeColor.Text, ImGuiCol.Text);
 
     /// <summary>
     /// Gets the secondary text colour, used for column labels and captions.
     /// </summary>
-    public uint TextDim => this.Enabled ? TextDimColor : ImGui.GetColorU32(ImGuiCol.TextDisabled);
+    public uint TextDim => this.Resolve(ThemeColor.TextDim, ImGuiCol.TextDisabled);
 
     /// <summary>
     /// Gets the emphasised text colour, used for the selected item's name.
     /// </summary>
-    public uint TextBright => this.Enabled ? TextBrightColor : ImGui.GetColorU32(ImGuiCol.Text);
+    public uint TextBright => this.Resolve(ThemeColor.TextBright, ImGuiCol.Text);
 
     /// <summary>
     /// Gets the colour gil figures are drawn in.
     /// </summary>
-    public uint GilText => this.Enabled ? GilTextColor : ImGui.GetColorU32(ImGuiCol.Text);
+    public uint GilText => this.Resolve(ThemeColor.GilText, ImGuiCol.Text);
 
     /// <summary>
     /// Gets the panel and table border colour.
     /// </summary>
-    public uint Border => this.Enabled ? BorderColor : ImGui.GetColorU32(ImGuiCol.Border);
+    public uint Border => this.Resolve(ThemeColor.Border, ImGuiCol.Border);
 
     /// <summary>
     /// Gets the child panel background colour.
     /// </summary>
-    public uint PanelBg => this.Enabled ? PanelBgColor : ImGui.GetColorU32(ImGuiCol.ChildBg);
+    public uint PanelBg => this.Resolve(ThemeColor.PanelBg, ImGuiCol.ChildBg);
+
+    /// <summary>
+    /// Gets every colour the skin defines, in display order.
+    /// </summary>
+    /// <returns>The theme colour keys.</returns>
+    public static IReadOnlyList<ThemeColor> AllColors()
+    {
+      return new List<ThemeColor>(Defaults.Keys);
+    }
+
+    /// <summary>
+    /// Gets the built-in default for a colour, ignoring any override.
+    /// </summary>
+    /// <param name="color">The colour to look up.</param>
+    /// <returns>The packed default colour.</returns>
+    public static uint GetDefault(ThemeColor color)
+    {
+      return Defaults.TryGetValue(color, out var value) ? value : 0xFF000000u;
+    }
+
+    /// <summary>
+    /// Converts a packed colour to the vector form the ImGui colour pickers use.
+    /// </summary>
+    /// <param name="packed">The packed colour.</param>
+    /// <returns>The colour as red, green, blue and alpha in the range 0 to 1.</returns>
+    public static Vector4 ToVector(uint packed)
+    {
+      return new Vector4(
+        (packed & 0xFF) / 255.0f,
+        ((packed >> 8) & 0xFF) / 255.0f,
+        ((packed >> 16) & 0xFF) / 255.0f,
+        ((packed >> 24) & 0xFF) / 255.0f);
+    }
+
+    /// <summary>
+    /// Converts a colour vector back to packed form.
+    /// </summary>
+    /// <param name="value">The colour as red, green, blue and alpha in the range 0 to 1.</param>
+    /// <returns>The packed colour.</returns>
+    public static uint FromVector(Vector4 value)
+    {
+      var r = (uint)Math.Clamp((int)(value.X * 255.0f), 0, 255);
+      var g = (uint)Math.Clamp((int)(value.Y * 255.0f), 0, 255);
+      var b = (uint)Math.Clamp((int)(value.Z * 255.0f), 0, 255);
+      var a = (uint)Math.Clamp((int)(value.W * 255.0f), 0, 255);
+
+      return (a << 24) | (b << 16) | (g << 8) | r;
+    }
+
+    /// <summary>
+    /// Formats a packed colour as the hex string used in the editor.
+    /// </summary>
+    /// <param name="packed">The packed colour.</param>
+    /// <returns>A six digit RGB hex string.</returns>
+    public static string ToHex(uint packed)
+    {
+      return string.Create(
+        CultureInfo.InvariantCulture,
+        $"{packed & 0xFF:X2}{(packed >> 8) & 0xFF:X2}{(packed >> 16) & 0xFF:X2}");
+    }
+
+    /// <summary>
+    /// Gets the current value of a colour, which is its override when one is set and its default otherwise.
+    /// </summary>
+    /// <param name="color">The colour to look up.</param>
+    /// <returns>The packed colour.</returns>
+    public uint Get(ThemeColor color)
+    {
+      return this.config.ThemeOverrides.TryGetValue(color.ToString(), out var value)
+        ? value
+        : GetDefault(color);
+    }
+
+    /// <summary>
+    /// Checks whether a colour has been changed from its default.
+    /// </summary>
+    /// <param name="color">The colour to check.</param>
+    /// <returns>True when an override is set.</returns>
+    public bool IsOverridden(ThemeColor color)
+    {
+      return this.config.ThemeOverrides.ContainsKey(color.ToString());
+    }
+
+    /// <summary>
+    /// Overrides a colour. Setting a colour back to its default removes the override instead of storing it.
+    /// </summary>
+    /// <param name="color">The colour to change.</param>
+    /// <param name="value">The packed colour to use.</param>
+    public void Set(ThemeColor color, uint value)
+    {
+      if (value == GetDefault(color))
+      {
+        this.config.ThemeOverrides.Remove(color.ToString());
+        return;
+      }
+
+      this.config.ThemeOverrides[color.ToString()] = value;
+    }
+
+    /// <summary>
+    /// Restores a single colour to its default.
+    /// </summary>
+    /// <param name="color">The colour to reset.</param>
+    public void Reset(ThemeColor color)
+    {
+      this.config.ThemeOverrides.Remove(color.ToString());
+    }
+
+    /// <summary>
+    /// Restores every colour to its default.
+    /// </summary>
+    public void ResetAll()
+    {
+      this.config.ThemeOverrides.Clear();
+    }
 
     /// <summary>
     /// Applies the skin until the returned handle is disposed.
@@ -113,40 +236,40 @@ namespace MarketTerror.GUI.Theme
         return NullScope.Instance;
       }
 
-      ImGui.PushStyleColor(ImGuiCol.Text, TextColor);
-      ImGui.PushStyleColor(ImGuiCol.TextDisabled, TextDimColor);
-      ImGui.PushStyleColor(ImGuiCol.WindowBg, WindowBgColor);
-      ImGui.PushStyleColor(ImGuiCol.ChildBg, PanelBgColor);
-      ImGui.PushStyleColor(ImGuiCol.PopupBg, PanelBgColor);
-      ImGui.PushStyleColor(ImGuiCol.Border, BorderColor);
-      ImGui.PushStyleColor(ImGuiCol.FrameBg, FrameBgColor);
-      ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, FrameBgHoveredColor);
-      ImGui.PushStyleColor(ImGuiCol.FrameBgActive, FrameBgActiveColor);
-      ImGui.PushStyleColor(ImGuiCol.TitleBg, PanelBgColor);
-      ImGui.PushStyleColor(ImGuiCol.TitleBgActive, FrameBgActiveColor);
-      ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, PanelBgColor);
-      ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, WindowBgColor);
-      ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, FrameBgActiveColor);
-      ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, AccentHoverColor);
-      ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabActive, AccentColor);
-      ImGui.PushStyleColor(ImGuiCol.CheckMark, AccentColor);
-      ImGui.PushStyleColor(ImGuiCol.SliderGrab, AccentDimColor);
-      ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, AccentColor);
-      ImGui.PushStyleColor(ImGuiCol.Button, FrameBgColor);
-      ImGui.PushStyleColor(ImGuiCol.ButtonHovered, FrameBgActiveColor);
-      ImGui.PushStyleColor(ImGuiCol.ButtonActive, AccentDimColor);
-      ImGui.PushStyleColor(ImGuiCol.Header, AccentDimColor);
-      ImGui.PushStyleColor(ImGuiCol.HeaderHovered, AccentHoverColor);
-      ImGui.PushStyleColor(ImGuiCol.HeaderActive, AccentColor);
-      ImGui.PushStyleColor(ImGuiCol.Separator, BorderColor);
-      ImGui.PushStyleColor(ImGuiCol.Tab, TabColor);
-      ImGui.PushStyleColor(ImGuiCol.TabHovered, AccentHoverColor);
-      ImGui.PushStyleColor(ImGuiCol.TabActive, TabActiveColor);
-      ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, PanelBgColor);
-      ImGui.PushStyleColor(ImGuiCol.TableBorderStrong, BorderColor);
-      ImGui.PushStyleColor(ImGuiCol.TableBorderLight, BorderColor);
+      ImGui.PushStyleColor(ImGuiCol.Text, this.Get(ThemeColor.Text));
+      ImGui.PushStyleColor(ImGuiCol.TextDisabled, this.Get(ThemeColor.TextDim));
+      ImGui.PushStyleColor(ImGuiCol.WindowBg, this.Get(ThemeColor.WindowBg));
+      ImGui.PushStyleColor(ImGuiCol.ChildBg, this.Get(ThemeColor.PanelBg));
+      ImGui.PushStyleColor(ImGuiCol.PopupBg, this.Get(ThemeColor.PanelBg));
+      ImGui.PushStyleColor(ImGuiCol.Border, this.Get(ThemeColor.Border));
+      ImGui.PushStyleColor(ImGuiCol.FrameBg, this.Get(ThemeColor.FrameBg));
+      ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, this.Get(ThemeColor.FrameBgHovered));
+      ImGui.PushStyleColor(ImGuiCol.FrameBgActive, this.Get(ThemeColor.FrameBgActive));
+      ImGui.PushStyleColor(ImGuiCol.TitleBg, this.Get(ThemeColor.TitleBg));
+      ImGui.PushStyleColor(ImGuiCol.TitleBgActive, this.Get(ThemeColor.TitleBgActive));
+      ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, this.Get(ThemeColor.TitleBg));
+      ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, this.Get(ThemeColor.WindowBg));
+      ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, this.Get(ThemeColor.FrameBgActive));
+      ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, this.Get(ThemeColor.AccentHover));
+      ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabActive, this.Get(ThemeColor.Accent));
+      ImGui.PushStyleColor(ImGuiCol.CheckMark, this.Get(ThemeColor.Accent));
+      ImGui.PushStyleColor(ImGuiCol.SliderGrab, this.Get(ThemeColor.AccentDim));
+      ImGui.PushStyleColor(ImGuiCol.SliderGrabActive, this.Get(ThemeColor.Accent));
+      ImGui.PushStyleColor(ImGuiCol.Button, this.Get(ThemeColor.FrameBg));
+      ImGui.PushStyleColor(ImGuiCol.ButtonHovered, this.Get(ThemeColor.FrameBgActive));
+      ImGui.PushStyleColor(ImGuiCol.ButtonActive, this.Get(ThemeColor.AccentDim));
+      ImGui.PushStyleColor(ImGuiCol.Header, this.Get(ThemeColor.AccentDim));
+      ImGui.PushStyleColor(ImGuiCol.HeaderHovered, this.Get(ThemeColor.AccentHover));
+      ImGui.PushStyleColor(ImGuiCol.HeaderActive, this.Get(ThemeColor.Accent));
+      ImGui.PushStyleColor(ImGuiCol.Separator, this.Get(ThemeColor.Border));
+      ImGui.PushStyleColor(ImGuiCol.Tab, this.Get(ThemeColor.Tab));
+      ImGui.PushStyleColor(ImGuiCol.TabHovered, this.Get(ThemeColor.AccentHover));
+      ImGui.PushStyleColor(ImGuiCol.TabActive, this.Get(ThemeColor.TabActive));
+      ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, this.Get(ThemeColor.PanelBg));
+      ImGui.PushStyleColor(ImGuiCol.TableBorderStrong, this.Get(ThemeColor.Border));
+      ImGui.PushStyleColor(ImGuiCol.TableBorderLight, this.Get(ThemeColor.Border));
       ImGui.PushStyleColor(ImGuiCol.TableRowBg, TransparentColor);
-      ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, RowAltColor);
+      ImGui.PushStyleColor(ImGuiCol.TableRowBgAlt, this.Get(ThemeColor.RowAlt));
 
       ImGui.PushStyleVar(ImGuiStyleVar.WindowRounding, 4.0f);
       ImGui.PushStyleVar(ImGuiStyleVar.ChildRounding, 4.0f);
@@ -161,6 +284,11 @@ namespace MarketTerror.GUI.Theme
     private static uint Rgb(byte r, byte g, byte b)
     {
       return 0xFF000000u | ((uint)b << 16) | ((uint)g << 8) | r;
+    }
+
+    private uint Resolve(ThemeColor color, ImGuiCol fallback)
+    {
+      return this.Enabled ? this.Get(color) : ImGui.GetColorU32(fallback);
     }
 
     private sealed class ThemeScope : IDisposable

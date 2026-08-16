@@ -124,6 +124,13 @@ namespace MarketTerror.GUI
 
       this.Checkbox("Terror skin", "Apply the Market Terror colour scheme to this plugin's windows. Turn it off to use your Dalamud theme.", this.Plugin.Config.TerrorSkinEnabled, (v) => this.Plugin.Config.TerrorSkinEnabled = v);
 
+      if (ImGui.Button("Edit theme colours"))
+      {
+        this.Plugin.OpenThemeEditor();
+      }
+
+      Utilities.HoverTooltip("Open the theme editor to change any of the skin's colours and see the result live.");
+
 #if DEBUG
       ImGui.NewLine();
 
