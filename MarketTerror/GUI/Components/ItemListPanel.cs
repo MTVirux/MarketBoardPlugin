@@ -130,13 +130,6 @@ namespace MarketTerror.GUI.Components
       this.wasSearchEmpty = !searching;
     }
 
-    private void DrawHeading(string label)
-    {
-      ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.TextDim);
-      ImGui.Text(label);
-      ImGui.PopStyleColor();
-    }
-
     private void DrawHistory()
     {
       var sheet = this.context.Plugin.DataManager.Excel.GetSheet<Item>();
@@ -186,8 +179,6 @@ namespace MarketTerror.GUI.Components
 
     private void DrawFavorites()
     {
-      this.DrawHeading("Favorites");
-      ImGui.Separator();
       var sheet = this.context.Plugin.DataManager.Excel.GetSheet<Item>();
       foreach (var id in this.context.Config.Favorites.ToArray())
       {
