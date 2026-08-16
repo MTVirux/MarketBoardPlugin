@@ -130,6 +130,17 @@ namespace MarketTerror
     public bool OpenOnStart { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the item that was open last is reselected on plugin start in debug builds.
+    /// </summary>
+    public bool RememberLastItem { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets the row id of the item that was selected last, or 0 when there is none.
+    /// </summary>
+    /// <remarks>Only written by debug builds.</remarks>
+    public uint LastOpenedItem { get; set; }
+
+    /// <summary>
     /// Gets or sets a value indicating whether the Terror skin is applied to the plugin's windows.
     /// </summary>
     public bool TerrorSkinEnabled { get; set; } = true;
