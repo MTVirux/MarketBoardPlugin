@@ -38,7 +38,15 @@ namespace MarketTerror.Services
     /// <summary>
     /// Gets the colour the integration is listed in.
     /// </summary>
-    public Vector4 Color => this.State switch
+    public Vector4 Color => ColorFor(this.State);
+
+    /// <summary>
+    /// Gets the colour a state is shown in, so anything reporting an integration outside of the
+    /// integrations window matches it.
+    /// </summary>
+    /// <param name="state">The state to colour.</param>
+    /// <returns>The colour for that state.</returns>
+    public static Vector4 ColorFor(IntegrationState state) => state switch
     {
       IntegrationState.Ok => OkColor,
       IntegrationState.Down => DownColor,

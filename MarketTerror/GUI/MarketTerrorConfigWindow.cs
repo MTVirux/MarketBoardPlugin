@@ -7,9 +7,11 @@ namespace MarketTerror.GUI
   using System;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
+  using Dalamud.Interface;
   using Dalamud.Interface.Windowing;
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
+  using MarketTerror.Services;
 
   /// <summary>
   /// The market board config window.
@@ -87,6 +89,9 @@ namespace MarketTerror.GUI
       {
         ImGui.EndDisabled();
       }
+
+      ImGui.SameLine();
+      this.LifestreamMark(lifestreamAvailable);
 
       this.Checkbox("Auto-search item on Market Board", "When clicking a listing, automatically type the item's name into the Market Board search when applicable.", this.Plugin.Config.AutoSearchOnMarketBoard, (v) => this.Plugin.Config.AutoSearchOnMarketBoard = v);
 
@@ -173,6 +178,32 @@ namespace MarketTerror.GUI
       ImGui.Text(label);
       ImGui.PopStyleColor();
       ImGui.Separator();
+    }
+
+    private void LifestreamMark(bool available)
+    {
+      var icon = available ? FontAwesomeIcon.Check : FontAwesomeIcon.Times;
+      var color = Integration.ColorFor(available ? IntegrationState.Ok : IntegrationState.Idle);
+
+      ImGui.PushFont(UiBuilder.IconFont);
+      ImGui.TextColored(color, $"{(char)icon}");
+      ImGui.PopFont();
+
+      string tooltip;
+      if (available)
+      {
+        tooltip = "Lifestream is installed and enabled, so listing clicks can travel.";
+      }
+      else if (this.Plugin.IsLifestreamDisabled)
+      {
+        tooltip = "Lifestream is installed but switched off, so this setting does nothing.";
+      }
+      else
+      {
+        tooltip = "Lifestream is not installed, so this setting does nothing.";
+      }
+
+      Utilities.HoverTooltip(tooltip);
     }
 
     private void Checkbox(string label, string description, bool oldValue, Action<bool> setter)
