@@ -22,8 +22,14 @@ namespace MarketTerror.GUI.Components
   {
     private const float WrapWidth = 340.0f;
     private const float IconSize = 40.0f;
-    private const float HqColumnWidth = 54.0f;
     private const float BorderSize = 1.0f;
+
+    /// <summary>
+    /// The ItemAction types whose second data value is an ItemFood row: combat meals, gatherer and
+    /// crafter meals, and the attribute potions. Other consumables reuse that slot for an HP or MP
+    /// cap, which resolves to an unrelated ItemFood row if it is followed.
+    /// </summary>
+    private static readonly uint[] FoodActionTypes = [844, 845, 846];
 
     private readonly MarketBoardContext context;
 
@@ -58,6 +64,7 @@ namespace MarketTerror.GUI.Components
       this.DrawLevels(item);
       this.DrawCombatStats(item);
       this.DrawBonuses(item);
+      this.DrawFoodBonuses(item);
       this.DrawSetBonus(item);
       this.DrawCustomisation(item);
       this.DrawDescription(item);
@@ -80,6 +87,22 @@ namespace MarketTerror.GUI.Components
       return value > 0
         ? "+" + value.ToString(CultureInfo.CurrentCulture)
         : value.ToString(CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>
+    /// Formats one food bonus. A relative bonus is a percentage of the character's own stat, capped
+    /// at the value the sheet carries alongside it; an absolute bonus is a flat amount.
+    /// </summary>
+    private static string FoodValue(int value, int max, bool relative)
+    {
+      if (!relative)
+      {
+        return Signed(value);
+      }
+
+      return max > 0
+        ? string.Create(CultureInfo.CurrentCulture, $"{Signed(value)}% (Max {max})")
+        : Signed(value) + "%";
     }
 
     private static void Text(string text, uint color)
@@ -124,13 +147,49 @@ namespace MarketTerror.GUI.Components
     }
 
     /// <summary>
+    /// Draws a separated block of stat lines, sizing the high quality column to its widest entry
+    /// and heading it only when at least one line has a high quality value.
+    /// </summary>
+    private void DrawStatRows(List<(string Label, string Value, string Hq)> rows)
+    {
+      if (rows.Count == 0)
+      {
+        return;
+      }
+
+      var hqColumn = 0.0f;
+
+      foreach (var row in rows)
+      {
+        hqColumn = Math.Max(hqColumn, ImGui.CalcTextSize(row.Hq).X);
+      }
+
+      if (hqColumn > 0.0f)
+      {
+        hqColumn += ImGui.GetStyle().ItemSpacing.X * 2.0f;
+      }
+
+      ImGui.Separator();
+
+      if (hqColumn > 0.0f)
+      {
+        ImGui.SetCursorPosX(RightEdge() - ImGui.CalcTextSize("HQ").X);
+        this.Label("HQ");
+      }
+
+      foreach (var row in rows)
+      {
+        this.StatRow(row.Label, row.Value, row.Hq, hqColumn);
+      }
+    }
+
+    /// <summary>
     /// Draws a stat line with the normal quality value and, where one exists, the high quality
     /// total in its own column against the right edge.
     /// </summary>
-    private void StatRow(string label, string value, string hqValue)
+    private void StatRow(string label, string value, string hqValue, float hqColumn)
     {
       var right = RightEdge();
-      var hqColumn = HqColumnWidth * ImGui.GetIO().FontGlobalScale;
 
       this.Label(label);
 
@@ -351,23 +410,48 @@ namespace MarketTerror.GUI.Components
         rows.Add((leftover.Name, string.Empty, Signed(leftover.Value)));
       }
 
-      if (rows.Count == 0)
+      this.DrawStatRows(rows);
+    }
+
+    /// <summary>
+    /// Meals and attribute potions carry no bonuses on the item row itself: their stats live in the
+    /// ItemFood sheet, reached through the item's action.
+    /// </summary>
+    private void DrawFoodBonuses(Item item)
+    {
+      var action = item.ItemAction.ValueNullable;
+
+      if (action == null || action.Value.Data.Count < 2 || !FoodActionTypes.Contains(action.Value.Action.RowId))
       {
         return;
       }
 
-      ImGui.Separator();
+      var food = this.context.Plugin.DataManager.Excel.GetSheet<ItemFood>().GetRowOrDefault(action.Value.Data[1]);
 
-      if (rows.Exists(row => row.Hq.Length > 0))
+      if (food == null)
       {
-        ImGui.SetCursorPosX(RightEdge() - ImGui.CalcTextSize("HQ").X);
-        this.Label("HQ");
+        return;
       }
 
-      foreach (var row in rows)
+      var rows = new List<(string Label, string Value, string Hq)>();
+
+      for (var i = 0; i < food.Value.Params.Count; i++)
       {
-        this.StatRow(row.Label, row.Value, row.Hq);
+        var param = food.Value.Params[i];
+        var name = param.BaseParam.ValueNullable?.Name.ExtractText() ?? string.Empty;
+
+        if (param.BaseParam.RowId == 0 || param.Value == 0 || name.Length == 0)
+        {
+          continue;
+        }
+
+        rows.Add((
+          name,
+          FoodValue(param.Value, param.Max, param.IsRelative),
+          FoodValue(param.ValueHQ, param.MaxHQ, param.IsRelative)));
       }
+
+      this.DrawStatRows(rows);
     }
 
     private void DrawSetBonus(Item item)
