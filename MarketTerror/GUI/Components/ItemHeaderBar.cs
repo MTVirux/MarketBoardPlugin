@@ -16,6 +16,7 @@ namespace MarketTerror.GUI.Components
   public sealed class ItemHeaderBar
   {
     private readonly MarketBoardContext context;
+    private readonly ItemTooltip tooltip;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemHeaderBar"/> class.
@@ -24,6 +25,7 @@ namespace MarketTerror.GUI.Components
     public ItemHeaderBar(MarketBoardContext context)
     {
       this.context = context ?? throw new ArgumentNullException(nameof(context));
+      this.tooltip = new ItemTooltip(this.context);
     }
 
     /// <summary>
@@ -45,6 +47,11 @@ namespace MarketTerror.GUI.Components
         if (ImGui.ImageButton(selectedItemIcon.Handle, new Vector2(40, 40)))
         {
           this.context.CopyToClipboard(itemName);
+        }
+
+        if (ImGui.IsItemHovered())
+        {
+          this.tooltip.Draw(item);
         }
       }
       else
