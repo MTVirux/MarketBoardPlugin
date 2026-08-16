@@ -202,16 +202,6 @@ namespace MarketTerror.GUI
 
       this.hoveredItemWatcher.Tick();
 
-      ImGui.Text("Settings : ");
-      ImGui.SameLine();
-      ImGui.PushFont(UiBuilder.IconFont);
-      if (ImGui.Button($"{(char)FontAwesomeIcon.Cog}"))
-      {
-        this.plugin.OpenConfigUi();
-      }
-
-      ImGui.PopFont();
-
       ImGui.ProgressBar(this.hoveredItemWatcher.Progress, new Vector2(-1, 0), string.Empty);
 
       ImGui.EndChild();

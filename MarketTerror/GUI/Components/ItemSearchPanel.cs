@@ -76,14 +76,23 @@ namespace MarketTerror.GUI.Components
       ImGui.Text("Advanced Search");
       ImGui.SameLine();
       ImGui.SetCursorPosY(previousYCursor);
+      var buttonSize = new Vector2(32 * scale, 1.5f * ImGui.GetItemRectSize().Y);
       ImGui.PushFont(UiBuilder.IconFont);
       ImGui.PushStyleColor(ImGuiCol.Text, this.context.AdvancedSearchOpen ? this.context.Theme.Accent : this.context.Theme.Text);
-      if (ImGui.Button($"{(char)FontAwesomeIcon.Wrench}", new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y)))
+      if (ImGui.Button($"{(char)FontAwesomeIcon.Search}", buttonSize))
       {
         this.context.AdvancedSearchOpen = !this.context.AdvancedSearchOpen;
       }
 
       ImGui.PopStyleColor();
+
+      ImGui.SameLine(ImGui.GetWindowContentRegionMax().X - buttonSize.X);
+      ImGui.SetCursorPosY(previousYCursor);
+      if (ImGui.Button($"{(char)FontAwesomeIcon.Cog}", buttonSize))
+      {
+        this.context.Plugin.OpenConfigUi();
+      }
+
       ImGui.PopFont();
 
       if (this.context.AdvancedSearchOpen)
