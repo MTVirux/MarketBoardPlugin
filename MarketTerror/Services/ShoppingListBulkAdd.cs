@@ -190,9 +190,13 @@ namespace MarketTerror.Services
           var cooldown = firstChunk ? 0 : ChunkDelayMilliseconds;
           var startedUtc = DateTime.UtcNow;
 
+          // Every chunk counts at the same speed per item, so a short last chunk finishes early
+          // instead of stretching its few items over a whole cooldown.
+          var perItem = (cooldown + requestGuess) / UniversalisClient.MaxItemsPerRequest;
+
           // Written before the baseline so a half seen update reads as "just started", not as a full chunk.
           this.pendingStartedUtc = startedUtc;
-          this.pendingDurationMilliseconds = cooldown + requestGuess;
+          this.pendingDurationMilliseconds = perItem * chunk.Length;
           this.pendingChunkSize = chunk.Length;
           this.pendingBaseline = this.Processed;
 
