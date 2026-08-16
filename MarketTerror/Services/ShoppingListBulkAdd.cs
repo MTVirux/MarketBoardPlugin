@@ -31,9 +31,9 @@ namespace MarketTerror.Services
     private const int ChunkDelayMilliseconds = 1000;
 
     /// <summary>
-    /// A rough guess at how long one chunk request takes, only used to pace the progress bar.
+    /// How long the first request is assumed to take. Later chunks use the time the previous one took.
     /// </summary>
-    private const int RequestGuessMilliseconds = 1000;
+    private const double FirstRequestGuessMilliseconds = 700;
 
     private readonly MarketTerrorPlugin plugin;
 
@@ -43,7 +43,7 @@ namespace MarketTerror.Services
 
     private int pendingChunkSize;
 
-    private int pendingDurationMilliseconds;
+    private double pendingDurationMilliseconds;
 
     private CancellationTokenSource? cancellation;
 
@@ -86,8 +86,10 @@ namespace MarketTerror.Services
     /// Gets the item count the progress display should show.
     /// </summary>
     /// <remarks>
-    /// The chunk being worked on is counted in one item at a time, evenly spread over its cooldown
-    /// and request, so the count ticks up instead of standing still and then jumping a whole chunk.
+    /// The chunk being worked on is counted in one item at a time over its cooldown and request, so
+    /// the count ticks up instead of standing still and then jumping a whole chunk. The ramp eases
+    /// towards the end of the chunk without reaching it, so a slow request slows the count down
+    /// rather than stopping it dead.
     /// </remarks>
     public int Counted
     {
@@ -99,7 +101,7 @@ namespace MarketTerror.Services
         }
 
         var elapsed = (DateTime.UtcNow - this.pendingStartedUtc).TotalMilliseconds;
-        var ramp = Math.Clamp(elapsed / this.pendingDurationMilliseconds, 0d, 1d);
+        var ramp = 1d - Math.Exp(-3d * Math.Max(elapsed, 0d) / this.pendingDurationMilliseconds);
         var ticked = this.pendingBaseline + (int)(this.pendingChunkSize * ramp);
 
         // Never below Processed, so the count cannot fall back once the chunk lands.
@@ -177,6 +179,7 @@ namespace MarketTerror.Services
     private async Task Run(IReadOnlyList<Item> items, string queryTarget, CancellationToken token)
     {
       var firstChunk = true;
+      var requestGuess = FirstRequestGuessMilliseconds;
 
       try
       {
@@ -184,10 +187,14 @@ namespace MarketTerror.Services
         {
           token.ThrowIfCancellationRequested();
 
-          this.pendingBaseline = this.Processed;
+          var cooldown = firstChunk ? 0 : ChunkDelayMilliseconds;
+          var startedUtc = DateTime.UtcNow;
+
+          // Written before the baseline so a half seen update reads as "just started", not as a full chunk.
+          this.pendingStartedUtc = startedUtc;
+          this.pendingDurationMilliseconds = cooldown + requestGuess;
           this.pendingChunkSize = chunk.Length;
-          this.pendingStartedUtc = DateTime.UtcNow;
-          this.pendingDurationMilliseconds = RequestGuessMilliseconds + (firstChunk ? 0 : ChunkDelayMilliseconds);
+          this.pendingBaseline = this.Processed;
 
           if (!firstChunk)
           {
@@ -208,6 +215,7 @@ namespace MarketTerror.Services
           {
             // One bad chunk should not abandon the rest of the category.
             this.plugin.Log.Warning(ex, $"Skipped {chunk.Length} items while adding {this.CategoryName} to the buy list.");
+            requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - cooldown);
             this.Processed += chunk.Length;
             continue;
           }
@@ -233,6 +241,8 @@ namespace MarketTerror.Services
           // The buy list is read while the window draws, so it may only be touched on the framework thread.
           await this.plugin.Framework.RunOnFrameworkThread(() => this.Apply(entries)).ConfigureAwait(false);
 
+          // How long this chunk really took, so the next one paces its count against a measured time.
+          requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - cooldown);
           this.Processed += chunk.Length;
         }
       }
