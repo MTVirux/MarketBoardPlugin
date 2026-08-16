@@ -466,7 +466,11 @@ namespace MarketTerror.GUI
         scope.SelectHomeWorld();
       }
 
-      Utilities.HoverTooltip("Your world");
+      var home = scope.HomeWorld;
+
+      Utilities.HoverTooltip(home.Length > 0 && home != scope.SelectedWorld
+        ? $"Your world\nRight-click to go back to {home}."
+        : "Your world");
     }
 
     private void DrawActionBar()

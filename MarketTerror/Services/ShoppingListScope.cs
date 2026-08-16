@@ -61,6 +61,13 @@ namespace MarketTerror.Services
     public bool HasSelection => this.SelectedEntry != null;
 
     /// <summary>
+    /// Gets the character's home world, or an empty string while it is not known yet.
+    /// </summary>
+    public string HomeWorld => this.plugin.PlayerState.IsLoaded
+      ? this.plugin.PlayerState.HomeWorld.Value.Name.ExtractText()
+      : string.Empty;
+
+    /// <summary>
     /// Gets how wide the price queries reach around the selected world.
     /// </summary>
     public MarketScope Scope => this.plugin.Config.ShoppingListScopeLevel;
