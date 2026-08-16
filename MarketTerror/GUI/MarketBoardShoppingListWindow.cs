@@ -68,7 +68,7 @@ namespace MarketTerror.GUI
       this.Flags = ImGuiWindowFlags.NoScrollbar;
       this.IsOpen = true;
       this.RespectCloseHotkey = false;
-      this.ShowCloseButton = false;
+      this.ShowCloseButton = true;
       this.Size = new Vector2(400, 150);
       this.SizeCondition = ImGuiCond.FirstUseEver;
       this.SizeConstraints = new WindowSizeConstraints
@@ -96,6 +96,16 @@ namespace MarketTerror.GUI
     {
       this.hidden = this.IsShown;
       this.forceShown = !this.hidden;
+    }
+
+    /// <inheritdoc/>
+    public override void OnClose()
+    {
+      this.hidden = true;
+      this.forceShown = false;
+
+      // The window stays open so a newly added item can bring it back.
+      this.IsOpen = true;
     }
 
     /// <inheritdoc/>
