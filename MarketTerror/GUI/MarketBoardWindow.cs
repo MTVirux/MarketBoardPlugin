@@ -369,10 +369,21 @@ namespace MarketTerror.GUI
     {
       var spacing = ImGui.GetStyle().ItemSpacing.Y;
       var available = ImGui.GetContentRegionAvail().Y;
+      var config = this.plugin.Config;
 
-      if (this.plugin.Config.RecentHistoryDisabled)
+      if (config.RecentHistoryDisabled)
       {
         this.listingsTable.Draw(available - spacing);
+        return;
+      }
+
+      // With one of the tables hidden there is nothing left to drag the splitter between.
+      if (config.CurrentListingsCollapsed || config.SalesHistoryCollapsed)
+      {
+        var rest = Math.Max(available - this.CollapsedSectionHeight(spacing) - spacing, 0.0f);
+
+        this.listingsTable.Draw(config.CurrentListingsCollapsed ? 0.0f : rest);
+        this.historyTable.Draw(config.SalesHistoryCollapsed ? 0.0f : rest);
         return;
       }
 
@@ -419,17 +430,28 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// The height a section takes up with its table hidden, leaving its heading and separator.
+    /// </summary>
+    /// <param name="spacing">The vertical item spacing.</param>
+    /// <returns>The collapsed section height in pixels.</returns>
+    private float CollapsedSectionHeight(float spacing)
+    {
+      this.titleFontHandle.Push();
+      var height = ImGui.GetTextLineHeightWithSpacing();
+      this.titleFontHandle.Pop();
+
+      return height + 1.0f + spacing;
+    }
+
+    /// <summary>
     /// The height a section needs for its heading, its separators and a few rows of its table.
     /// </summary>
     /// <param name="spacing">The vertical item spacing.</param>
     /// <returns>The minimum section height in pixels.</returns>
     private float MinSectionHeight(float spacing)
     {
-      this.titleFontHandle.Push();
-      var height = ImGui.GetTextLineHeightWithSpacing();
-      this.titleFontHandle.Pop();
-
-      return height + ((1.0f + spacing) * 2.0f) + (ImGui.GetTextLineHeightWithSpacing() * 3.0f);
+      // The collapsed height, plus the separator closing the table off and a few rows of it.
+      return this.CollapsedSectionHeight(spacing) + 1.0f + spacing + (ImGui.GetTextLineHeightWithSpacing() * 3.0f);
     }
 
     /// <summary>

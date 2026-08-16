@@ -89,6 +89,16 @@ namespace MarketTerror
     public float MarketDataSplitRatio { get; set; } = 0.5f;
 
     /// <summary>
+    ///  Gets or sets a value indicating whether the current listings table is hidden.
+    /// </summary>
+    public bool CurrentListingsCollapsed { get; set; }
+
+    /// <summary>
+    ///  Gets or sets a value indicating whether the sales history table is hidden.
+    /// </summary>
+    public bool SalesHistoryCollapsed { get; set; }
+
+    /// <summary>
     ///  Gets or sets the unscaled width of the search and item list column.
     /// </summary>
     public float ItemListColumnWidth { get; set; } = 267.0f;

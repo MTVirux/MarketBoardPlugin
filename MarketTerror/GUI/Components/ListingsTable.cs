@@ -43,13 +43,22 @@ namespace MarketTerror.GUI.Components
         ? "Current listings"
         : "Current listings (Includes 5% GST)";
 
-      this.context.TitleFont.Push();
-      ImGui.Text(heading);
-      this.context.TitleFont.Pop();
+      var collapsed = this.context.Config.CurrentListingsCollapsed;
+
+      if (SectionHeading.Draw(this.context, "currentListingsHeading", heading, collapsed))
+      {
+        this.context.Config.CurrentListingsCollapsed = !collapsed;
+        this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
+      }
 
       var beforeSeparator = ImGui.GetCursorPosY();
       ImGui.Separator();
       var separatorHeight = ImGui.GetCursorPosY() - beforeSeparator;
+
+      if (collapsed)
+      {
+        return;
+      }
 
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;

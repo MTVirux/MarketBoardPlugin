@@ -37,13 +37,22 @@ namespace MarketTerror.GUI.Components
     {
       var top = ImGui.GetCursorPosY();
 
-      this.context.TitleFont.Push();
-      ImGui.Text("Sales history");
-      this.context.TitleFont.Pop();
+      var collapsed = this.context.Config.SalesHistoryCollapsed;
+
+      if (SectionHeading.Draw(this.context, "salesHistoryHeading", "Sales history", collapsed))
+      {
+        this.context.Config.SalesHistoryCollapsed = !collapsed;
+        this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
+      }
 
       var beforeSeparator = ImGui.GetCursorPosY();
       ImGui.Separator();
       var separatorHeight = ImGui.GetCursorPosY() - beforeSeparator;
+
+      if (collapsed)
+      {
+        return;
+      }
 
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
