@@ -103,15 +103,25 @@ namespace MarketTerror.Services
 
     private Integration Lifestream()
     {
-      var installed = this.plugin.IsLifestreamInstalled;
-      var detail = installed
-        ? "Clicking a listing can travel to its world and open the Market Board there."
+      if (this.plugin.IsLifestreamAvailable)
+      {
+        return this.Build(
+          "Lifestream",
+          IntegrationState.Ok,
+          "enabled",
+          "Clicking a listing can travel to its world and open the Market Board there.",
+          true);
+      }
+
+      var disabled = this.plugin.IsLifestreamDisabled;
+      var detail = disabled
+        ? "Listing clicks stay where you are. Switch Lifestream back on in the plugin\ninstaller to travel to the listing's world automatically."
         : "Listing clicks stay where you are. Install Lifestream to travel to the\nlisting's world automatically.";
 
       return this.Build(
         "Lifestream",
-        installed ? IntegrationState.Ok : IntegrationState.Idle,
-        installed ? "installed" : "not detected",
+        IntegrationState.Idle,
+        disabled ? "installed but disabled" : "not detected",
         detail,
         true);
     }

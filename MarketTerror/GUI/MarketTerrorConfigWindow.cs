@@ -72,16 +72,16 @@ namespace MarketTerror.GUI
 
       this.SectionHeading("Teleport / Integration");
 
-      // Auto-teleport to world setting (only enabled if Lifestream is installed)
-      var lifestreamInstalled = this.Plugin.IsLifestreamInstalled;
-      if (!lifestreamInstalled)
+      // Auto-teleport to world setting (only enabled if Lifestream is installed and switched on)
+      var lifestreamAvailable = this.Plugin.IsLifestreamAvailable;
+      if (!lifestreamAvailable)
       {
         ImGui.BeginDisabled();
       }
 
-      this.Checkbox("Auto-teleport to world", lifestreamInstalled ? "Automatically teleport to the listing's world when clicked (requires Lifestream plugin)" : "Automatically teleport to the listing's world when clicked (Lifestream plugin not installed)", this.Plugin.Config.AutoTeleportToWorld, (v) => this.Plugin.Config.AutoTeleportToWorld = v);
+      this.Checkbox("Auto-teleport to world", lifestreamAvailable ? "Automatically teleport to the listing's world when clicked (requires Lifestream plugin)" : "Automatically teleport to the listing's world when clicked (Lifestream plugin not installed or disabled)", this.Plugin.Config.AutoTeleportToWorld, (v) => this.Plugin.Config.AutoTeleportToWorld = v);
 
-      if (!lifestreamInstalled)
+      if (!lifestreamAvailable)
       {
         ImGui.EndDisabled();
       }

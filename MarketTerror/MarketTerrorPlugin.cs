@@ -47,6 +47,11 @@ namespace MarketTerror
     private const string CurrentConfigTypeName = "MarketTerror.MarketTerrorConfig, MarketTerror";
 
     /// <summary>
+    /// The internal name Lifestream is installed under.
+    /// </summary>
+    private const string LifestreamInternalName = "Lifestream";
+
+    /// <summary>
     /// The chat commands that open the main window.
     /// </summary>
     private static readonly string[] OpenCommands = { "/pmb", "/mt", "/marketterror" };
@@ -184,9 +189,14 @@ namespace MarketTerror
     public MarketTerrorConfig Config { get; private set; }
 
     /// <summary>
-    /// Gets a value indicating whether the Lifestream plugin is installed.
+    /// Gets a value indicating whether the Lifestream plugin can be used right now.
     /// </summary>
-    public bool IsLifestreamInstalled => this.PluginInterface.InstalledPlugins.Any(p => p.InternalName == "Lifestream");
+    public bool IsLifestreamAvailable => this.FindPlugin(LifestreamInternalName)?.IsLoaded == true;
+
+    /// <summary>
+    /// Gets a value indicating whether the Lifestream plugin is installed but switched off.
+    /// </summary>
+    public bool IsLifestreamDisabled => this.FindPlugin(LifestreamInternalName) is { IsLoaded: false };
 
     /// <summary>
     /// Gets the shopping list.
@@ -399,6 +409,17 @@ namespace MarketTerror
       {
         log.Error(ex, "Failed to migrate the saved configuration; settings will fall back to defaults.");
       }
+    }
+
+    /// <summary>
+    /// Finds an installed plugin whether or not it is switched on, so callers can tell a plugin that
+    /// is absent from one that is merely disabled.
+    /// </summary>
+    /// <param name="internalName">The internal name the plugin is installed under.</param>
+    /// <returns>The installed plugin, or null when it is not installed.</returns>
+    private IExposedPlugin? FindPlugin(string internalName)
+    {
+      return this.PluginInterface.InstalledPlugins.FirstOrDefault(p => p.InternalName == internalName);
     }
 
     private void OnContextMenuOpened(IMenuOpenedArgs args)

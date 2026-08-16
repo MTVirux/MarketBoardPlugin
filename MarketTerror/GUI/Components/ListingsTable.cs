@@ -241,7 +241,7 @@ namespace MarketTerror.GUI.Components
         var autoSearchName = this.context.SelectedItem.Value.Name.ExtractText();
         var autoSearchId = this.context.SelectedItem.Value.RowId;
 
-        if (traveled && plugin.IsLifestreamInstalled)
+        if (traveled && plugin.IsLifestreamAvailable)
         {
           plugin.AutoSearch.Arm(autoSearchName, autoSearchId);
         }
