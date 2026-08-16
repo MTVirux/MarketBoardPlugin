@@ -28,6 +28,7 @@ namespace MarketTerror.Helpers
     private const string BoardAddonName = "ItemSearch";
     private const string ConfirmAddonName = "SelectYesno";
     private const long ListingsTimeoutMs = 15000;
+    private const long ListingsSettleMs = 500;
     private const long ConfirmTimeoutMs = 10000;
     private const long ResultTimeoutMs = 15000;
     private const uint HqItemIdOffset = 1000000;
@@ -43,6 +44,8 @@ namespace MarketTerror.Helpers
     private BuyRequest? request;
     private Action<BuyResult>? onFinished;
     private long deadlineTick;
+    private long listingsSettleTick;
+    private uint lastListingCount;
     private ulong purchasedListingBefore;
     private ulong targetListingId;
     private double targetUnitPrice;
@@ -97,6 +100,8 @@ namespace MarketTerror.Helpers
       this.onFinished = finished;
       this.state = State.WaitingListings;
       this.deadlineTick = Environment.TickCount64 + ListingsTimeoutMs;
+      this.listingsSettleTick = 0;
+      this.lastListingCount = 0;
       this.targetListingId = 0;
       this.targetUnitPrice = 0;
     }
@@ -189,6 +194,11 @@ namespace MarketTerror.Helpers
       {
         if (Environment.TickCount64 > this.deadlineTick)
         {
+          if (this.state == State.WaitingListings)
+          {
+            this.LogListingsTimeout();
+          }
+
           this.Finish(BuyResult.Failed(this.state switch
           {
             State.WaitingListings => "the listings never arrived",
@@ -221,6 +231,49 @@ namespace MarketTerror.Helpers
       }
     }
 
+    /// <summary>
+    /// Says what the board was doing when a buy gave up waiting for its listings.
+    /// </summary>
+    private unsafe void LogListingsTimeout()
+    {
+      var proxy = InfoProxyItemSearch.Instance();
+      var windowOpen = this.gameGui.GetAddonByName(ResultAddonName) != nint.Zero;
+      var name = this.request!.ItemName;
+
+      this.log.Warning(proxy == null
+        ? $"Gave up waiting for the listings of \"{name}\": no item search proxy, listings window open {windowOpen}"
+        : $"Gave up waiting for the listings of \"{name}\": still waiting {proxy->WaitingForListings}, count {proxy->ListingCount}, search item {proxy->SearchItemId}, listings window open {windowOpen}");
+    }
+
+    /// <summary>
+    /// Checks whether the listings the game is holding are this item's and all of them.
+    /// </summary>
+    /// <param name="proxy">The item search info proxy.</param>
+    /// <param name="buy">What is being bought.</param>
+    /// <returns>True when the listings can be matched against.</returns>
+    /// <remarks>
+    /// The board keeps the previous item's listings until the first page of the new ones lands, and the
+    /// rest of the pages follow over the frames after that. Matching any earlier is what makes a listing
+    /// that is plainly on the board look like it is not there.
+    /// </remarks>
+    private unsafe bool AreListingsReady(InfoProxyItemSearch* proxy, BuyRequest buy)
+    {
+      if (proxy->WaitingForListings || proxy->ListingCount == 0 || proxy->SearchItemId % HqItemIdOffset != buy.ItemId)
+      {
+        this.listingsSettleTick = 0;
+        return false;
+      }
+
+      if (this.listingsSettleTick == 0 || proxy->ListingCount != this.lastListingCount)
+      {
+        this.lastListingCount = proxy->ListingCount;
+        this.listingsSettleTick = Environment.TickCount64 + ListingsSettleMs;
+        return false;
+      }
+
+      return Environment.TickCount64 >= this.listingsSettleTick;
+    }
+
     private unsafe void TrySelectListing()
     {
       nint addonPtr = this.gameGui.GetAddonByName(ResultAddonName);
@@ -236,13 +289,13 @@ namespace MarketTerror.Helpers
       }
 
       var proxy = InfoProxyItemSearch.Instance();
-      if (proxy == null || proxy->ListingCount == 0)
+      if (proxy == null)
       {
         return;
       }
 
       var buy = this.request!;
-      if (proxy->SearchItemId % HqItemIdOffset != buy.ItemId)
+      if (!this.AreListingsReady(proxy, buy) || addon->Results->GetItemCount() == 0)
       {
         return;
       }
@@ -277,6 +330,7 @@ namespace MarketTerror.Helpers
 
       if (index < 0)
       {
+        this.log.Debug($"None of the {proxy->ListingCount} listings on the board are \"{buy.ItemName}\" x{buy.Quantity} {(buy.Hq ? "HQ" : "NQ")} at {buy.MaxUnitPrice:F0} or less per unit");
         this.Finish(BuyResult.Failed(this.DescribeCheapest(proxy, withTax)));
         return;
       }

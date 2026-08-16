@@ -25,11 +25,13 @@ namespace MarketTerror.Helpers
   public sealed class MarketBoardAutoSearch : IDisposable
   {
     private const string AddonName = "ItemSearch";
+    private const string ResultAddonName = "ItemSearchResult";
     private const long PollSettleMs = 500;
     private const long FallbackArmMs = 300000;
     private const long LocalBoardArmMs = 10000;
     private const long AddonSettleMs = 500;
     private const long ResultsTimeoutMs = 10000;
+    private const long ResultWindowTimeoutMs = 10000;
     private const uint HqItemIdOffset = 1000000;
 
     private readonly IFramework framework;
@@ -46,6 +48,7 @@ namespace MarketTerror.Helpers
     private long pollStartTick;
     private long fallbackDeadlineTick;
     private long resultsDeadlineTick;
+    private long resultWindowDeadlineTick;
     private long addonSettleTick;
     private bool addonSeen;
     private bool resultsLogged;
@@ -91,6 +94,7 @@ namespace MarketTerror.Helpers
       Traveling,
       WaitingAddon,
       WaitingResults,
+      WaitingResultWindow,
     }
 
     /// <summary>
@@ -296,15 +300,37 @@ namespace MarketTerror.Helpers
 
       if (this.state == State.WaitingResults)
       {
-        var opened = this.TryOpenResult();
+        var clicked = this.TryOpenResult();
 
-        if (opened.HasValue)
+        if (clicked == true)
         {
-          this.Finish(opened.Value);
+          // The click only asks the board for the listings; the window opening is what says they are on their way.
+          this.state = State.WaitingResultWindow;
+          this.resultWindowDeadlineTick = now + ResultWindowTimeoutMs;
+        }
+        else if (clicked == false)
+        {
+          this.Finish(false);
         }
         else if (now > this.resultsDeadlineTick)
         {
           this.log.Debug($"No Market Board result for \"{this.itemName}\" (id {this.itemId}) arrived in time; leaving the search as-is");
+          this.Finish(false);
+        }
+
+        return;
+      }
+
+      if (this.state == State.WaitingResultWindow)
+      {
+        if (this.IsResultWindowOpen())
+        {
+          this.log.Debug($"The Market Board listings for \"{this.itemName}\" are open");
+          this.Finish(true);
+        }
+        else if (now > this.resultWindowDeadlineTick)
+        {
+          this.log.Debug($"The Market Board listings for \"{this.itemName}\" never opened");
           this.Finish(false);
         }
 
@@ -394,6 +420,18 @@ namespace MarketTerror.Helpers
       this.addonSettleTick = 0;
     }
 
+    private unsafe bool IsResultWindowOpen()
+    {
+      nint addonPtr = this.gameGui.GetAddonByName(ResultAddonName);
+      if (addonPtr == nint.Zero)
+      {
+        return false;
+      }
+
+      var addon = (AddonItemSearchResult*)addonPtr;
+      return addon->AtkUnitBase.IsFullyLoaded() && addon->AtkUnitBase.IsReady;
+    }
+
     private unsafe bool IsItemSearchReady(nint addonPtr)
     {
       if (addonPtr == nint.Zero)
@@ -467,7 +505,7 @@ namespace MarketTerror.Helpers
     /// <summary>
     /// Selects the searched item in the results once the server has answered.
     /// </summary>
-    /// <returns>True once the result has been opened, false when it never can be, and null while it is still waiting.</returns>
+    /// <returns>True once the result has been clicked, false when it never can be, and null while it is still waiting.</returns>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Must never throw into the framework update loop")]
     private unsafe bool? TryOpenResult()
     {
