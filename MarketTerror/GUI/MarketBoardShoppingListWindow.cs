@@ -150,6 +150,8 @@ namespace MarketTerror.GUI
     public override void Draw()
     {
       Utilities.RainbowText("EXPERIMENTAL");
+      ImGui.SameLine(0, 0);
+      ImGui.Text(" - use at your own risk");
 
       this.DrawBulkAddProgress();
       this.DrawBuyProgress();
