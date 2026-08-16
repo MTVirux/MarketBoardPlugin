@@ -15,6 +15,7 @@ namespace MarketTerror.GUI
   using Dalamud.Interface.Windowing;
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
+  using MarketTerror.Models;
   using MarketTerror.Models.ShoppingList;
   using MarketTerror.Services;
 
@@ -326,18 +327,21 @@ namespace MarketTerror.GUI
     {
       var targets = scope.TargetsFor(level);
 
-      if (targets.Count > 0)
+      if (targets.Count == 0)
       {
-        return string.Join(" + ", targets);
+        targets = new[]
+        {
+          level switch
+          {
+            MarketScope.RegionWithOceania => "Region + Oceania",
+            MarketScope.Region => "Region",
+            MarketScope.DataCentre => "Data Centre",
+            _ => "World",
+          },
+        };
       }
 
-      return level switch
-      {
-        MarketScope.RegionWithOceania => "Region + Oceania",
-        MarketScope.Region => "Region",
-        MarketScope.DataCentre => "Data Centre",
-        _ => "World",
-      };
+      return MarketScopeLabel.For(level, targets);
     }
 
     /// <summary>

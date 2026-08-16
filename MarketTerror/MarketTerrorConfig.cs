@@ -7,6 +7,7 @@ namespace MarketTerror
   using System.Collections.Generic;
   using System.Diagnostics.CodeAnalysis;
   using Dalamud.Configuration;
+  using MarketTerror.Models;
   using MarketTerror.Models.ShoppingList;
 
   /// <summary>
@@ -22,7 +23,7 @@ namespace MarketTerror
     /// <summary>
     /// The version this build writes.
     /// </summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
 
     /// <summary>
     /// Gets or sets the version of the config file.
@@ -30,13 +31,20 @@ namespace MarketTerror
     public int Version { get; set; } = CurrentVersion;
 
     /// <summary>
+    /// Gets or sets how wide the market board window prices around the character's world.
+    /// </summary>
+    public MarketScope MarketBoardScope { get; set; } = MarketScope.World;
+
+    /// <summary>
     /// Gets or sets a value indicating whether cross data center was selected.
     /// </summary>
+    /// <remarks>Replaced by <see cref="MarketBoardScope"/>; only read while migrating an older config.</remarks>
     public bool CrossDataCenter { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether cross world was selected.
     /// </summary>
+    /// <remarks>Replaced by <see cref="MarketBoardScope"/>; only read while migrating an older config.</remarks>
     public bool CrossWorld { get; set; }
 
     /// <summary>
@@ -155,11 +163,6 @@ namespace MarketTerror
     /// Gets or sets a value indicating whether the matching result is automatically opened once the Market Board auto-search returns.
     /// </summary>
     public bool AutoOpenSearchResult { get; set; } = true;
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the Oceania DC should be included in the Cross-DC filter.
-    /// </summary>
-    public bool IncludeOceaniaDC { get; set; } = true;
 
     /// <summary>
     /// Gets or sets a value indicating whether the main window should open on plugin start in debug builds.

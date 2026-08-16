@@ -285,7 +285,7 @@ namespace MarketTerror.GUI
         return;
       }
 
-      this.MarketData.Refresh(this.SelectedItem.Value, this.Worlds.QueryTarget, this.Worlds.SelectedIndex);
+      this.MarketData.Refresh(this.SelectedItem.Value, this.Worlds.QueryTarget, this.Worlds.IncludesOceania);
     }
 
     /// <summary>

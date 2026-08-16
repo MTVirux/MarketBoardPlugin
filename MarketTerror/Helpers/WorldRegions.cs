@@ -10,6 +10,11 @@ namespace MarketTerror.Helpers
   internal static class WorldRegions
   {
     /// <summary>
+    /// Oceania sits on its own, so it is only ever priced when it is asked for by name.
+    /// </summary>
+    public const string Oceania = "Oceania";
+
+    /// <summary>
     /// Resolves the name a region is queried by.
     /// </summary>
     /// <param name="regionRowId">The region row id of a data centre.</param>
@@ -21,7 +26,7 @@ namespace MarketTerror.Helpers
         1 => "Japan",
         2 => "North-America",
         3 => "Europe",
-        4 => "Oceania",
+        4 => Oceania,
         5 => "中国",
         _ => string.Empty,
       };

@@ -2,7 +2,7 @@
 // Copyright (c) MTVirux. All rights reserved.
 // </copyright>
 
-namespace MarketTerror.Models.ShoppingList
+namespace MarketTerror.Models
 {
   /// <summary>
   /// How wide a market data query reaches around the selected world.

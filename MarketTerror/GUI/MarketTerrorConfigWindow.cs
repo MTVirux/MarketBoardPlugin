@@ -114,13 +114,6 @@ namespace MarketTerror.GUI
       this.SectionHeading("Others");
       this.Checkbox("Watch for hovered item", "Automatically select the item hovered in any of the in-game inventory window after 1 second.", this.Plugin.Config.WatchForHovered, (v) => this.Plugin.Config.WatchForHovered = v);
 
-      this.Checkbox("Include Oceania DC", "Toggles whether the Oceania DC should be included in the Cross-DC filter", this.Plugin.Config.IncludeOceaniaDC, (v) =>
-      {
-        this.Plugin.Config.IncludeOceaniaDC = v;
-        this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
-        this.Plugin.ResetMarketData();
-      });
-
       this.Checkbox("Terror skin", "Apply the Market Terror colour scheme to this plugin's windows. Turn it off to use your Dalamud theme.", this.Plugin.Config.TerrorSkinEnabled, (v) => this.Plugin.Config.TerrorSkinEnabled = v);
 
       if (ImGui.Button("Edit theme colours"))

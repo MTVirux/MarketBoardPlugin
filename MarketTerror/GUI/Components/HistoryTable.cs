@@ -141,7 +141,7 @@ namespace MarketTerror.GUI.Components
 
     private void DrawRow(MarketDataRecentHistory history, int index)
     {
-      var selectedWorld = this.context.Worlds.SelectedIndex;
+      var worlds = this.context.Worlds;
 
       ImGui.TableNextRow();
       ImGui.TableSetColumnIndex(0);
@@ -181,7 +181,7 @@ namespace MarketTerror.GUI.Components
 
       ImGui.TableSetColumnIndex(5);
       ImGui.Text(
-        $"{history.BuyerName} {SeIconChar.CrossWorld.ToChar()} {(selectedWorld <= 1 ? history.WorldName : this.context.Worlds.Worlds[selectedWorld].Query)}");
+        $"{history.BuyerName} {SeIconChar.CrossWorld.ToChar()} {(worlds.IsMultiWorld ? history.WorldName : worlds.QueryTarget)}");
     }
   }
 }

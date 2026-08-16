@@ -9,6 +9,7 @@ namespace MarketTerror.Services
   using System.Linq;
   using Lumina.Excel.Sheets;
   using MarketTerror.Helpers;
+  using MarketTerror.Models;
   using MarketTerror.Models.ShoppingList;
 
   /// <summary>
@@ -20,11 +21,6 @@ namespace MarketTerror.Services
   /// </remarks>
   public sealed class ShoppingListScope
   {
-    /// <summary>
-    /// Oceania sits on its own, so it is only ever priced when it is asked for by name.
-    /// </summary>
-    private const string OceaniaRegion = "Oceania";
-
     private readonly MarketTerrorPlugin plugin;
 
     private readonly List<WorldEntry> worlds = new List<WorldEntry>();
@@ -121,9 +117,9 @@ namespace MarketTerror.Services
       {
         MarketScope.DataCentre => new[] { entry.DataCentre },
         MarketScope.Region => new[] { entry.Region },
-        MarketScope.RegionWithOceania => entry.Region == OceaniaRegion
+        MarketScope.RegionWithOceania => entry.Region == WorldRegions.Oceania
           ? new[] { entry.Region }
-          : new[] { entry.Region, OceaniaRegion },
+          : new[] { entry.Region, WorldRegions.Oceania },
         _ => new[] { entry.Name },
       };
     }

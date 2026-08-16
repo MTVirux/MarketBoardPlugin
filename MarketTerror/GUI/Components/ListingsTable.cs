@@ -146,7 +146,7 @@ namespace MarketTerror.GUI.Components
 
     private void DrawRow(MarketDataListing listing, int index)
     {
-      var selectedWorld = this.context.Worlds.SelectedIndex;
+      var worlds = this.context.Worlds;
 
       ImGui.TableNextRow();
       ImGui.TableSetColumnIndex(0);
@@ -191,18 +191,18 @@ namespace MarketTerror.GUI.Components
 
       var retainerSB = new StringBuilder($"{listing.RetainerName} {SeIconChar.CrossWorld.ToChar()}");
 
-      if (selectedWorld <= 1)
+      if (worlds.IsMultiWorld)
       {
         retainerSB.Append(CultureInfo.CurrentCulture, $" {listing.WorldName ?? string.Empty}");
 
-        if (selectedWorld == 0)
+        if (worlds.IsRegionWide)
         {
-          retainerSB.Append(CultureInfo.CurrentCulture, $" @ {this.context.Worlds.GetDataCenterName(listing.WorldID!.Value)}");
+          retainerSB.Append(CultureInfo.CurrentCulture, $" @ {worlds.GetDataCenterName(listing.WorldID!.Value)}");
         }
       }
       else
       {
-        retainerSB.Append(CultureInfo.CurrentCulture, $" {this.context.Worlds.Worlds[selectedWorld].Query}");
+        retainerSB.Append(CultureInfo.CurrentCulture, $" {worlds.QueryTarget}");
       }
 
       ImGui.Text(retainerSB.ToString());
@@ -211,14 +211,14 @@ namespace MarketTerror.GUI.Components
     private void HandleClick(MarketDataListing listing, int index)
     {
       var plugin = this.context.Plugin;
-      var selectedWorld = this.context.Worlds.SelectedIndex;
+      var worlds = this.context.Worlds;
 
       this.context.SelectedListing = index;
 
       // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
-      var worldName = selectedWorld > 1
-        ? this.context.Worlds.Worlds[selectedWorld].Query
-        : listing.WorldName ?? string.Empty;
+      var worldName = worlds.IsMultiWorld
+        ? listing.WorldName ?? string.Empty
+        : worlds.QueryTarget;
 
       this.context.GoToMarketBoard(worldName, this.context.SelectedItem, this.context.Config.AutoTeleportToWorld);
 

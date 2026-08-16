@@ -41,6 +41,11 @@ namespace MarketTerror.GUI.Components
       var item = this.context.SelectedItem!.Value;
       var itemName = item.Name.ExtractText();
 
+      // The combo names the world, data centre or region it prices at, so it has to fit that.
+      var comboWidth = Math.Max(
+        250 * scale,
+        ImGui.CalcTextSize(this.context.Worlds.SelectedDisplayName).X + ImGui.GetFrameHeight() + (ImGui.GetStyle().FramePadding.X * 2));
+
       using var selectedItemIcon = this.context.Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup
       {
         IconId = item.Icon,
@@ -72,12 +77,12 @@ namespace MarketTerror.GUI.Components
       ImGui.Text(itemName);
       ImGui.PopStyleColor();
       ImGui.OpenPopupOnItemClick(ContextMenuId, ImGuiPopupFlags.MouseButtonRight);
-      ImGui.SameLine(ImGui.GetContentRegionAvail().X - (250 * scale));
+      ImGui.SameLine(ImGui.GetContentRegionAvail().X - comboWidth);
       ImGui.SetCursorPosY(8 * scale);
       this.context.TitleFont.Pop();
 
       ImGui.BeginGroup();
-      ImGui.SetNextItemWidth(250 * scale);
+      ImGui.SetNextItemWidth(comboWidth);
 
       if (ImGui.BeginCombo("##worldCombo", this.context.Worlds.SelectedDisplayName))
       {

@@ -23,6 +23,7 @@ namespace MarketTerror
 
   using MarketTerror.GUI;
   using MarketTerror.Helpers;
+  using MarketTerror.Models;
   using MarketTerror.Models.ShoppingList;
   using MarketTerror.Services;
 
@@ -469,6 +470,19 @@ namespace MarketTerror
       {
         this.Config.ItemRefreshTimeout = MarketTerrorConfig.DefaultItemRefreshTimeout;
       }
+
+      // The two cross-world flags became one scope, and the Oceania toggle folded into it at its old default.
+      if (this.Config.CrossDataCenter)
+      {
+        this.Config.MarketBoardScope = MarketScope.RegionWithOceania;
+      }
+      else if (this.Config.CrossWorld)
+      {
+        this.Config.MarketBoardScope = MarketScope.DataCentre;
+      }
+
+      this.Config.CrossDataCenter = false;
+      this.Config.CrossWorld = false;
 
       this.Config.Version = MarketTerrorConfig.CurrentVersion;
       this.PluginInterface.SavePluginConfig(this.Config);

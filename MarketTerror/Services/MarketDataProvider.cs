@@ -10,6 +10,7 @@ namespace MarketTerror.Services
   using System.Threading;
   using System.Threading.Tasks;
   using Lumina.Excel.Sheets;
+  using MarketTerror.Helpers;
   using MarketTerror.Models.FFXIVMT;
   using MarketTerror.Models.Universalis;
 
@@ -81,8 +82,8 @@ namespace MarketTerror.Services
     /// </summary>
     /// <param name="item">The item to fetch data for.</param>
     /// <param name="queryTarget">The world, data centre or region to query.</param>
-    /// <param name="selectedWorldIndex">The index of the selected world, used to decide whether the Oceania data centre is merged in.</param>
-    public void Refresh(Item item, string queryTarget, int selectedWorldIndex)
+    /// <param name="includeOceania">True to merge the Oceania data centre's listings into the result.</param>
+    public void Refresh(Item item, string queryTarget, bool includeOceania)
     {
       this.MarketData = null;
       this.Gilflux = null;
@@ -124,12 +125,12 @@ namespace MarketTerror.Services
                 cancellationTokenSource.Token)
               .ConfigureAwait(false);
 
-            if (selectedWorldIndex == 0 && this.plugin.Config.IncludeOceaniaDC && queryTarget != "Oceania")
+            if (includeOceania)
             {
               var oceaniaMarketData = await this.plugin.UniversalisClient
                 .GetMarketData(
                   itemId,
-                  "Oceania",
+                  WorldRegions.Oceania,
                   this.plugin.Config.ListingCount,
                   this.plugin.Config.HistoryCount,
                   cancellationTokenSource.Token)

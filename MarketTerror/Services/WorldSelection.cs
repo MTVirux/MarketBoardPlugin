@@ -14,6 +14,7 @@ namespace MarketTerror.Services
   using Lumina.Extensions;
   using MarketTerror.Extensions;
   using MarketTerror.Helpers;
+  using MarketTerror.Models;
 
   /// <summary>
   /// The list of worlds the market board can be queried against, and which one is selected.
@@ -22,7 +23,7 @@ namespace MarketTerror.Services
   {
     private readonly MarketTerrorPlugin plugin;
 
-    private readonly List<(string Query, string Display)> worlds = new();
+    private readonly List<(string Query, string Display, MarketScope Scope)> worlds = new();
 
     private ulong playerId;
 
@@ -41,15 +42,15 @@ namespace MarketTerror.Services
       this.plugin.Framework.Update += this.HandleFrameworkUpdateEvent;
 
 #if DEBUG
-      this.worlds.Add(("Chaos", "Chaos"));
-      this.worlds.Add(("Moogle", "Moogle"));
+      this.worlds.Add(("Chaos", "Chaos", MarketScope.DataCentre));
+      this.worlds.Add(("Moogle", "Moogle", MarketScope.DataCentre));
 #endif
     }
 
     /// <summary>
-    /// Gets the available worlds, as pairs of the name used for queries and the name shown in the combo.
+    /// Gets the available worlds, as the name used for queries, the name shown in the combo and how wide the entry reaches.
     /// </summary>
-    public IReadOnlyList<(string Query, string Display)> Worlds => this.worlds;
+    public IReadOnlyList<(string Query, string Display, MarketScope Scope)> Worlds => this.worlds;
 
     /// <summary>
     /// Gets the index of the selected world, or -1 when nothing is selected yet.
@@ -72,14 +73,33 @@ namespace MarketTerror.Services
     public string SelectedDisplayName => this.selectedIndex >= 0 ? this.worlds[this.selectedIndex].Display : string.Empty;
 
     /// <summary>
-    /// Selects a world and records the matching cross-world and cross-data-centre flags in the configuration.
+    /// Gets how wide the selected entry reaches.
+    /// </summary>
+    public MarketScope SelectedScope => this.selectedIndex >= 0 ? this.worlds[this.selectedIndex].Scope : MarketScope.World;
+
+    /// <summary>
+    /// Gets a value indicating whether the selection spans more than one world, so listings carry their own world name.
+    /// </summary>
+    public bool IsMultiWorld => this.SelectedScope != MarketScope.World;
+
+    /// <summary>
+    /// Gets a value indicating whether the selection spans more than one data centre.
+    /// </summary>
+    public bool IsRegionWide => this.SelectedScope is MarketScope.Region or MarketScope.RegionWithOceania;
+
+    /// <summary>
+    /// Gets a value indicating whether the Oceania data centre is priced alongside the selection.
+    /// </summary>
+    public bool IncludesOceania => this.SelectedScope == MarketScope.RegionWithOceania;
+
+    /// <summary>
+    /// Selects a world and records how wide it reaches in the configuration.
     /// </summary>
     /// <param name="index">The index into <see cref="Worlds"/>.</param>
     public void Select(int index)
     {
       this.selectedIndex = index;
-      this.plugin.Config.CrossDataCenter = index == 0;
-      this.plugin.Config.CrossWorld = index == 1;
+      this.plugin.Config.MarketBoardScope = this.SelectedScope;
     }
 
     /// <summary>
@@ -121,7 +141,8 @@ namespace MarketTerror.Services
 
       if (this.playerId != this.plugin.PlayerState.ContentId)
       {
-        var currentDc = this.plugin.PlayerState.CurrentWorld.Value.DataCenter;
+        var currentWorld = this.plugin.PlayerState.CurrentWorld.Value;
+        var currentDc = currentWorld.DataCenter;
         var dcWorlds = this.plugin.DataManager.GetExcelSheet<World>()
           .Where(w => w.DataCenter.RowId == currentDc.RowId && w.IsPublic)
           .OrderBy(w => w.Name.ExtractText())
@@ -129,33 +150,30 @@ namespace MarketTerror.Services
           {
             string displayName = w.Name.ExtractText();
 
-            if (this.plugin.PlayerState.CurrentWorld.Value.RowId == w.RowId)
+            if (currentWorld.RowId == w.RowId)
             {
               displayName += $" {SeIconChar.Hyadelyn.ToChar()}";
             }
 
-            return (w.Name.ExtractText(), displayName);
+            return (w.Name.ExtractText(), displayName, MarketScope.World);
           });
 
         var regionName = WorldRegions.GetName(this.plugin.PlayerState.HomeWorld.Value.DataCenter.Value.Region.RowId);
+        var dcName = currentDc.Value.Name.ExtractText();
 
         this.worlds.Clear();
-        this.worlds.Add((regionName, $"Cross-DC {SeIconChar.CrossWorld.ToChar()}"));
-        this.worlds.Add((currentDc.Value.Name.ExtractText(), $"Cross-World {SeIconChar.CrossWorld.ToChar()}"));
+
+        // An Oceania world already reaches Oceania at plain region scope, so there is nothing to add on.
+        if (regionName != WorldRegions.Oceania)
+        {
+          this.AddScope(regionName, MarketScope.RegionWithOceania, regionName, WorldRegions.Oceania);
+        }
+
+        this.AddScope(regionName, MarketScope.Region, regionName);
+        this.AddScope(dcName, MarketScope.DataCentre, dcName);
         this.worlds.AddRange(dcWorlds);
 
-        if (this.plugin.Config.CrossDataCenter)
-        {
-          this.selectedIndex = 0;
-        }
-        else if (this.plugin.Config.CrossWorld)
-        {
-          this.selectedIndex = 1;
-        }
-        else
-        {
-          this.selectedIndex = this.worlds.FindIndex(w => w.Query == this.plugin.PlayerState.CurrentWorld.Value.Name);
-        }
+        this.selectedIndex = this.RestoreSelection(currentWorld.Name.ExtractText());
 
         if (this.worlds.Count > 1)
         {
@@ -167,6 +185,26 @@ namespace MarketTerror.Services
       {
         this.playerId = 0;
       }
+    }
+
+    private void AddScope(string query, MarketScope scope, params string[] targets)
+    {
+      this.worlds.Add((query, MarketScopeLabel.For(scope, targets), scope));
+    }
+
+    private int RestoreSelection(string currentWorldName)
+    {
+      var stored = this.plugin.Config.MarketBoardScope;
+
+      // An Oceania character is not offered the "+ Oceania" entry, so it settles for the plain region.
+      if (stored == MarketScope.RegionWithOceania && !this.worlds.Any(w => w.Scope == stored))
+      {
+        stored = MarketScope.Region;
+      }
+
+      return stored == MarketScope.World
+        ? this.worlds.FindIndex(w => w.Scope == MarketScope.World && w.Query == currentWorldName)
+        : this.worlds.FindIndex(w => w.Scope == stored);
     }
   }
 }
