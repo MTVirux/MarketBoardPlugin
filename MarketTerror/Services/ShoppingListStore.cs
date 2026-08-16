@@ -166,13 +166,21 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Marks every entry as waiting for a new price, so the table can say so until one lands.
+    /// Marks the given entries as waiting for a new price, so the table can say so until one lands.
     /// </summary>
-    public void MarkRefreshing()
+    /// <param name="itemIds">The row ids of the items being priced again.</param>
+    public void MarkRefreshing(IEnumerable<uint> itemIds)
     {
-      foreach (var item in this.items)
+      ArgumentNullException.ThrowIfNull(itemIds);
+
+      foreach (var id in itemIds)
       {
-        item.Refreshing = true;
+        var existing = this.items.Find(i => i.SourceItem.RowId == id);
+
+        if (existing != null)
+        {
+          existing.Refreshing = true;
+        }
       }
     }
 
@@ -188,13 +196,21 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Forgets the buy outcome of every entry, so a new pricing job starts from uncoloured rows.
+    /// Forgets the buy outcome of the given entries, so a new pricing job starts from uncoloured rows.
     /// </summary>
-    public void ClearOutcomes()
+    /// <param name="itemIds">The row ids of the items being priced again.</param>
+    public void ClearOutcomes(IEnumerable<uint> itemIds)
     {
-      foreach (var item in this.items)
+      ArgumentNullException.ThrowIfNull(itemIds);
+
+      foreach (var id in itemIds)
       {
-        item.Outcome = BuyOutcome.None;
+        var existing = this.items.Find(i => i.SourceItem.RowId == id);
+
+        if (existing != null)
+        {
+          existing.Outcome = BuyOutcome.None;
+        }
       }
     }
 

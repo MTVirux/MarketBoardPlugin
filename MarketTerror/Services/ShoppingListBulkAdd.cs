@@ -100,9 +100,10 @@ namespace MarketTerror.Services
     /// </summary>
     /// <param name="items">The items to price again.</param>
     /// <param name="queryTargets">The worlds, data centres or regions to price the items against.</param>
-    public void StartRefresh(IReadOnlyList<Item> items, IReadOnlyList<string> queryTargets)
+    /// <param name="label">What to call the job while it runs, or null for the whole list.</param>
+    public void StartRefresh(IReadOnlyList<Item> items, IReadOnlyList<string> queryTargets, string? label = null)
     {
-      this.StartJob("the shopping list", items, queryTargets, true);
+      this.StartJob(label ?? "the shopping list", items, queryTargets, true);
     }
 
     /// <summary>
@@ -155,8 +156,10 @@ namespace MarketTerror.Services
 
       if (refresh)
       {
-        this.plugin.ShoppingList.ClearOutcomes();
-        this.plugin.ShoppingList.MarkRefreshing();
+        // Only the rows being priced again, so a single row refresh leaves the rest of the list alone.
+        var ids = queued.Select(i => i.RowId).ToArray();
+        this.plugin.ShoppingList.ClearOutcomes(ids);
+        this.plugin.ShoppingList.MarkRefreshing(ids);
       }
 
       this.job = Task.Run(() => this.Run(queued, targets, token), token);

@@ -29,6 +29,16 @@ namespace MarketTerror.GUI
     /// </summary>
     private const string NoValue = "-";
 
+    /// <summary>
+    /// The unscaled width of one of the icon buttons in the action column.
+    /// </summary>
+    private const float ActionButtonWidth = 32;
+
+    /// <summary>
+    /// How many icon buttons a row can show.
+    /// </summary>
+    private const int ActionButtonCount = 4;
+
     private const ImGuiTableFlags TableFlags =
       ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp |
       ImGuiTableFlags.Sortable | ImGuiTableFlags.SortTristate;
@@ -174,7 +184,7 @@ namespace MarketTerror.GUI
       ImGui.TableSetupColumn(
         "Action",
         ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed,
-        (112 * ImGui.GetIO().FontGlobalScale) + ImGui.GetStyle().ItemSpacing.X);
+        (ActionButtonCount * ActionButtonWidth * ImGui.GetIO().FontGlobalScale) + (ActionButtonCount * ImGui.GetStyle().ItemSpacing.X));
       ImGui.TableSetupScrollFreeze(0, 1);
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
@@ -222,13 +232,22 @@ namespace MarketTerror.GUI
         ImGui.TableSetColumnIndex(4);
         ImGui.Text(item.Unlisted ? NoValue : item.World);
 
-        var buttonSize = new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
+        var buttonSize = new Vector2(ActionButtonWidth * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
 
         ImGui.TableSetColumnIndex(5);
 
-        var canBuy = this.Plugin.ShoppingListBuyer.CanBuy(item, out var buyBlockedReason)
-          && !this.Plugin.ShoppingListBuyer.IsRunning
-          && !this.Plugin.ShoppingListBulkAdd.IsRunning;
+        var idle = !this.Plugin.ShoppingListBuyer.IsRunning && !this.Plugin.ShoppingListBulkAdd.IsRunning;
+
+        ImGui.BeginDisabled(!idle || !this.Plugin.ShoppingListScope.HasSelection);
+        ImGui.PushFont(UiBuilder.IconFont);
+        var refresh = ImGui.Button($"{(char)FontAwesomeIcon.SyncAlt}##shoplistrefresh" + k, buttonSize);
+        ImGui.PopFont();
+        ImGui.EndDisabled();
+        Utilities.HoverTooltip("Price this item again.");
+
+        ImGui.SameLine();
+
+        var canBuy = this.Plugin.ShoppingListBuyer.CanBuy(item, out var buyBlockedReason) && idle;
 
         ImGui.BeginDisabled(!canBuy);
         ImGui.PushFont(UiBuilder.IconFont);
@@ -277,6 +296,14 @@ namespace MarketTerror.GUI
         if (buy)
         {
           this.Plugin.ShoppingListBuyer.BuyOne(item);
+        }
+
+        if (refresh)
+        {
+          this.Plugin.ShoppingListBulkAdd.StartRefresh(
+            new[] { item.SourceItem },
+            this.Plugin.ShoppingListScope.QueryTargets,
+            item.SourceItem.Name.ExtractText());
         }
 
         k += 1;
@@ -401,7 +428,7 @@ namespace MarketTerror.GUI
 
       ImGui.BeginDisabled(busy || !scope.HasSelection);
 
-      if (ImGui.Button("Refresh"))
+      if (ImGui.Button("Refresh all"))
       {
         this.Plugin.ShoppingListBulkAdd.StartRefresh(
           this.Plugin.ShoppingList.Select(i => i.SourceItem).ToArray(),
