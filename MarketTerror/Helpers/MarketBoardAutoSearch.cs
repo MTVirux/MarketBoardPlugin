@@ -49,6 +49,8 @@ namespace MarketTerror.Helpers
     private long addonSettleTick;
     private bool addonSeen;
     private bool resultsLogged;
+    private Action<bool>? onFinished;
+    private bool forced;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardAutoSearch"/> class.
@@ -96,11 +98,17 @@ namespace MarketTerror.Helpers
     /// </summary>
     /// <param name="name">The item name to search for.</param>
     /// <param name="id">The row ID of the item, used to pick the matching result.</param>
-    public void Arm(string name, uint id)
+    /// <param name="onFinished">Called exactly once with true when the item's listings were opened, false otherwise.</param>
+    /// <param name="force">True to run regardless of the auto-search settings.</param>
+    public void Arm(string name, uint id, Action<bool>? onFinished = null, bool force = false)
     {
-      if (this.Arm(name, id, State.Traveling, FallbackArmMs))
+      if (this.Arm(name, id, State.Traveling, FallbackArmMs, onFinished, force))
       {
         this.log.Debug($"Auto-search armed for \"{name}\"; waiting for travel to finish");
+      }
+      else
+      {
+        onFinished?.Invoke(false);
       }
     }
 
@@ -109,11 +117,17 @@ namespace MarketTerror.Helpers
     /// </summary>
     /// <param name="name">The item name to search for.</param>
     /// <param name="id">The row ID of the item, used to pick the matching result.</param>
-    public void ArmForLocalBoard(string name, uint id)
+    /// <param name="onFinished">Called exactly once with true when the item's listings were opened, false otherwise.</param>
+    /// <param name="force">True to run regardless of the auto-search settings.</param>
+    public void ArmForLocalBoard(string name, uint id, Action<bool>? onFinished = null, bool force = false)
     {
-      if (this.Arm(name, id, State.WaitingAddon, LocalBoardArmMs))
+      if (this.Arm(name, id, State.WaitingAddon, LocalBoardArmMs, onFinished, force))
       {
         this.log.Debug($"Auto-search armed for \"{name}\"; waiting for the nearby Market Board to open");
+      }
+      else
+      {
+        onFinished?.Invoke(false);
       }
     }
 
@@ -122,12 +136,7 @@ namespace MarketTerror.Helpers
     /// </summary>
     public void Disarm()
     {
-      this.state = State.Idle;
-      this.itemName = string.Empty;
-      this.itemId = 0;
-      this.addonSeen = false;
-      this.addonSettleTick = 0;
-      this.resultsLogged = false;
+      this.Finish(false);
     }
 
     /// <summary>
@@ -135,21 +144,24 @@ namespace MarketTerror.Helpers
     /// </summary>
     /// <param name="name">The item name to search for.</param>
     /// <param name="id">The row ID of the item, used to pick the matching result.</param>
-    public void TryFillNow(string name, uint id)
+    /// <param name="onFinished">Called exactly once with true when the item's listings were opened, false otherwise.</param>
+    /// <param name="force">True to run regardless of the auto-search settings.</param>
+    public void TryFillNow(string name, uint id, Action<bool>? onFinished = null, bool force = false)
     {
-      if (string.IsNullOrWhiteSpace(name))
+      nint addon = string.IsNullOrWhiteSpace(name) ? nint.Zero : this.gameGui.GetAddonByName(AddonName);
+
+      if (addon == nint.Zero)
       {
+        onFinished?.Invoke(false);
         return;
       }
 
-      var addon = this.gameGui.GetAddonByName(AddonName);
-      if (addon == nint.Zero)
-      {
-        return;
-      }
+      this.Finish(false);
 
       this.itemName = name;
       this.itemId = id;
+      this.onFinished = onFinished;
+      this.forced = force;
       this.Fire(addon);
     }
 
@@ -211,16 +223,53 @@ namespace MarketTerror.Helpers
       return string.Empty;
     }
 
-    private bool Arm(string name, uint id, State initialState, long timeoutMs)
+    /// <summary>
+    /// Clears the pending auto-search and tells whoever armed it how it ended.
+    /// </summary>
+    /// <param name="opened">True when the item's listings were opened.</param>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "A caller's continuation must never throw into the framework update loop")]
+    private void Finish(bool opened)
+    {
+      var callback = this.onFinished;
+
+      this.onFinished = null;
+      this.forced = false;
+      this.state = State.Idle;
+      this.itemName = string.Empty;
+      this.itemId = 0;
+      this.addonSeen = false;
+      this.addonSettleTick = 0;
+      this.resultsLogged = false;
+
+      if (callback == null)
+      {
+        return;
+      }
+
+      try
+      {
+        callback(opened);
+      }
+      catch (Exception ex)
+      {
+        this.log.Error(ex, "An auto-search continuation threw");
+      }
+    }
+
+    private bool Arm(string name, uint id, State initialState, long timeoutMs, Action<bool>? onFinished, bool force)
     {
       if (string.IsNullOrWhiteSpace(name))
       {
         return false;
       }
 
+      this.Finish(false);
+
       var now = Environment.TickCount64;
       this.itemName = name;
       this.itemId = id;
+      this.onFinished = onFinished;
+      this.forced = force;
       this.state = initialState;
       this.addonSeen = false;
       this.addonSettleTick = 0;
@@ -237,7 +286,7 @@ namespace MarketTerror.Helpers
         return;
       }
 
-      if (!this.isEnabled())
+      if (!this.forced && !this.isEnabled())
       {
         this.Disarm();
         return;
@@ -247,14 +296,16 @@ namespace MarketTerror.Helpers
 
       if (this.state == State.WaitingResults)
       {
-        if (this.TryOpenResult())
+        var opened = this.TryOpenResult();
+
+        if (opened.HasValue)
         {
-          this.Disarm();
+          this.Finish(opened.Value);
         }
         else if (now > this.resultsDeadlineTick)
         {
           this.log.Debug($"No Market Board result for \"{this.itemName}\" (id {this.itemId}) arrived in time; leaving the search as-is");
-          this.Disarm();
+          this.Finish(false);
         }
 
         return;
@@ -263,7 +314,7 @@ namespace MarketTerror.Helpers
       if (now > this.fallbackDeadlineTick)
       {
         this.log.Debug($"Auto-search for \"{this.itemName}\" timed out before the Market Board was ready");
-        this.Disarm();
+        this.Finish(false);
         return;
       }
 
@@ -361,10 +412,18 @@ namespace MarketTerror.Helpers
     {
       var name = this.itemName;
       var id = this.itemId;
+      var callback = this.onFinished;
+      var wasForced = this.forced;
+
+      this.onFinished = null;
       this.Disarm();
+
+      this.onFinished = callback;
+      this.forced = wasForced;
 
       if (addonPtr == nint.Zero)
       {
+        this.Finish(false);
         return;
       }
 
@@ -374,6 +433,7 @@ namespace MarketTerror.Helpers
         if (addon->SearchTextInput == null)
         {
           this.log.Warning("ItemSearch addon has no search text input, skipping auto-search");
+          this.Finish(false);
           return;
         }
 
@@ -386,26 +446,30 @@ namespace MarketTerror.Helpers
         addon->RunSearch();
         this.log.Debug($"Auto-searched \"{name}\" on the Market Board");
 
-        if (id != 0 && this.isOpenResultEnabled())
+        if (id != 0 && (wasForced || this.isOpenResultEnabled()))
         {
           this.itemName = name;
           this.itemId = id;
           this.state = State.WaitingResults;
           this.resultsDeadlineTick = Environment.TickCount64 + ResultsTimeoutMs;
+          return;
         }
+
+        this.Finish(false);
       }
       catch (Exception ex)
       {
         this.log.Error(ex, "Failed to auto-search item on the Market Board");
+        this.Finish(false);
       }
     }
 
     /// <summary>
     /// Selects the searched item in the results once the server has answered.
     /// </summary>
-    /// <returns>True once the result has been opened, or when it can never be.</returns>
+    /// <returns>True once the result has been opened, false when it never can be, and null while it is still waiting.</returns>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Must never throw into the framework update loop")]
-    private unsafe bool TryOpenResult()
+    private unsafe bool? TryOpenResult()
     {
       try
       {
@@ -413,14 +477,14 @@ namespace MarketTerror.Helpers
         if (addonPtr == nint.Zero)
         {
           this.log.Debug("Market Board closed before its results arrived; dropping the pending result selection");
-          return true;
+          return false;
         }
 
         var addon = (AddonItemSearch*)addonPtr;
         var results = addon->ResultsList;
         if (results == null)
         {
-          return false;
+          return null;
         }
 
         var rowCount = results->GetItemCount();
@@ -451,12 +515,12 @@ namespace MarketTerror.Helpers
           }
         }
 
-        return false;
+        return null;
       }
       catch (Exception ex)
       {
         this.log.Error(ex, "Failed to open the Market Board search result");
-        return true;
+        return false;
       }
     }
 

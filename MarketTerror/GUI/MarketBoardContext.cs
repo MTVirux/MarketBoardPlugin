@@ -322,6 +322,56 @@ namespace MarketTerror.GUI
     /// <param name="allowTravel">False to stay put and only fill a board that is already open.</param>
     public void GoToMarketBoard(string worldName, Item? item, bool allowTravel)
     {
+      this.GoToMarketBoard(worldName, item, allowTravel, false, null);
+    }
+
+    /// <summary>
+    /// Goes to a world's Market Board and opens an item's listings so they can be bought.
+    /// </summary>
+    /// <param name="worldName">The world to go to.</param>
+    /// <param name="item">The item whose listings are wanted.</param>
+    /// <param name="onSearchFinished">Called with true once the listings are open, false when they never opened.</param>
+    /// <remarks>The search and the result opening are forced on, since a buy is useless without the listings.</remarks>
+    public void GoToMarketBoardForBuy(string worldName, Item item, Action<bool> onSearchFinished)
+    {
+      ArgumentNullException.ThrowIfNull(onSearchFinished);
+
+      this.GoToMarketBoard(worldName, item, true, true, onSearchFinished);
+    }
+
+    /// <summary>
+    /// Copies text to the clipboard and, when enabled, announces it in chat.
+    /// </summary>
+    /// <param name="text">The text to copy.</param>
+    public void CopyToClipboard(string text)
+    {
+      ImGui.LogToClipboard();
+      ImGui.LogText(text);
+      ImGui.LogFinish();
+
+      try
+      {
+        if (this.Config.ClipboardNotificationsEnabled)
+        {
+          this.Plugin.NotifyClipboardCopied(text);
+        }
+      }
+      catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+      {
+        this.Plugin.Log.Warning($"Failed to notify clipboard copied: {ex.Message}");
+      }
+    }
+
+    /// <summary>
+    /// Travels to a world's Market Board and hands the item over to the auto-search.
+    /// </summary>
+    /// <param name="worldName">The world to go to, or an empty string when it is unknown.</param>
+    /// <param name="item">The item to search for, or null to only travel.</param>
+    /// <param name="allowTravel">False to stay put and only fill a board that is already open.</param>
+    /// <param name="force">True to search and open the result regardless of the auto-search settings.</param>
+    /// <param name="onFinished">Called exactly once with how the auto-search ended, or null when nobody is waiting.</param>
+    private void GoToMarketBoard(string worldName, Item? item, bool allowTravel, bool force, Action<bool>? onFinished)
+    {
       var plugin = this.Plugin;
 
       var travelEnabled = allowTravel && !string.IsNullOrEmpty(worldName);
@@ -346,47 +396,28 @@ namespace MarketTerror.GUI
       }
 
       // Auto-search: queue for after the travel, or fill the open Market Board immediately.
-      if (this.Config.AutoSearchOnMarketBoard && item.HasValue)
+      if ((force || this.Config.AutoSearchOnMarketBoard) && item.HasValue)
       {
         var autoSearchName = item.Value.Name.ExtractText();
         var autoSearchId = item.Value.RowId;
 
         if (traveled && plugin.IsLifestreamAvailable)
         {
-          plugin.AutoSearch.Arm(autoSearchName, autoSearchId);
+          plugin.AutoSearch.Arm(autoSearchName, autoSearchId, onFinished, force);
         }
         else if (openedLocalBoard)
         {
-          plugin.AutoSearch.ArmForLocalBoard(autoSearchName, autoSearchId);
+          plugin.AutoSearch.ArmForLocalBoard(autoSearchName, autoSearchId, onFinished, force);
         }
         else
         {
-          plugin.AutoSearch.TryFillNow(autoSearchName, autoSearchId);
+          plugin.AutoSearch.TryFillNow(autoSearchName, autoSearchId, onFinished, force);
         }
-      }
-    }
 
-    /// <summary>
-    /// Copies text to the clipboard and, when enabled, announces it in chat.
-    /// </summary>
-    /// <param name="text">The text to copy.</param>
-    public void CopyToClipboard(string text)
-    {
-      ImGui.LogToClipboard();
-      ImGui.LogText(text);
-      ImGui.LogFinish();
+        return;
+      }
 
-      try
-      {
-        if (this.Config.ClipboardNotificationsEnabled)
-        {
-          this.Plugin.NotifyClipboardCopied(text);
-        }
-      }
-      catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
-      {
-        this.Plugin.Log.Warning($"Failed to notify clipboard copied: {ex.Message}");
-      }
+      onFinished?.Invoke(false);
     }
   }
 }

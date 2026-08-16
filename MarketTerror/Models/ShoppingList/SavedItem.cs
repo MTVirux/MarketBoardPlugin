@@ -19,11 +19,15 @@ namespace MarketTerror.Models.ShoppingList
     /// <param name="sourceItem"> Item class to save.</param>
     /// <param name="price"> Current cheapest price.</param>
     /// <param name="world"> Current world. </param>
-    public SavedItem(Item sourceItem, double price, string world)
+    /// <param name="quantity">The stack size of the listing the price came from, or 0 when it is unknown.</param>
+    /// <param name="hq">True when the listing the price came from is high quality.</param>
+    public SavedItem(Item sourceItem, double price, string world, long quantity, bool hq)
     {
       this.SourceItem = sourceItem;
       this.Price = price;
       this.World = world;
+      this.Quantity = quantity;
+      this.Hq = hq;
     }
 
     /// <summary>
@@ -40,6 +44,28 @@ namespace MarketTerror.Models.ShoppingList
     ///  Gets or sets world from where the price attribute was fetched.
     /// </summary>
     public string World { get; set; }
+
+    /// <summary>
+    ///  Gets or sets the stack size of the listing the price came from, or 0 when it is unknown.
+    /// </summary>
+    /// <remarks>Rows saved before buying existed have no stack size, and cannot be bought until refreshed.</remarks>
+    public long Quantity { get; set; }
+
+    /// <summary>
+    ///  Gets or sets a value indicating whether the listing the price came from is high quality.
+    /// </summary>
+    public bool Hq { get; set; }
+
+    /// <summary>
+    ///  Gets the gil the whole listing costs.
+    /// </summary>
+    public double Total => this.Price * this.Quantity;
+
+    /// <summary>
+    ///  Gets or sets how the last buy attempt on this row ended.
+    /// </summary>
+    /// <remarks>Not saved to the configuration; it only lasts until the row is priced again.</remarks>
+    public BuyOutcome Outcome { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the entry is waiting for a new price.
@@ -74,7 +100,12 @@ namespace MarketTerror.Models.ShoppingList
         ? cheapest.PricePerUnit + (cheapest.Tax / cheapest.Quantity)
         : cheapest.PricePerUnit;
 
-      return new SavedItem(sourceItem, price, cheapest.WorldName ?? fallbackWorld);
+      return new SavedItem(
+        sourceItem,
+        price,
+        cheapest.WorldName ?? fallbackWorld,
+        cheapest.Quantity,
+        cheapest.Hq);
     }
   }
 }

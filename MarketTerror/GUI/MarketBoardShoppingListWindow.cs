@@ -66,11 +66,11 @@ namespace MarketTerror.GUI
       this.IsOpen = true;
       this.RespectCloseHotkey = false;
       this.ShowCloseButton = true;
-      this.Size = new Vector2(400, 150);
+      this.Size = new Vector2(560, 150);
       this.SizeCondition = ImGuiCond.FirstUseEver;
       this.SizeConstraints = new WindowSizeConstraints
       {
-        MinimumSize = new Vector2(400, 150),
+        MinimumSize = new Vector2(560, 150),
         MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
       };
 
@@ -81,7 +81,8 @@ namespace MarketTerror.GUI
     /// Gets a value indicating whether the window is currently on screen.
     /// </summary>
     public bool IsShown =>
-      !this.hidden && (this.Plugin.ShoppingList.Count > 0 || this.forceShown || this.Plugin.ShoppingListBulkAdd.IsRunning);
+      !this.hidden
+      && (this.Plugin.ShoppingList.Count > 0 || this.forceShown || this.Plugin.ShoppingListBulkAdd.IsRunning || this.Plugin.ShoppingListBuyer.IsRunning);
 
     private MarketTerrorPlugin Plugin { get; init; }
 
@@ -138,6 +139,7 @@ namespace MarketTerror.GUI
     public override void Draw()
     {
       this.DrawBulkAddProgress();
+      this.DrawBuyProgress();
 
       if (this.Plugin.ShoppingList.Count == 0)
       {
@@ -159,18 +161,20 @@ namespace MarketTerror.GUI
       // The footer keeps its own row pinned under the table, so it stays put while the list scrolls.
       var footerHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y;
 
-      if (!ImGui.BeginTable("shoppingList", 4, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
+      if (!ImGui.BeginTable("shoppingList", 6, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
       {
         return;
       }
 
       ImGui.TableSetupColumn("Name");
       ImGui.TableSetupColumn("Price");
+      ImGui.TableSetupColumn("Qty");
+      ImGui.TableSetupColumn("Total");
       ImGui.TableSetupColumn("World");
       ImGui.TableSetupColumn(
         "Action",
         ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed,
-        (72 * ImGui.GetIO().FontGlobalScale) + ImGui.GetStyle().ItemSpacing.X);
+        (112 * ImGui.GetIO().FontGlobalScale) + ImGui.GetStyle().ItemSpacing.X);
       ImGui.TableSetupScrollFreeze(0, 1);
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
@@ -188,36 +192,54 @@ namespace MarketTerror.GUI
 
         ImGui.TableSetColumnIndex(0);
 
-        if (item.Unlisted)
+        var nameColor = item.Outcome switch
         {
-          ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
-        }
+          BuyOutcome.Bought => this.theme.BuySuccess,
+          BuyOutcome.BoughtCheaper => this.theme.BuyBargain,
+          BuyOutcome.Failed => this.theme.BuyFailed,
+          _ => item.Unlisted ? this.theme.TextDim : this.theme.Text,
+        };
 
+        ImGui.PushStyleColor(ImGuiCol.Text, nameColor);
         ImGui.Text(item.SourceItem.Name.ExtractText());
-
-        if (item.Unlisted)
-        {
-          ImGui.PopStyleColor();
-        }
+        ImGui.PopStyleColor();
 
         ImGui.TableSetColumnIndex(1);
-        var price = this.PriceText(item);
-        var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(price).X;
-        if (padding > 0)
-        {
-          ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
-        }
-
         ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
-        ImGui.Text(price);
+        RightAligned(this.PriceText(item));
         ImGui.PopStyleColor();
 
         ImGui.TableSetColumnIndex(2);
+        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+        RightAligned(item.Unlisted || item.Quantity <= 0 ? NoValue : item.Quantity.ToString("N0", CultureInfo.CurrentCulture));
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(3);
+        ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
+        RightAligned(this.TotalText(item));
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(4);
         ImGui.Text(item.Unlisted ? NoValue : item.World);
 
         var buttonSize = new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
 
-        ImGui.TableSetColumnIndex(3);
+        ImGui.TableSetColumnIndex(5);
+
+        var canBuy = this.Plugin.ShoppingListBuyer.CanBuy(item, out var buyBlockedReason)
+          && !this.Plugin.ShoppingListBuyer.IsRunning
+          && !this.Plugin.ShoppingListBulkAdd.IsRunning;
+
+        ImGui.BeginDisabled(!canBuy);
+        ImGui.PushFont(UiBuilder.IconFont);
+        var buy = ImGui.Button($"{(char)FontAwesomeIcon.ShoppingCart}##shoplistbuy" + k, buttonSize);
+        ImGui.PopFont();
+        ImGui.EndDisabled();
+        Utilities.HoverTooltip(buyBlockedReason.Length > 0
+          ? buyBlockedReason
+          : $"Buy this listing on {item.World} if it is still there at {this.PriceText(item)} or less.");
+
+        ImGui.SameLine();
 
         var travel = false;
 
@@ -252,6 +274,11 @@ namespace MarketTerror.GUI
           this.Plugin.MarketBoardContext.GoToMarketBoard(item.World, item.SourceItem, true);
         }
 
+        if (buy)
+        {
+          this.Plugin.ShoppingListBuyer.BuyOne(item);
+        }
+
         k += 1;
       }
 
@@ -283,6 +310,22 @@ namespace MarketTerror.GUI
       var milliseconds = stats.Milliseconds.ToString("N0", CultureInfo.CurrentCulture);
 
       return $"{items} over {queries} @ {stats.Scope} in {milliseconds} ms";
+    }
+
+    /// <summary>
+    /// Draws text pushed to the right edge of the cell it is in.
+    /// </summary>
+    /// <param name="text">The text to draw.</param>
+    private static void RightAligned(string text)
+    {
+      var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(text).X;
+
+      if (padding > 0)
+      {
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
+      }
+
+      ImGui.Text(text);
     }
 
     /// <summary>
@@ -370,6 +413,20 @@ namespace MarketTerror.GUI
 
       ImGui.SameLine();
 
+      var buyer = this.Plugin.ShoppingListBuyer;
+
+      ImGui.BeginDisabled(busy || buyer.IsRunning || !this.Plugin.Config.ShoppingListBuyEnabled);
+
+      if (ImGui.Button("Buy all"))
+      {
+        buyer.BuyAll(this.Plugin.ShoppingList.ToArray());
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Buy every row still listed at or below its price, closest worlds first.");
+
+      ImGui.SameLine();
+
       if (ImGui.Button("Copy"))
       {
         ImGui.OpenPopup("shoppingListCopy");
@@ -412,9 +469,31 @@ namespace MarketTerror.GUI
         : item.Price.ToString("N0", CultureInfo.CurrentCulture);
     }
 
+    /// <summary>
+    /// Formats the gil the whole listing behind a row costs.
+    /// </summary>
+    /// <param name="item">The row to format.</param>
+    /// <returns>The text to draw in the total cell.</returns>
+    private string TotalText(SavedItem item)
+    {
+      if (item.Refreshing)
+      {
+        return "Refreshing";
+      }
+
+      if (item.Unlisted || item.Quantity <= 0)
+      {
+        return NoValue;
+      }
+
+      return this.Plugin.Config.PriceIconShown
+        ? item.Total.ToString("C", this.Plugin.NumberFormatInfo)
+        : item.Total.ToString("N0", CultureInfo.CurrentCulture);
+    }
+
     private void DrawFooter()
     {
-      var total = this.Plugin.ShoppingList.Sum(i => i.Price);
+      var total = this.Plugin.ShoppingList.Sum(i => i.Total);
       var text = "Total Cost: " + (this.Plugin.Config.PriceIconShown
         ? total.ToString("C", this.Plugin.NumberFormatInfo)
         : total.ToString("N0", CultureInfo.CurrentCulture));
@@ -581,6 +660,14 @@ namespace MarketTerror.GUI
             : items.OrderByDescending(i => i.Price);
         case 2:
           return this.sortAscending
+            ? items.OrderBy(i => i.Quantity)
+            : items.OrderByDescending(i => i.Quantity);
+        case 3:
+          return this.sortAscending
+            ? items.OrderBy(i => i.Total)
+            : items.OrderByDescending(i => i.Total);
+        case 4:
+          return this.sortAscending
             ? items.OrderBy(i => i.World, StringComparer.CurrentCultureIgnoreCase)
             : items.OrderByDescending(i => i.World, StringComparer.CurrentCultureIgnoreCase);
         default:
@@ -617,6 +704,40 @@ namespace MarketTerror.GUI
       if (ImGui.Button("Cancel"))
       {
         bulkAdd.Cancel();
+      }
+
+      ImGui.Separator();
+    }
+
+    /// <summary>
+    /// Draws how far a buy run has got, and the button that stops it.
+    /// </summary>
+    private void DrawBuyProgress()
+    {
+      var buyer = this.Plugin.ShoppingListBuyer;
+
+      if (!buyer.IsRunning)
+      {
+        return;
+      }
+
+      ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+      ImGui.TextWrapped($"Buying {buyer.CurrentItemName}...");
+      ImGui.PopStyleColor();
+
+      var cancelWidth = ImGui.CalcTextSize("Cancel").X + (ImGui.GetStyle().FramePadding.X * 2);
+      var barWidth = ImGui.GetContentRegionAvail().X - cancelWidth - ImGui.GetStyle().ItemSpacing.X;
+
+      ImGui.ProgressBar(
+        buyer.Total > 0 ? buyer.Done / (float)buyer.Total : 0f,
+        new Vector2(barWidth, 0),
+        $"{buyer.Done} / {buyer.Total}");
+
+      ImGui.SameLine();
+
+      if (ImGui.Button("Cancel##buyRun"))
+      {
+        buyer.Cancel();
       }
 
       ImGui.Separator();

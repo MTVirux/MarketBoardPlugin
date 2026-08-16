@@ -156,6 +156,7 @@ namespace MarketTerror
 
       this.marketBoardWindow = new MarketBoardWindow(this);
       this.marketBoardConfigWindow = new MarketTerrorConfigWindow(this);
+      this.ShoppingListBuyer = new ShoppingListBuyer(this);
       this.marketBoardShoppingListWindow = new MarketBoardShoppingListWindow(this);
       this.themeEditorWindow = new ThemeEditorWindow(this);
       this.integrationsWindow = new IntegrationsWindow(this.marketBoardWindow.Context);
@@ -226,6 +227,11 @@ namespace MarketTerror
     /// Gets the service that adds a whole category to the shopping list.
     /// </summary>
     public ShoppingListBulkAdd ShoppingListBulkAdd { get; init; }
+
+    /// <summary>
+    /// Gets the service that buys shopping list rows off the Market Board.
+    /// </summary>
+    public ShoppingListBuyer ShoppingListBuyer { get; init; }
 
     /// <summary>
     /// Gets every world the market board can be priced at.
@@ -419,6 +425,9 @@ namespace MarketTerror
 
         // Stop any category still being added to the shopping list
         this.ShoppingListBulkAdd.Dispose();
+
+        // Stop any buy run and drop its purchase state machine
+        this.ShoppingListBuyer.Dispose();
       }
 
       this.isDisposed = true;

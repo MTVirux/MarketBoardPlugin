@@ -155,6 +155,7 @@ namespace MarketTerror.Services
 
       if (refresh)
       {
+        this.plugin.ShoppingList.ClearOutcomes();
         this.plugin.ShoppingList.MarkRefreshing();
       }
 

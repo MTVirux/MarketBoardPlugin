@@ -46,6 +46,9 @@ namespace MarketTerror.GUI.Theme
       { ThemeColor.GilText, Rgb(0xE0, 0xB3, 0x41) },
       { ThemeColor.Tab, Rgb(0x1C, 0x03, 0x03) },
       { ThemeColor.TabActive, Rgb(0x69, 0x00, 0x00) },
+      { ThemeColor.BuySuccess, Rgb(0x4C, 0xC1, 0x4C) },
+      { ThemeColor.BuyBargain, Rgb(0xE0, 0xB3, 0x41) },
+      { ThemeColor.BuyFailed, Rgb(0xD1, 0x4A, 0x4A) },
     };
 
     private readonly MarketTerrorConfig config;
@@ -103,6 +106,21 @@ namespace MarketTerror.GUI.Theme
     /// Gets the colour gil figures are drawn in.
     /// </summary>
     public uint GilText => this.Resolve(ThemeColor.GilText, ImGuiCol.Text);
+
+    /// <summary>
+    /// Gets the colour of a shopping list row that was bought at its saved price.
+    /// </summary>
+    public uint BuySuccess => this.Resolve(ThemeColor.BuySuccess, ImGuiCol.Text);
+
+    /// <summary>
+    /// Gets the colour of a shopping list row that was bought below its saved price.
+    /// </summary>
+    public uint BuyBargain => this.Resolve(ThemeColor.BuyBargain, ImGuiCol.Text);
+
+    /// <summary>
+    /// Gets the colour of a shopping list row nothing could be bought for.
+    /// </summary>
+    public uint BuyFailed => this.Resolve(ThemeColor.BuyFailed, ImGuiCol.Text);
 
     /// <summary>
     /// Gets the panel and table border colour.
