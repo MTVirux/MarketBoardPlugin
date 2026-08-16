@@ -7,6 +7,7 @@ namespace MarketTerror.GUI
   using System;
   using System.Collections.Generic;
   using System.Globalization;
+  using System.Linq;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
@@ -20,13 +21,20 @@ namespace MarketTerror.GUI
   public class MarketBoardShoppingListWindow : Window
   {
     private const ImGuiTableFlags TableFlags =
-      ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp;
+      ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp |
+      ImGuiTableFlags.Sortable | ImGuiTableFlags.SortTristate;
 
     private readonly TerrorTheme theme;
+
+    private readonly List<SavedItem> sortedItems = new List<SavedItem>();
 
     private IDisposable? themeScope;
 
     private bool forceShown;
+
+    private int sortColumn = -1;
+
+    private bool sortAscending = true;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardShoppingListWindow"/> class.
@@ -104,16 +112,18 @@ namespace MarketTerror.GUI
       ImGui.TableSetupColumn("Name");
       ImGui.TableSetupColumn("Price");
       ImGui.TableSetupColumn("World");
-      ImGui.TableSetupColumn("Action");
+      ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.NoSort);
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
       ImGui.TableHeadersRow();
       ImGui.PopStyleColor();
 
+      this.UpdateSort();
+
       List<SavedItem> todel = new List<SavedItem>();
 
       int k = 0;
-      foreach (var item in this.Plugin.ShoppingList)
+      foreach (var item in this.sortedItems)
       {
         ImGui.TableNextRow();
 
@@ -153,6 +163,62 @@ namespace MarketTerror.GUI
       foreach (var item in todel)
       {
         this.Plugin.ShoppingList.Remove(item);
+      }
+    }
+
+    private void UpdateSort()
+    {
+      var specs = ImGui.TableGetSortSpecs();
+
+      if (specs.IsNull)
+      {
+        return;
+      }
+
+      var column = -1;
+      var ascending = true;
+
+      if (specs.SpecsCount > 0)
+      {
+        var spec = specs.Specs;
+        column = spec.ColumnIndex;
+        ascending = spec.SortDirection != ImGuiSortDirection.Descending;
+      }
+
+      specs.SpecsDirty = false;
+
+      if (column == this.sortColumn && ascending == this.sortAscending && this.sortedItems.Count == this.Plugin.ShoppingList.Count)
+      {
+        return;
+      }
+
+      this.sortColumn = column;
+      this.sortAscending = ascending;
+
+      this.sortedItems.Clear();
+      this.sortedItems.AddRange(this.SortItems());
+    }
+
+    private IEnumerable<SavedItem> SortItems()
+    {
+      var items = this.Plugin.ShoppingList;
+
+      switch (this.sortColumn)
+      {
+        case 0:
+          return this.sortAscending
+            ? items.OrderBy(i => i.SourceItem.Name.ExtractText(), StringComparer.CurrentCultureIgnoreCase)
+            : items.OrderByDescending(i => i.SourceItem.Name.ExtractText(), StringComparer.CurrentCultureIgnoreCase);
+        case 1:
+          return this.sortAscending
+            ? items.OrderBy(i => i.Price)
+            : items.OrderByDescending(i => i.Price);
+        case 2:
+          return this.sortAscending
+            ? items.OrderBy(i => i.World, StringComparer.CurrentCultureIgnoreCase)
+            : items.OrderByDescending(i => i.World, StringComparer.CurrentCultureIgnoreCase);
+        default:
+          return items;
       }
     }
 
