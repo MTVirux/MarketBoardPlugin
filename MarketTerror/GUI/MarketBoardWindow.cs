@@ -221,7 +221,8 @@ namespace MarketTerror.GUI
         "itemListSplitter",
         new Vector2(splitterWidth, ImGui.GetContentRegionAvail().Y),
         true,
-        scale);
+        scale,
+        false);
 
       if (columnDrag != 0.0f)
       {
@@ -337,7 +338,8 @@ namespace MarketTerror.GUI
         "marketDataSplitter",
         new Vector2(ImGui.GetContentRegionAvail().X, splitterHeight),
         false,
-        scale);
+        scale,
+        true);
 
       if (drag != 0.0f)
       {
@@ -359,8 +361,9 @@ namespace MarketTerror.GUI
     /// <param name="size">The size of the grab area.</param>
     /// <param name="vertical">True for a bar between two columns, false for one between two rows.</param>
     /// <param name="scale">The current UI scale.</param>
+    /// <param name="visibleWhenIdle">True to draw the bar even when it is not hovered.</param>
     /// <returns>The distance the bar was dragged this frame, in pixels.</returns>
-    private float DrawSplitter(string id, Vector2 size, bool vertical, float scale)
+    private float DrawSplitter(string id, Vector2 size, bool vertical, float scale, bool visibleWhenIdle)
     {
       ImGui.InvisibleButton(id, size);
 
@@ -372,20 +375,23 @@ namespace MarketTerror.GUI
         ImGui.SetMouseCursor(vertical ? ImGuiMouseCursor.ResizeEw : ImGuiMouseCursor.ResizeNs);
       }
 
-      var min = ImGui.GetItemRectMin();
-      var max = ImGui.GetItemRectMax();
-      var from = vertical
-        ? new Vector2((min.X + max.X) * 0.5f, min.Y)
-        : new Vector2(min.X, (min.Y + max.Y) * 0.5f);
-      var to = vertical
-        ? new Vector2((min.X + max.X) * 0.5f, max.Y)
-        : new Vector2(max.X, (min.Y + max.Y) * 0.5f);
+      if (hovered || visibleWhenIdle)
+      {
+        var min = ImGui.GetItemRectMin();
+        var max = ImGui.GetItemRectMax();
+        var from = vertical
+          ? new Vector2((min.X + max.X) * 0.5f, min.Y)
+          : new Vector2(min.X, (min.Y + max.Y) * 0.5f);
+        var to = vertical
+          ? new Vector2((min.X + max.X) * 0.5f, max.Y)
+          : new Vector2(max.X, (min.Y + max.Y) * 0.5f);
 
-      ImGui.GetWindowDrawList().AddLine(
-        from,
-        to,
-        hovered ? this.theme.AccentHover : this.theme.Border,
-        (hovered ? 2.0f : 1.0f) * scale);
+        ImGui.GetWindowDrawList().AddLine(
+          from,
+          to,
+          hovered ? this.theme.AccentHover : this.theme.Border,
+          (hovered ? 2.0f : 1.0f) * scale);
+      }
 
       if (!active)
       {
