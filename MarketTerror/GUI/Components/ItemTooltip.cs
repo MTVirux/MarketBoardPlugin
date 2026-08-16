@@ -147,8 +147,9 @@ namespace MarketTerror.GUI.Components
     }
 
     /// <summary>
-    /// Draws a separated block of stat lines, sizing the high quality column to its widest entry
-    /// and heading it only when at least one line has a high quality value.
+    /// Draws a separated block of stat lines, sizing the high quality column to its widest entry.
+    /// The column headings only appear when at least one line has a high quality value, since with
+    /// a single column there are no qualities to tell apart.
     /// </summary>
     private void DrawStatRows(List<(string Label, string Value, string Hq)> rows)
     {
@@ -173,7 +174,12 @@ namespace MarketTerror.GUI.Components
 
       if (hqColumn > 0.0f)
       {
-        ImGui.SetCursorPosX(RightEdge() - ImGui.CalcTextSize("HQ").X);
+        var right = RightEdge();
+
+        ImGui.SetCursorPosX(right - hqColumn - ImGui.CalcTextSize("NQ").X);
+        this.Label("NQ");
+        ImGui.SameLine();
+        ImGui.SetCursorPosX(right - ImGui.CalcTextSize("HQ").X);
         this.Label("HQ");
       }
 
