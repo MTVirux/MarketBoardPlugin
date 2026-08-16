@@ -156,14 +156,25 @@ namespace MarketTerror.Helpers
     }
 
     /// <summary>
+    /// Puts a prompt on one line so the way the game wrapped it cannot get in the way of reading it.
+    /// </summary>
+    /// <param name="text">The text to flatten.</param>
+    /// <returns>The text with every run of whitespace turned into a single space.</returns>
+    /// <remarks>The dialog is wrapped to its own width, which lands mid-name often enough to matter.</remarks>
+    private static string Flatten(string text)
+    {
+      return string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
+
+    /// <summary>
     /// Checks whether a prompt is about the item being bought.
     /// </summary>
     /// <param name="prompt">The parsed prompt.</param>
     /// <param name="buy">What is being bought.</param>
     /// <returns>True when the prompt names the item.</returns>
     /// <remarks>
-    /// The item link the prompt is written with carries the row id, which beats reading the name: the
-    /// game writes it in lower case mid-sentence, and other languages do their own thing with it.
+    /// An item link carries the row id, which beats reading the name, but the purchase prompt only
+    /// colours the name rather than linking it, so the text is usually what answers this.
     /// </remarks>
     private static bool NamesItem(SeString prompt, BuyRequest buy)
     {
@@ -175,7 +186,7 @@ namespace MarketTerror.Helpers
         }
       }
 
-      return prompt.TextValue.Contains(buy.ItemName, StringComparison.OrdinalIgnoreCase);
+      return Flatten(prompt.TextValue).Contains(Flatten(buy.ItemName), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -419,7 +430,7 @@ namespace MarketTerror.Helpers
       // The prompt carries the item as a link, so its raw text is full of payload bytes. Only the
       // parsed text is readable, and the payload is the surest way to tell which item it is about.
       var parsed = SeString.Parse(addon->PromptText->NodeText.AsSpan());
-      var prompt = parsed.TextValue;
+      var prompt = Flatten(parsed.TextValue);
 
       if (string.Equals(prompt, this.answeredPrompt, StringComparison.Ordinal))
       {
