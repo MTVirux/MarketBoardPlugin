@@ -41,6 +41,7 @@ namespace MarketTerror.GUI.Theme
       { ThemeColor.AccentDim, Rgb(0x4A, 0x13, 0x10) },
       { ThemeColor.AccentHover, Rgb(0x8A, 0x1E, 0x18) },
       { ThemeColor.RowAlt, Rgb(0x18, 0x18, 0x18) },
+      { ThemeColor.TableHeaderBg, Rgb(0x08, 0x08, 0x09) },
       { ThemeColor.Text, Rgb(0xE8, 0xE6, 0xE3) },
       { ThemeColor.TextDim, Rgb(0x83, 0x80, 0x81) },
       { ThemeColor.TextBright, Rgb(0xF4, 0xF2, 0xEF) },
@@ -270,7 +271,7 @@ namespace MarketTerror.GUI.Theme
       ImGui.PushStyleColor(ImGuiCol.Tab, this.Get(ThemeColor.Tab));
       ImGui.PushStyleColor(ImGuiCol.TabHovered, this.Get(ThemeColor.AccentHover));
       ImGui.PushStyleColor(ImGuiCol.TabActive, this.Get(ThemeColor.TabActive));
-      ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, this.Get(ThemeColor.PanelBg));
+      ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, this.Get(ThemeColor.TableHeaderBg));
       ImGui.PushStyleColor(ImGuiCol.TableBorderStrong, this.Get(ThemeColor.Border));
       ImGui.PushStyleColor(ImGuiCol.TableBorderLight, this.Get(ThemeColor.Border));
       ImGui.PushStyleColor(ImGuiCol.TableRowBg, TransparentColor);

@@ -45,6 +45,9 @@ namespace MarketTerror.GUI.Theme
     /// <summary>The alternating table row background.</summary>
     RowAlt,
 
+    /// <summary>The table header row background.</summary>
+    TableHeaderBg,
+
     /// <summary>Body text.</summary>
     Text,
 
