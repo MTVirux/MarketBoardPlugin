@@ -94,7 +94,7 @@ namespace MarketTerror.GUI.Components
         this.context.ItemListTab = ItemListTab.All;
       }
 
-      if (ImGui.BeginTabBar("itemListTabs"))
+      if (ImGui.BeginTabBar("itemListTabs", ImGuiTabBarFlags.Reorderable))
       {
         if (DrawTab(FontAwesomeIcon.List, "allTab", "All items", ImGuiTabItemFlags.None))
         {
