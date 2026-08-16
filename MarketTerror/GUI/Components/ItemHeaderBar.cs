@@ -9,12 +9,16 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.Textures;
   using Dalamud.Utility;
+  using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+  using MarketTerror.Helpers;
 
   /// <summary>
   /// The header of the right hand column: the selected item's icon and name, the world combo and the data timestamps.
   /// </summary>
   public sealed class ItemHeaderBar
   {
+    private const string ContextMenuId = "itemHeaderContextMenu";
+
     private readonly MarketBoardContext context;
     private readonly ItemTooltip tooltip;
 
@@ -53,6 +57,8 @@ namespace MarketTerror.GUI.Components
         {
           this.tooltip.Draw(item);
         }
+
+        ImGui.OpenPopupOnItemClick(ContextMenuId, ImGuiPopupFlags.MouseButtonRight);
       }
       else
       {
@@ -65,6 +71,7 @@ namespace MarketTerror.GUI.Components
       ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.TextBright);
       ImGui.Text(itemName);
       ImGui.PopStyleColor();
+      ImGui.OpenPopupOnItemClick(ContextMenuId, ImGuiPopupFlags.MouseButtonRight);
       ImGui.SameLine(ImGui.GetContentRegionAvail().X - (250 * scale));
       ImGui.SetCursorPosY(8 * scale);
       this.context.TitleFont.Pop();
@@ -119,6 +126,55 @@ namespace MarketTerror.GUI.Components
       ImGui.PopStyleColor();
 
       ImGui.EndGroup();
+
+      this.DrawContextMenu(item.RowId);
+    }
+
+    private static unsafe void SearchInGame(uint itemId)
+    {
+      var itemFinder = ItemFinderModule.Instance();
+
+      if (itemFinder != null)
+      {
+        itemFinder->SearchForItem(itemId, true);
+      }
+    }
+
+    private void DrawContextMenu(uint itemId)
+    {
+      if (!ImGui.BeginPopup(ContextMenuId))
+      {
+        return;
+      }
+
+      if (ImGui.Selectable("Open in Universalis"))
+      {
+        Utilities.OpenBrowser($"https://universalis.app/market/{itemId}");
+      }
+
+      if (ImGui.Selectable("Open in mtvirux.app"))
+      {
+        Utilities.OpenBrowser($"https://mtvirux.app/item/{itemId}");
+      }
+
+      if (ImGui.Selectable("Search in-game"))
+      {
+        SearchInGame(itemId);
+      }
+
+      if (this.context.Config.Favorites.Contains(itemId))
+      {
+        if (ImGui.Selectable("Remove from the favorites"))
+        {
+          this.context.Config.Favorites.Remove(itemId);
+        }
+      }
+      else if (ImGui.Selectable("Add to the favorites"))
+      {
+        this.context.Config.Favorites.Add(itemId);
+      }
+
+      ImGui.EndPopup();
     }
   }
 }
