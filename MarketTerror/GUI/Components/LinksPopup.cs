@@ -7,6 +7,7 @@ namespace MarketTerror.GUI.Components
   using System;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
+  using Dalamud.Interface;
   using MarketTerror.Helpers;
 
   /// <summary>
@@ -65,7 +66,7 @@ namespace MarketTerror.GUI.Components
 
       if (this.context.MarketData.IsUniversalisUp != false)
       {
-        if (ImGui.Button("Data provided by Universalis", buttonSize))
+        if (HeartButton("universalis", "Universalis", buttonSize))
         {
           var universalisUrl = "https://universalis.app";
           var selectedItem = this.context.SelectedItem;
@@ -80,19 +81,46 @@ namespace MarketTerror.GUI.Components
       }
       else
       {
-        if (ImGui.Button("Universalis API seems down", buttonSize))
+        if (HeartButton("universalisStatus", "Universalis", buttonSize))
         {
           Utilities.OpenBrowser("https://status.universalis.app");
         }
+
+        if (ImGui.IsItemHovered())
+        {
+          ImGui.SetTooltip("The Universalis API seems down");
+        }
       }
 
-      if (ImGui.Button("SeaOfTerror Repo", buttonSize))
+      if (HeartButton("repo", "SeaOfTerror", buttonSize))
       {
         Utilities.OpenBrowser("https://github.com/MTVirux/SeaOfTerror");
       }
 
       ImGui.PopStyleColor(3);
       ImGui.EndPopup();
+    }
+
+    private static bool HeartButton(string id, string label, Vector2 size)
+    {
+      var clicked = ImGui.Button($"##{id}", size);
+
+      var min = ImGui.GetItemRectMin();
+      var height = ImGui.GetItemRectSize().Y;
+      var padding = ImGui.GetStyle().FramePadding.X;
+      var color = ImGui.GetColorU32(ImGuiCol.Text);
+      var drawList = ImGui.GetWindowDrawList();
+
+      var heart = $"{(char)FontAwesomeIcon.Heart}";
+      ImGui.PushFont(UiBuilder.IconFont);
+      var heartSize = ImGui.CalcTextSize(heart);
+      drawList.AddText(new Vector2(min.X + padding, min.Y + ((height - heartSize.Y) / 2f)), color, heart);
+      ImGui.PopFont();
+
+      var labelSize = ImGui.CalcTextSize(label);
+      drawList.AddText(new Vector2(min.X + padding + heartSize.X + padding, min.Y + ((height - labelSize.Y) / 2f)), color, label);
+
+      return clicked;
     }
   }
 }
