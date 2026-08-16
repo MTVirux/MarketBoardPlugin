@@ -219,7 +219,7 @@ namespace MarketTerror.GUI.Components
     private void DrawHeader(Item item, float scale)
     {
       var top = ImGui.GetCursorPosY();
-      var id = item.RowId.ToString(CultureInfo.CurrentCulture);
+      var id = string.Create(CultureInfo.CurrentCulture, $"ID: {item.RowId}");
       var idWidth = ImGui.CalcTextSize(id).X;
 
       using var icon = this.context.Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup
