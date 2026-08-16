@@ -55,11 +55,6 @@ namespace MarketTerror
     public bool NoGilSalesTax { get; set; }
 
     /// <summary>
-    /// Gets or sets a value indicating whether the SeaOfTerror Repo button has been hidden.
-    /// </summary>
-    public bool KofiHidden { get; set; }
-
-    /// <summary>
     ///  Gets or sets a value indicating the number of ms an item can be cached.
     /// </summary>
     public int ItemRefreshTimeout { get; set; } = 30000;

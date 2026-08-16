@@ -82,7 +82,7 @@ namespace MarketTerror.GUI.Components
         }
       }
 
-      if (!this.context.Config.KofiHidden && Button("SeaOfTerror Repo", 0x005E5BFFu, buttonSize))
+      if (Button("SeaOfTerror Repo", 0x005E5BFFu, buttonSize))
       {
         Utilities.OpenBrowser("https://github.com/MTVirux/SeaOfTerror");
       }

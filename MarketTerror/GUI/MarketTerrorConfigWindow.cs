@@ -113,7 +113,6 @@ namespace MarketTerror.GUI
 
       this.SectionHeading("Others");
       this.Checkbox("Watch for hovered item", "Automatically select the item hovered in any of the in-game inventory window after 1 second.", this.Plugin.Config.WatchForHovered, (v) => this.Plugin.Config.WatchForHovered = v);
-      this.Checkbox("Hide SeaOfTerror Repo button", "Toggles whether the SeaOfTerror Repo button should be hidden", this.Plugin.Config.KofiHidden, (v) => this.Plugin.Config.KofiHidden = v);
 
       this.Checkbox("Include Oceania DC", "Toggles whether the Oceania DC should be included in the Cross-DC filter", this.Plugin.Config.IncludeOceaniaDC, (v) =>
       {
