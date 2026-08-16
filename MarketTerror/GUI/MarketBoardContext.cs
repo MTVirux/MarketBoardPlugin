@@ -5,6 +5,7 @@
 namespace MarketTerror.GUI
 {
   using System;
+  using System.Collections.Generic;
   using System.Linq;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.ManagedFontAtlas;
@@ -21,6 +22,16 @@ namespace MarketTerror.GUI
   /// </remarks>
   public sealed class MarketBoardContext
   {
+    /// <summary>
+    /// The equip level the maximum equip level filter starts at and resets to.
+    /// </summary>
+    public const int DefaultMaxLevel = 100;
+
+    /// <summary>
+    /// The item level the maximum item level filter starts at and resets to.
+    /// </summary>
+    public const int DefaultMaxItemLevel = 999;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardContext"/> class.
     /// </summary>
@@ -97,9 +108,14 @@ namespace MarketTerror.GUI
     public ClassJob? SelectedClassJob { get; set; }
 
     /// <summary>
-    /// Gets or sets the top level category filter index.
+    /// Gets the item search categories the item list is limited to, or an empty set for every category.
     /// </summary>
-    public int ItemCategory { get; set; }
+    public HashSet<uint> SelectedCategories { get; } = new HashSet<uint>();
+
+    /// <summary>
+    /// Gets the item rarities the item list is limited to, or an empty set for every rarity.
+    /// </summary>
+    public HashSet<byte> SelectedRarities { get; } = new HashSet<byte>();
 
     /// <summary>
     /// Gets or sets the minimum equip level filter.
@@ -109,7 +125,17 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Gets or sets the maximum equip level filter.
     /// </summary>
-    public int MaxLevel { get; set; } = 100;
+    public int MaxLevel { get; set; } = DefaultMaxLevel;
+
+    /// <summary>
+    /// Gets or sets the minimum item level filter.
+    /// </summary>
+    public int MinItemLevel { get; set; }
+
+    /// <summary>
+    /// Gets or sets the maximum item level filter.
+    /// </summary>
+    public int MaxItemLevel { get; set; } = DefaultMaxItemLevel;
 
     /// <summary>
     /// Gets or sets a value indicating whether only high quality listings are shown.
@@ -145,6 +171,40 @@ namespace MarketTerror.GUI
     /// Gets or sets a value indicating whether the advanced search options are shown.
     /// </summary>
     public bool AdvancedSearchOpen { get; set; }
+
+    /// <summary>
+    /// Builds the item filter matching the current advanced search settings.
+    /// </summary>
+    /// <param name="searchString">The item name fragment to search for.</param>
+    /// <returns>The filter to hand to the catalogue.</returns>
+    public ItemFilter BuildFilter(string searchString)
+    {
+      return new ItemFilter(
+        searchString,
+        this.SelectedCategories,
+        this.SelectedRarities,
+        this.MinLevel,
+        this.MaxLevel,
+        this.MinItemLevel,
+        this.MaxItemLevel,
+        this.SelectedClassJob);
+    }
+
+    /// <summary>
+    /// Resets every advanced search filter to its default.
+    /// </summary>
+    public void ResetFilters()
+    {
+      this.SelectedCategories.Clear();
+      this.SelectedRarities.Clear();
+      this.SelectedClassJob = null;
+      this.MinLevel = 0;
+      this.MaxLevel = DefaultMaxLevel;
+      this.MinItemLevel = 0;
+      this.MaxItemLevel = DefaultMaxItemLevel;
+      this.HqOnly = false;
+      this.MinQuantity = 0;
+    }
 
     /// <summary>
     /// Selects an item, refreshes its market data and records it in the search history.

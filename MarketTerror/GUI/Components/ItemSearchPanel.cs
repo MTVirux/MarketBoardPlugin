@@ -5,6 +5,8 @@
 namespace MarketTerror.GUI.Components
 {
   using System;
+  using System.Collections.Generic;
+  using System.Linq;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
@@ -15,7 +17,16 @@ namespace MarketTerror.GUI.Components
   /// </summary>
   public sealed class ItemSearchPanel
   {
-    private readonly string[] categoryLabels = new[] { "All", "Weapons", "Equipments", "Others", "Furniture" };
+    private static readonly string[] TopLevelLabels = new[] { "Weapons", "Armor", "Items", "Housing" };
+
+    private static readonly (byte Rarity, string Label)[] RarityOptions = new[]
+    {
+      ((byte)1, "White"),
+      ((byte)2, "Green"),
+      ((byte)3, "Blue"),
+      ((byte)4, "Purple"),
+      ((byte)7, "Pink"),
+    };
 
     private readonly MarketBoardContext context;
 
@@ -70,76 +81,260 @@ namespace MarketTerror.GUI.Components
       }
     }
 
+    private static void Toggle<T>(ISet<T> set, T value, bool on)
+    {
+      if (on)
+      {
+        set.Add(value);
+      }
+      else
+      {
+        set.Remove(value);
+      }
+    }
+
+    private static void DrawRange(string id, ref int min, ref int max, int limit, float scale)
+    {
+      var width = 55.0f * scale;
+
+      ImGui.SetNextItemWidth(width);
+      ImGui.InputInt($"##{id}Min", ref min, 0, 0);
+      ImGui.SameLine();
+      ImGui.Text("to");
+      ImGui.SameLine();
+      ImGui.SetNextItemWidth(width);
+      ImGui.InputInt($"##{id}Max", ref max, 0, 0);
+
+      min = Math.Clamp(min, 0, limit);
+      max = Math.Clamp(max, 0, limit);
+    }
+
     private void DrawAdvancedSearch()
     {
-      ImGui.Text("Category: ");
-      ImGui.SameLine();
-      var itemCategory = this.context.ItemCategory;
-      ImGui.Combo("###ListBox", ref itemCategory, this.categoryLabels, this.categoryLabels.Length);
-      this.context.ItemCategory = itemCategory;
+      var scale = ImGui.GetIO().FontGlobalScale;
+      var equipment = this.SelectionHasEquipment();
 
-      ImGui.Text("HQ Only : ");
-      ImGui.SameLine();
-      var hqOnly = this.context.HqOnly;
-      ImGui.Checkbox("###Checkbox", ref hqOnly);
-      this.context.HqOnly = hqOnly;
-
-      ImGui.Text("Min Qty : ");
-      ImGui.SameLine();
-      var minQuantity = this.context.MinQuantity;
-      ImGui.InputInt("###MinQuantity", ref minQuantity);
-      this.context.MinQuantity = minQuantity;
-
-      ImGui.Text("Class: ");
-      ImGui.SameLine();
-      if (ImGui.BeginCombo(
-        "###ClassJobCombo",
-        this.context.SelectedClassJob == null ? "All Classes" : this.context.SelectedClassJob.Value.Abbreviation.ExtractText()))
+      if (!ImGui.BeginTable("advancedSearch", 2, ImGuiTableFlags.SizingFixedFit))
       {
-        void SelectClassJob(ClassJob? classJob)
-        {
-          var selected = this.context.SelectedClassJob?.RowId == classJob?.RowId;
-          if (ImGui.Selectable(classJob == null ? "All Classes" : classJob?.Abbreviation.ExtractText(), selected))
-          {
-            this.context.SelectedClassJob = classJob;
-          }
-
-          if (selected)
-          {
-            ImGui.SetItemDefaultFocus();
-          }
-        }
-
-        SelectClassJob(null);
-
-        foreach (var classJob in this.context.Catalog.ClassJobs)
-        {
-          SelectClassJob(classJob);
-        }
-
-        ImGui.EndCombo();
+        return;
       }
 
-      if (this.context.ItemCategory is 1 or 2)
-      {
-        ImGui.Text("Min level : ");
-        ImGui.SameLine();
-        var minLevel = this.context.MinLevel;
-        ImGui.InputInt("##lvlmin", ref minLevel);
-        this.context.MinLevel = minLevel;
+      ImGui.TableSetupColumn("label", ImGuiTableColumnFlags.WidthFixed);
+      ImGui.TableSetupColumn("value", ImGuiTableColumnFlags.WidthStretch);
 
-        ImGui.Text("Max level : ");
-        ImGui.SameLine();
+      void Row(string label)
+      {
+        ImGui.TableNextRow();
+        ImGui.TableSetColumnIndex(0);
+        ImGui.AlignTextToFramePadding();
+        ImGui.Text(label);
+        ImGui.TableSetColumnIndex(1);
+      }
+
+      Row("Category");
+      this.DrawCategoryPicker(scale);
+
+      Row("Rarity");
+      this.DrawRarityPicker();
+
+      Row("Item level");
+      var minItemLevel = this.context.MinItemLevel;
+      var maxItemLevel = this.context.MaxItemLevel;
+      DrawRange("ilvl", ref minItemLevel, ref maxItemLevel, MarketBoardContext.DefaultMaxItemLevel, scale);
+      this.context.MinItemLevel = minItemLevel;
+      this.context.MaxItemLevel = maxItemLevel;
+
+      if (equipment)
+      {
+        Row("Equip level");
+        var minLevel = this.context.MinLevel;
         var maxLevel = this.context.MaxLevel;
-        ImGui.InputInt("##lvlmax", ref maxLevel);
+        DrawRange("lvl", ref minLevel, ref maxLevel, MarketBoardContext.DefaultMaxLevel, scale);
+        this.context.MinLevel = minLevel;
         this.context.MaxLevel = maxLevel;
       }
       else
       {
-        // If the category selected doesn't need an equip level -> reset to default
+        // Nothing equippable is selected, so a hidden equip level filter would silently drop items.
         this.context.MinLevel = 0;
-        this.context.MaxLevel = 100;
+        this.context.MaxLevel = MarketBoardContext.DefaultMaxLevel;
       }
+
+      Row("Class");
+      this.DrawClassPicker();
+
+      Row("HQ only");
+      var hqOnly = this.context.HqOnly;
+      ImGui.Checkbox("##hqOnly", ref hqOnly);
+      this.context.HqOnly = hqOnly;
+
+      Row("Min qty");
+      ImGui.SetNextItemWidth(-1);
+      var minQuantity = this.context.MinQuantity;
+      ImGui.InputInt("##minQuantity", ref minQuantity);
+      this.context.MinQuantity = Math.Max(0, minQuantity);
+
+      ImGui.EndTable();
+
+      if (ImGui.Button("Reset filters"))
+      {
+        this.context.ResetFilters();
+      }
+    }
+
+    private bool SelectionHasEquipment()
+    {
+      var selected = this.context.SelectedCategories;
+
+      return selected.Count > 0
+        && this.context.Catalog.Categories.Any(c => selected.Contains(c.RowId) && c.Category is 1 or 2);
+    }
+
+    private string CategoryPreview()
+    {
+      var selected = this.context.SelectedCategories;
+
+      if (selected.Count == 0)
+      {
+        return "All categories";
+      }
+
+      if (selected.Count == 1)
+      {
+        return this.context.Catalog.Categories
+          .Where(c => selected.Contains(c.RowId))
+          .Select(c => c.Name.ExtractText())
+          .FirstOrDefault() ?? "1 category";
+      }
+
+      return $"{selected.Count} categories";
+    }
+
+    private void DrawCategoryPicker(float scale)
+    {
+      var selected = this.context.SelectedCategories;
+
+      ImGui.SetNextItemWidth(-1);
+      ImGui.SetNextWindowSizeConstraints(Vector2.Zero, new Vector2(float.MaxValue, 400.0f * scale));
+
+      if (!ImGui.BeginCombo("##categoryPicker", this.CategoryPreview()))
+      {
+        return;
+      }
+
+      if (ImGui.Selectable("All categories", selected.Count == 0))
+      {
+        selected.Clear();
+      }
+
+      ImGui.Separator();
+
+      foreach (var group in this.context.Catalog.Categories.GroupBy(c => (int)c.Category))
+      {
+        var children = group.ToList();
+        var checkedCount = children.Count(c => selected.Contains(c.RowId));
+        var all = checkedCount > 0 && checkedCount == children.Count;
+
+        if (ImGui.Checkbox($"##group{group.Key}", ref all))
+        {
+          foreach (var child in children)
+          {
+            Toggle(selected, child.RowId, all);
+          }
+        }
+
+        ImGui.SameLine();
+
+        var label = group.Key >= 1 && group.Key <= TopLevelLabels.Length
+          ? TopLevelLabels[group.Key - 1]
+          : $"Category {group.Key}";
+
+        if (checkedCount > 0 && !all)
+        {
+          label += $" ({checkedCount})";
+        }
+
+        if (ImGui.TreeNode($"{label}##group{group.Key}"))
+        {
+          foreach (var child in children)
+          {
+            var on = selected.Contains(child.RowId);
+            if (ImGui.Checkbox($"{child.Name.ExtractText()}##cat{child.RowId}", ref on))
+            {
+              Toggle(selected, child.RowId, on);
+            }
+          }
+
+          ImGui.TreePop();
+        }
+      }
+
+      ImGui.EndCombo();
+    }
+
+    private void DrawRarityPicker()
+    {
+      var selected = this.context.SelectedRarities;
+
+      var preview = selected.Count switch
+      {
+        0 => "All rarities",
+        1 => RarityOptions.First(r => selected.Contains(r.Rarity)).Label,
+        _ => $"{selected.Count} rarities",
+      };
+
+      ImGui.SetNextItemWidth(-1);
+
+      if (!ImGui.BeginCombo("##rarityPicker", preview))
+      {
+        return;
+      }
+
+      foreach (var option in RarityOptions)
+      {
+        var on = selected.Contains(option.Rarity);
+        if (ImGui.Checkbox($"{option.Label}##rarity{option.Rarity}", ref on))
+        {
+          Toggle(selected, option.Rarity, on);
+        }
+      }
+
+      ImGui.EndCombo();
+    }
+
+    private void DrawClassPicker()
+    {
+      ImGui.SetNextItemWidth(-1);
+
+      if (!ImGui.BeginCombo(
+        "##classJobPicker",
+        this.context.SelectedClassJob == null ? "All Classes" : this.context.SelectedClassJob.Value.Abbreviation.ExtractText()))
+      {
+        return;
+      }
+
+      void SelectClassJob(ClassJob? classJob)
+      {
+        var selected = this.context.SelectedClassJob?.RowId == classJob?.RowId;
+        if (ImGui.Selectable(classJob == null ? "All Classes" : classJob?.Abbreviation.ExtractText(), selected))
+        {
+          this.context.SelectedClassJob = classJob;
+        }
+
+        if (selected)
+        {
+          ImGui.SetItemDefaultFocus();
+        }
+      }
+
+      SelectClassJob(null);
+
+      foreach (var classJob in this.context.Catalog.ClassJobs)
+      {
+        SelectClassJob(classJob);
+      }
+
+      ImGui.EndCombo();
     }
   }
 }
