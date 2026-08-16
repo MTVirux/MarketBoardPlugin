@@ -208,7 +208,10 @@ namespace MarketTerror.GUI
 
       this.hoveredItemWatcher.Tick();
 
-      ImGui.ProgressBar(this.hoveredItemWatcher.Progress, new Vector2(-1, 0), string.Empty);
+      if (this.plugin.Config.WatchForHovered)
+      {
+        ImGui.ProgressBar(this.hoveredItemWatcher.Progress, new Vector2(-1, 0), string.Empty);
+      }
 
       ImGui.EndChild();
       ImGui.SameLine(0.0f, 0.0f);
