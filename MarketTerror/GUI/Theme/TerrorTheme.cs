@@ -24,22 +24,22 @@ namespace MarketTerror.GUI.Theme
 
     private const uint TransparentColor = 0u;
 
-    private static readonly uint WindowBgColor = Rgb(0x0D, 0x0B, 0x10);
-    private static readonly uint PanelBgColor = Rgb(0x14, 0x10, 0x19);
-    private static readonly uint FrameBgColor = Rgb(0x1B, 0x16, 0x22);
-    private static readonly uint FrameBgHoveredColor = Rgb(0x24, 0x1D, 0x2E);
-    private static readonly uint FrameBgActiveColor = Rgb(0x2B, 0x24, 0x36);
-    private static readonly uint BorderColor = Rgb(0x38, 0x2E, 0x46);
-    private static readonly uint AccentColor = Rgb(0xD9, 0x4F, 0x7B);
-    private static readonly uint AccentDimColor = Rgb(0x7B, 0x2D, 0x4A);
-    private static readonly uint AccentHoverColor = Rgb(0x9B, 0x3A, 0x5E);
-    private static readonly uint RowAltColor = Rgb(0x17, 0x12, 0x21);
-    private static readonly uint TextColor = Rgb(0xE6, 0xE2, 0xEA);
-    private static readonly uint TextDimColor = Rgb(0x8B, 0x7F, 0xA3);
-    private static readonly uint TextBrightColor = Rgb(0xF0, 0xEA, 0xF5);
-    private static readonly uint GilTextColor = Rgb(0xFF, 0xD9, 0x8A);
-    private static readonly uint TabColor = Rgb(0x1B, 0x16, 0x22);
-    private static readonly uint TabActiveColor = Rgb(0x24, 0x1D, 0x2E);
+    private static readonly uint WindowBgColor = Rgb(0x0A, 0x0A, 0x0B);
+    private static readonly uint PanelBgColor = Rgb(0x12, 0x12, 0x13);
+    private static readonly uint FrameBgColor = Rgb(0x1A, 0x1A, 0x1C);
+    private static readonly uint FrameBgHoveredColor = Rgb(0x26, 0x20, 0x1E);
+    private static readonly uint FrameBgActiveColor = Rgb(0x32, 0x2A, 0x26);
+    private static readonly uint BorderColor = Rgb(0x38, 0x30, 0x2C);
+    private static readonly uint AccentColor = Rgb(0xB3, 0x27, 0x1F);
+    private static readonly uint AccentDimColor = Rgb(0x4A, 0x13, 0x10);
+    private static readonly uint AccentHoverColor = Rgb(0x8A, 0x1E, 0x18);
+    private static readonly uint RowAltColor = Rgb(0x0E, 0x0E, 0x0F);
+    private static readonly uint TextColor = Rgb(0xE8, 0xE6, 0xE3);
+    private static readonly uint TextDimColor = Rgb(0x7E, 0x78, 0x74);
+    private static readonly uint TextBrightColor = Rgb(0xF4, 0xF2, 0xEF);
+    private static readonly uint GilTextColor = Rgb(0xC9, 0xA2, 0x27);
+    private static readonly uint TabColor = Rgb(0x1A, 0x1A, 0x1C);
+    private static readonly uint TabActiveColor = Rgb(0x26, 0x20, 0x1E);
 
     private readonly MarketTerrorConfig config;
 
