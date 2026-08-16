@@ -11,6 +11,7 @@ namespace MarketTerror.GUI
   using Dalamud.Interface.ManagedFontAtlas;
   using Lumina.Excel.Sheets;
   using MarketTerror.GUI.Theme;
+  using MarketTerror.Helpers;
   using MarketTerror.Models.ShoppingList;
   using MarketTerror.Services;
 
@@ -144,6 +145,16 @@ namespace MarketTerror.GUI
     public int MaxItemLevel { get; set; } = DefaultMaxItemLevel;
 
     /// <summary>
+    /// Gets or sets the unlock state the item list is limited to, or null for every item.
+    /// </summary>
+    public bool? UnlockFilter { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether the unlock state can be read for the current character.
+    /// </summary>
+    public bool CanReadUnlockState => this.Plugin.ClientState.IsLoggedIn;
+
+    /// <summary>
     /// Gets or sets the index of the highlighted listing.
     /// </summary>
     public int SelectedListing { get; set; } = -1;
@@ -183,7 +194,9 @@ namespace MarketTerror.GUI
         this.MaxLevel,
         this.MinItemLevel,
         this.MaxItemLevel,
-        this.SelectedClassJob);
+        this.SelectedClassJob,
+        this.CanReadUnlockState ? this.UnlockFilter : null,
+        id => ItemUnlock.IsUnlocked(this.Plugin.ClientState, id));
     }
 
     /// <summary>
@@ -194,6 +207,7 @@ namespace MarketTerror.GUI
       this.SelectedCategories.Clear();
       this.SelectedRarities.Clear();
       this.SelectedClassJob = null;
+      this.UnlockFilter = null;
       this.MinLevel = 0;
       this.MaxLevel = DefaultMaxLevel;
       this.MinItemLevel = 0;

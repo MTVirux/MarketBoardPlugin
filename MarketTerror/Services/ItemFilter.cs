@@ -20,6 +20,8 @@ namespace MarketTerror.Services
 
     private readonly HashSet<byte> rarities;
 
+    private readonly Func<uint, bool?>? unlockProbe;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemFilter"/> class.
     /// </summary>
@@ -31,6 +33,8 @@ namespace MarketTerror.Services
     /// <param name="minItemLevel">The minimum item level.</param>
     /// <param name="maxItemLevel">The maximum item level.</param>
     /// <param name="classJob">The class job to filter by, or null for all classes.</param>
+    /// <param name="unlocked">The unlock state to keep, or null to keep every item.</param>
+    /// <param name="unlockProbe">Reads the unlock state of an item, or null to leave the unlock state unfiltered.</param>
     public ItemFilter(
       string searchString,
       IEnumerable<uint> categories,
@@ -39,7 +43,9 @@ namespace MarketTerror.Services
       int maxLevel,
       int minItemLevel,
       int maxItemLevel,
-      ClassJob? classJob)
+      ClassJob? classJob,
+      bool? unlocked = null,
+      Func<uint, bool?>? unlockProbe = null)
     {
       this.SearchString = searchString ?? string.Empty;
       this.categories = new HashSet<uint>(categories ?? Enumerable.Empty<uint>());
@@ -49,6 +55,8 @@ namespace MarketTerror.Services
       this.MinItemLevel = minItemLevel;
       this.MaxItemLevel = maxItemLevel;
       this.ClassJob = classJob;
+      this.Unlocked = unlocked;
+      this.unlockProbe = unlockProbe;
     }
 
     /// <summary>
@@ -80,6 +88,11 @@ namespace MarketTerror.Services
     /// Gets the class job to filter by, or null for all classes.
     /// </summary>
     public ClassJob? ClassJob { get; }
+
+    /// <summary>
+    /// Gets the unlock state to keep, or null to keep every item.
+    /// </summary>
+    public bool? Unlocked { get; }
 
     /// <summary>
     /// Checks whether a category survives the filter.
@@ -119,7 +132,18 @@ namespace MarketTerror.Services
         return false;
       }
 
-      return item.ClassJobCategory.Value.HasClass(this.ClassJob);
+      if (!item.ClassJobCategory.Value.HasClass(this.ClassJob))
+      {
+        return false;
+      }
+
+      if (this.Unlocked == null || this.unlockProbe == null)
+      {
+        return true;
+      }
+
+      // Items that unlock nothing report no state, so they drop out of both unlock states.
+      return this.unlockProbe(item.RowId) == this.Unlocked;
     }
 
     /// <summary>
@@ -136,6 +160,7 @@ namespace MarketTerror.Services
         && this.MinItemLevel == other.MinItemLevel
         && this.MaxItemLevel == other.MaxItemLevel
         && this.ClassJob?.RowId == other.ClassJob?.RowId
+        && this.Unlocked == other.Unlocked
         && this.categories.SetEquals(other.categories)
         && this.rarities.SetEquals(other.rarities);
     }

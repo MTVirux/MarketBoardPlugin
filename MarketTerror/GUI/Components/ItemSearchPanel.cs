@@ -163,6 +163,13 @@ namespace MarketTerror.GUI.Components
       Row("Class");
       this.DrawClassPicker();
 
+      // Nobody is logged in, so there is no character whose collection could be read.
+      if (this.context.CanReadUnlockState)
+      {
+        Row("Collection");
+        this.DrawUnlockPicker();
+      }
+
       ImGui.EndTable();
 
       if (ImGui.Button("Reset filters"))
@@ -287,6 +294,48 @@ namespace MarketTerror.GUI.Components
           Toggle(selected, option.Rarity, on);
         }
       }
+
+      ImGui.EndCombo();
+    }
+
+    private void DrawUnlockPicker()
+    {
+      var preview = this.context.UnlockFilter switch
+      {
+        true => "Already unlocked",
+        false => "Not unlocked",
+        _ => "All items",
+      };
+
+      ImGui.SetNextItemWidth(-1);
+
+      if (!ImGui.BeginCombo("##unlockPicker", preview))
+      {
+        if (this.context.UnlockFilter != null && ImGui.IsItemHovered())
+        {
+          ImGui.SetTooltip("Only items that unlock something - minions, mounts, orchestrion rolls,\ncards - have a collection state, so everything else is hidden.");
+        }
+
+        return;
+      }
+
+      void SelectUnlockState(bool? unlocked, string label)
+      {
+        var selected = this.context.UnlockFilter == unlocked;
+        if (ImGui.Selectable(label, selected))
+        {
+          this.context.UnlockFilter = unlocked;
+        }
+
+        if (selected)
+        {
+          ImGui.SetItemDefaultFocus();
+        }
+      }
+
+      SelectUnlockState(null, "All items");
+      SelectUnlockState(true, "Already unlocked");
+      SelectUnlockState(false, "Not unlocked");
 
       ImGui.EndCombo();
     }
