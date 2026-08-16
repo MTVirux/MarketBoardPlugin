@@ -278,13 +278,24 @@ namespace MarketTerror.GUI
 
     private static void DrawScopePicker(ShoppingListScope scope)
     {
-      if (ImGui.BeginCombo("##shoppingListScope", ScopeLabel(scope.Scope)))
+      if (ImGui.BeginCombo("##shoppingListScope", ScopeLabel(scope, scope.Scope)))
       {
+        var current = ScopeLabel(scope, scope.Scope);
+        var listed = new HashSet<string>(StringComparer.Ordinal);
+
         foreach (var level in ScopeOrder)
         {
-          var isSelected = level == scope.Scope;
+          var label = ScopeLabel(scope, level);
 
-          if (ImGui.Selectable(ScopeLabel(level), isSelected))
+          if (!listed.Add(label))
+          {
+            // An Oceania world reaches the same markets at both region scopes.
+            continue;
+          }
+
+          var isSelected = label == current;
+
+          if (ImGui.Selectable($"{label}##{level}", isSelected))
           {
             scope.SelectScope(level);
           }
@@ -304,9 +315,23 @@ namespace MarketTerror.GUI
         : "How far the searches reach around the picked world.");
     }
 
-    private static string ScopeLabel(MarketScope scope)
+    /// <summary>
+    /// Names what a scope would actually price at, falling back to the plain scope word
+    /// while no world is selected.
+    /// </summary>
+    /// <param name="scope">The shopping list scope.</param>
+    /// <param name="level">The scope level to name.</param>
+    /// <returns>The label for the picker.</returns>
+    private static string ScopeLabel(ShoppingListScope scope, MarketScope level)
     {
-      return scope switch
+      var targets = scope.TargetsFor(level);
+
+      if (targets.Count > 0)
+      {
+        return string.Join(" + ", targets);
+      }
+
+      return level switch
       {
         MarketScope.RegionWithOceania => "Region + Oceania",
         MarketScope.Region => "Region",
@@ -333,7 +358,13 @@ namespace MarketTerror.GUI
       }
 
       var available = ImGui.GetContentRegionAvail().X;
-      var scopeWidth = 140 * scale;
+
+      // The scope combo names the world, data centre or region it prices at, so it has to fit that.
+      var scopeLabel = ScopeLabel(scope, scope.Scope);
+      var scopeWidth = Math.Max(
+        140 * scale,
+        ImGui.CalcTextSize(scopeLabel).X + ImGui.GetFrameHeight() + (ImGui.GetStyle().FramePadding.X * 2));
+
       var worldWidth = sameLine ? 150 * scale : available - scopeWidth - spacing;
 
       if (scopeWidth + worldWidth + spacing > available)

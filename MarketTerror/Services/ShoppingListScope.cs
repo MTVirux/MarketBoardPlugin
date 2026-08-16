@@ -68,28 +68,7 @@ namespace MarketTerror.Services
     /// <summary>
     /// Gets the world, data centre or region names the prices are fetched for, cheapest answer winning.
     /// </summary>
-    public IReadOnlyList<string> QueryTargets
-    {
-      get
-      {
-        var entry = this.SelectedEntry;
-
-        if (entry == null)
-        {
-          return Array.Empty<string>();
-        }
-
-        return this.Scope switch
-        {
-          MarketScope.DataCentre => new[] { entry.DataCentre },
-          MarketScope.Region => new[] { entry.Region },
-          MarketScope.RegionWithOceania => entry.Region == OceaniaRegion
-            ? new[] { entry.Region }
-            : new[] { entry.Region, OceaniaRegion },
-          _ => new[] { entry.Name },
-        };
-      }
-    }
+    public IReadOnlyList<string> QueryTargets => this.TargetsFor(this.Scope);
 
     /// <summary>
     /// Gets the query targets as one label, for tooltips.
@@ -115,6 +94,31 @@ namespace MarketTerror.Services
 
         return this.ApplyHomeWorldDefault();
       }
+    }
+
+    /// <summary>
+    /// Gets the world, data centre or region names a scope would price at, for the selected world.
+    /// </summary>
+    /// <param name="scope">The scope to resolve.</param>
+    /// <returns>The names to query, empty when no world is selected yet.</returns>
+    public IReadOnlyList<string> TargetsFor(MarketScope scope)
+    {
+      var entry = this.SelectedEntry;
+
+      if (entry == null)
+      {
+        return Array.Empty<string>();
+      }
+
+      return scope switch
+      {
+        MarketScope.DataCentre => new[] { entry.DataCentre },
+        MarketScope.Region => new[] { entry.Region },
+        MarketScope.RegionWithOceania => entry.Region == OceaniaRegion
+          ? new[] { entry.Region }
+          : new[] { entry.Region, OceaniaRegion },
+        _ => new[] { entry.Name },
+      };
     }
 
     /// <summary>
