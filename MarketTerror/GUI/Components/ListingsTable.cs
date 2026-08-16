@@ -49,7 +49,12 @@ namespace MarketTerror.GUI.Components
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
       var tableHeight = sectionHeight - (ImGui.GetCursorPosY() - top);
 
-      if (!ImGui.BeginTable("currentListings", 5, flags, new Vector2(0.0f, tableHeight)))
+      // Straddle the panel's padding so the table alone runs to its edges.
+      var padding = ImGui.GetStyle().WindowPadding.X;
+      var tableWidth = ImGui.GetContentRegionAvail().X + (padding * 2.0f);
+      ImGui.SetCursorPosX(ImGui.GetCursorPosX() - padding);
+
+      if (!ImGui.BeginTable("currentListings", 5, flags, new Vector2(tableWidth, tableHeight)))
       {
         return;
       }
