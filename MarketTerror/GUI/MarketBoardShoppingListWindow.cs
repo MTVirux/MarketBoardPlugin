@@ -13,9 +13,9 @@ namespace MarketTerror.GUI
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
   using Dalamud.Interface.Windowing;
+  using MarketTerror.GUI.Components;
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
-  using MarketTerror.Models;
   using MarketTerror.Models.ShoppingList;
   using MarketTerror.Services;
 
@@ -33,18 +33,9 @@ namespace MarketTerror.GUI
       ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp |
       ImGuiTableFlags.Sortable | ImGuiTableFlags.SortTristate;
 
-    /// <summary>
-    /// The scopes as the picker lists them, widest reach first.
-    /// </summary>
-    private static readonly MarketScope[] ScopeOrder =
-    {
-      MarketScope.RegionWithOceania,
-      MarketScope.Region,
-      MarketScope.DataCentre,
-      MarketScope.World,
-    };
-
     private readonly TerrorTheme theme;
+
+    private readonly WorldPicker worldPicker = new WorldPicker("shoppingListWorld");
 
     private readonly List<SavedItem> sortedItems = new List<SavedItem>();
 
@@ -61,8 +52,6 @@ namespace MarketTerror.GUI
     private int sortedRevision = -1;
 
     private bool sortAscending = true;
-
-    private string worldFilter = string.Empty;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardShoppingListWindow"/> class.
@@ -277,73 +266,6 @@ namespace MarketTerror.GUI
       }
     }
 
-    private static void DrawScopePicker(ShoppingListScope scope)
-    {
-      if (ImGui.BeginCombo("##shoppingListScope", ScopeLabel(scope, scope.Scope)))
-      {
-        var current = ScopeLabel(scope, scope.Scope);
-        var listed = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var level in ScopeOrder)
-        {
-          var label = ScopeLabel(scope, level);
-
-          if (!listed.Add(label))
-          {
-            // An Oceania world reaches the same markets at both region scopes.
-            continue;
-          }
-
-          var isSelected = label == current;
-
-          if (ImGui.Selectable($"{label}##{level}", isSelected))
-          {
-            scope.SelectScope(level);
-          }
-
-          if (isSelected)
-          {
-            ImGui.SetItemDefaultFocus();
-          }
-        }
-
-        ImGui.EndCombo();
-      }
-
-      var target = scope.QueryTargetLabel;
-      Utilities.HoverTooltip(target.Length > 0
-        ? $"How far the searches reach. Prices come from {target}."
-        : "How far the searches reach around the picked world.");
-    }
-
-    /// <summary>
-    /// Names what a scope would actually price at, falling back to the plain scope word
-    /// while no world is selected.
-    /// </summary>
-    /// <param name="scope">The shopping list scope.</param>
-    /// <param name="level">The scope level to name.</param>
-    /// <returns>The label for the picker.</returns>
-    private static string ScopeLabel(ShoppingListScope scope, MarketScope level)
-    {
-      var targets = scope.TargetsFor(level);
-
-      if (targets.Count == 0)
-      {
-        targets = new[]
-        {
-          level switch
-          {
-            MarketScope.RegionWithOceania => "Region + Oceania",
-            MarketScope.Region => "Region",
-            MarketScope.DataCentre => "Data Centre",
-            _ => "World",
-          },
-        };
-      }
-
-      return MarketScopeLabel.For(level, targets);
-    }
-
     /// <summary>
     /// Sums up the last pricing job, or an empty string while none has run.
     /// </summary>
@@ -383,10 +305,9 @@ namespace MarketTerror.GUI
       var available = ImGui.GetContentRegionAvail().X;
 
       // The scope combo names the world, data centre or region it prices at, so it has to fit that.
-      var scopeLabel = ScopeLabel(scope, scope.Scope);
       var scopeWidth = Math.Max(
         140 * scale,
-        ImGui.CalcTextSize(scopeLabel).X + ImGui.GetFrameHeight() + (ImGui.GetStyle().FramePadding.X * 2));
+        ImGui.CalcTextSize(scope.SelectedDisplayName).X + ImGui.GetFrameHeight() + (ImGui.GetStyle().FramePadding.X * 2));
 
       var worldWidth = sameLine ? 150 * scale : available - scopeWidth - spacing;
 
@@ -407,93 +328,14 @@ namespace MarketTerror.GUI
       ImGui.BeginDisabled(this.Plugin.ShoppingListBulkAdd.IsRunning);
 
       ImGui.SetNextItemWidth(worldWidth);
-      this.DrawWorldPicker(scope);
+      this.worldPicker.Draw(scope, this.theme);
 
       ImGui.SameLine();
 
       ImGui.SetNextItemWidth(scopeWidth);
-      DrawScopePicker(scope);
+      ScopePicker.Draw("##shoppingListScope", scope);
 
       ImGui.EndDisabled();
-    }
-
-    private void DrawWorldPicker(ShoppingListScope scope)
-    {
-      var selected = scope.SelectedWorld;
-
-      var open = ImGui.BeginCombo("##shoppingListWorld", selected.Length > 0 ? selected : "Pick a world");
-      var resetToHome = ImGui.IsItemClicked(ImGuiMouseButton.Right);
-
-      if (open)
-      {
-        if (ImGui.IsWindowAppearing())
-        {
-          this.worldFilter = string.Empty;
-          ImGui.SetKeyboardFocusHere();
-        }
-
-        ImGui.SetNextItemWidth(-1);
-        ImGui.InputTextWithHint("##shoppingListWorldFilter", "Search worlds", ref this.worldFilter, 64);
-        ImGui.Separator();
-
-        var filter = this.worldFilter.Trim();
-        var lastGroup = string.Empty;
-        var matches = 0;
-
-        foreach (var world in scope.Worlds)
-        {
-          var group = $"{world.Region} - {world.DataCentre}";
-
-          if (filter.Length > 0 &&
-              world.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
-              group.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
-          {
-            continue;
-          }
-
-          matches++;
-
-          if (group != lastGroup)
-          {
-            lastGroup = group;
-            ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
-            ImGui.Text(group);
-            ImGui.PopStyleColor();
-          }
-
-          var isSelected = world.Name == selected;
-
-          if (ImGui.Selectable(world.Name, isSelected))
-          {
-            scope.SelectWorld(world.Name);
-          }
-
-          if (isSelected)
-          {
-            ImGui.SetItemDefaultFocus();
-          }
-        }
-
-        if (matches == 0)
-        {
-          ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
-          ImGui.Text("No worlds match.");
-          ImGui.PopStyleColor();
-        }
-
-        ImGui.EndCombo();
-      }
-
-      if (resetToHome)
-      {
-        scope.SelectHomeWorld();
-      }
-
-      var home = scope.HomeWorld;
-
-      Utilities.HoverTooltip(home.Length > 0 && home != scope.SelectedWorld
-        ? $"Your world\nRight-click to go back to {home}."
-        : "Your world");
     }
 
     private void DrawActionBar()

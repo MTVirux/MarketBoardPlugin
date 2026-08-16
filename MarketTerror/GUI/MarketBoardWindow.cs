@@ -335,7 +335,6 @@ namespace MarketTerror.GUI
         this.themeScope?.Dispose();
         this.themeScope = null;
         this.hoveredItemWatcher.Dispose();
-        this.worldSelection.Dispose();
         this.marketDataProvider.Dispose();
         this.defaultFontHandle?.Dispose();
         this.titleFontHandle?.Dispose();

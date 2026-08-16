@@ -142,6 +142,7 @@ namespace MarketTerror
       this.MigrateConfig();
 
       this.ShoppingList = new ShoppingListStore(this);
+      this.WorldCatalogue = new WorldCatalogue(this);
       this.ShoppingListScope = new ShoppingListScope(this);
 
       this.AutoSearch = new MarketBoardAutoSearch(
@@ -225,6 +226,11 @@ namespace MarketTerror
     /// Gets the service that adds a whole category to the shopping list.
     /// </summary>
     public ShoppingListBulkAdd ShoppingListBulkAdd { get; init; }
+
+    /// <summary>
+    /// Gets every world the market board can be priced at.
+    /// </summary>
+    public WorldCatalogue WorldCatalogue { get; init; }
 
     /// <summary>
     /// Gets the world and scope the shopping list prices its items against.

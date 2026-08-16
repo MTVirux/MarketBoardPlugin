@@ -31,7 +31,12 @@ namespace MarketTerror
     public int Version { get; set; } = CurrentVersion;
 
     /// <summary>
-    /// Gets or sets how wide the market board window prices around the character's world.
+    /// Gets or sets the world the market board window prices around, empty until one is resolved.
+    /// </summary>
+    public string MarketBoardScopeWorld { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets how wide the market board window prices around <see cref="MarketBoardScopeWorld"/>.
     /// </summary>
     public MarketScope MarketBoardScope { get; set; } = MarketScope.World;
 
@@ -124,7 +129,7 @@ namespace MarketTerror
     public bool ShoppingListCopyWorld { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets the world the shopping list shops from, or an empty string to follow the character's home world.
+    /// Gets or sets the world the shopping list shops from, or an empty string to follow the character's current world.
     /// </summary>
     public string ShoppingListScopeWorld { get; set; } = string.Empty;
 

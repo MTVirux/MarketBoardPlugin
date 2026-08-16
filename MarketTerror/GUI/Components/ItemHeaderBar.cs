@@ -21,6 +21,7 @@ namespace MarketTerror.GUI.Components
 
     private readonly MarketBoardContext context;
     private readonly ItemTooltip tooltip;
+    private readonly WorldPicker worldPicker = new WorldPicker("marketBoardWorld");
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemHeaderBar"/> class.
@@ -38,13 +39,17 @@ namespace MarketTerror.GUI.Components
     public void Draw()
     {
       var scale = ImGui.GetIO().FontGlobalScale;
+      var spacing = ImGui.GetStyle().ItemSpacing.X;
+      var worlds = this.context.Worlds;
       var item = this.context.SelectedItem!.Value;
       var itemName = item.Name.ExtractText();
 
-      // The combo names the world, data centre or region it prices at, so it has to fit that.
-      var comboWidth = Math.Max(
+      // The scope combo names the world, data centre or region it prices at, so it has to fit that.
+      var scopeWidth = Math.Max(
         250 * scale,
-        ImGui.CalcTextSize(this.context.Worlds.SelectedDisplayName).X + ImGui.GetFrameHeight() + (ImGui.GetStyle().FramePadding.X * 2));
+        ImGui.CalcTextSize(worlds.SelectedDisplayName).X + ImGui.GetFrameHeight() + (ImGui.GetStyle().FramePadding.X * 2));
+
+      var worldWidth = 150 * scale;
 
       using var selectedItemIcon = this.context.Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup
       {
@@ -77,35 +82,30 @@ namespace MarketTerror.GUI.Components
       ImGui.Text(itemName);
       ImGui.PopStyleColor();
       ImGui.OpenPopupOnItemClick(ContextMenuId, ImGuiPopupFlags.MouseButtonRight);
-      ImGui.SameLine(ImGui.GetContentRegionAvail().X - comboWidth);
+
+      var available = ImGui.GetContentRegionAvail().X;
+
+      if (worldWidth + scopeWidth + spacing > available)
+      {
+        // Share what is left rather than spilling out of the window.
+        var share = Math.Max(available - spacing, 80 * scale);
+        scopeWidth = share * 0.6f;
+        worldWidth = share - scopeWidth;
+      }
+
+      ImGui.SameLine(Math.Max(available - worldWidth - scopeWidth - spacing, 0.0f));
       ImGui.SetCursorPosY(8 * scale);
       this.context.TitleFont.Pop();
 
       ImGui.BeginGroup();
-      ImGui.SetNextItemWidth(comboWidth);
 
-      if (ImGui.BeginCombo("##worldCombo", this.context.Worlds.SelectedDisplayName))
-      {
-        var worlds = this.context.Worlds.Worlds;
+      ImGui.SetNextItemWidth(worldWidth);
+      this.worldPicker.Draw(worlds, this.context.Theme, this.context.ResetMarketData);
 
-        for (var i = 0; i < worlds.Count; i++)
-        {
-          var isSelected = this.context.Worlds.SelectedIndex == i;
+      ImGui.SameLine();
 
-          if (ImGui.Selectable(worlds[i].Display, isSelected))
-          {
-            this.context.Worlds.Select(i);
-            this.context.ResetMarketData();
-          }
-
-          if (isSelected)
-          {
-            ImGui.SetItemDefaultFocus();
-          }
-        }
-
-        ImGui.EndCombo();
-      }
+      ImGui.SetNextItemWidth(scopeWidth);
+      ScopePicker.Draw("##marketBoardScope", worlds, this.context.ResetMarketData);
 
       var marketData = this.context.MarketData.MarketData;
 
