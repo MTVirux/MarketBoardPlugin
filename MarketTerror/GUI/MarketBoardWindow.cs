@@ -323,8 +323,8 @@ namespace MarketTerror.GUI
 
       var splitterHeight = ImGui.GetTextLineHeight() * 0.5f;
 
-      // The two cards and the splitter each add an item spacing below themselves.
-      var usable = available - splitterHeight - (spacing * 3);
+      // The splitter sits flush between the cards, so only the spacing below the last one is left over.
+      var usable = available - splitterHeight - spacing;
 
       if (usable <= 0.0f)
       {
@@ -338,12 +338,15 @@ namespace MarketTerror.GUI
 
       this.listingsTable.Draw(listingsHeight);
 
+      // Close the item spacing on either side of the splitter so the cards sit right against it.
+      ImGui.SetCursorPosY(ImGui.GetCursorPosY() - spacing);
+
       var drag = this.DrawSplitter(
         "marketDataSplitter",
         new Vector2(ImGui.GetContentRegionAvail().X, splitterHeight),
         false,
         scale,
-        true);
+        false);
 
       if (drag != 0.0f)
       {
@@ -354,6 +357,8 @@ namespace MarketTerror.GUI
       {
         this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
       }
+
+      ImGui.SetCursorPosY(ImGui.GetCursorPosY() - spacing);
 
       this.historyTable.Draw(usable - listingsHeight);
     }
