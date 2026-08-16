@@ -114,7 +114,7 @@ namespace MarketTerror.GUI
 
         ImGui.TableSetColumnIndex(3);
         ImGui.PushFont(UiBuilder.IconFont);
-        if (ImGui.Button($"{(char)FontAwesomeIcon.Slash}##shoplist" + k, new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y)))
+        if (ImGui.Button($"{(char)FontAwesomeIcon.TrashAlt}##shoplist" + k, new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y)))
         {
           todel.Add(item);
         }
