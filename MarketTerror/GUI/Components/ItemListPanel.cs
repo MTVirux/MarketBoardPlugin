@@ -39,7 +39,13 @@ namespace MarketTerror.GUI.Components
       // The hover progress bar sits below the list, so only leave room for it when it is drawn.
       var reservedHeight = this.context.Config.WatchForHovered ? -ImGui.GetFrameHeightWithSpacing() : 0;
 
-      ImGui.BeginChild("itemTree", new Vector2(0, reservedHeight), false, ImGuiWindowFlags.HorizontalScrollbar);
+      // Each tab gets its own child so the collapsed categories and the scroll position
+      // never carry over from one tab to another.
+      ImGui.BeginChild(
+        $"itemTree{this.context.ItemListTab}",
+        new Vector2(0, reservedHeight),
+        false,
+        ImGuiWindowFlags.HorizontalScrollbar);
       var itemTextSize = ImGui.CalcTextSize(string.Empty);
 
       if (this.context.ItemListTab == ItemListTab.Favorites)
@@ -218,11 +224,7 @@ namespace MarketTerror.GUI.Components
           ImGui.SetNextItemOpen(true, ImGuiCond.Always);
         }
 
-        // The search tab forces every category open, so it keeps its own node ids to
-        // avoid leaving the all items tab expanded once the search is cleared.
-        var nodeId = (searching ? "##searchcat" : "##cat") + category.Key.RowId;
-
-        if (ImGui.TreeNode(category.Key.Name.ExtractText() + nodeId))
+        if (ImGui.TreeNode(category.Key.Name.ExtractText() + "##cat" + category.Key.RowId))
         {
           ImGui.Unindent(ImGui.GetTreeNodeToLabelSpacing());
 
