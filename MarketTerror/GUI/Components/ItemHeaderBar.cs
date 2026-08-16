@@ -59,7 +59,7 @@ namespace MarketTerror.GUI.Components
       ImGui.Text(itemName);
       ImGui.PopStyleColor();
       ImGui.SameLine(ImGui.GetContentRegionAvail().X - (250 * scale));
-      ImGui.SetCursorPosY(0);
+      ImGui.SetCursorPosY(8 * scale);
       this.context.TitleFont.Pop();
 
       ImGui.BeginGroup();
