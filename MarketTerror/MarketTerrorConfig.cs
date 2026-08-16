@@ -118,5 +118,10 @@ namespace MarketTerror
     /// Gets or sets a value indicating whether the main window should open on plugin start in debug builds.
     /// </summary>
     public bool OpenOnStart { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the Terror skin is applied to the plugin's windows.
+    /// </summary>
+    public bool TerrorSkinEnabled { get; set; } = true;
   }
 }
