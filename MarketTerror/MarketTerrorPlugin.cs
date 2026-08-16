@@ -46,6 +46,11 @@ namespace MarketTerror
     /// </summary>
     private const string CurrentConfigTypeName = "MarketTerror.MarketTerrorConfig, MarketTerror";
 
+    /// <summary>
+    /// The chat commands that open the main window.
+    /// </summary>
+    private static readonly string[] OpenCommands = { "/pmb", "/mt", "/marketterror" };
+
     private readonly MarketBoardWindow marketBoardWindow;
 
     private readonly MarketTerrorConfigWindow marketBoardConfigWindow;
@@ -130,15 +135,13 @@ namespace MarketTerror
       this.windowSystem.AddWindow(this.marketBoardShoppingListWindow);
 
       // Set up command handlers
-      this.CommandManager.AddHandler("/pmb", new CommandInfo(this.OnOpenMarketBoardCommand)
+      foreach (var command in OpenCommands)
       {
-        HelpMessage = "Open the Market Terror window.",
-      });
-
-      this.CommandManager.AddHandler("/mt", new CommandInfo(this.OnOpenMarketBoardCommand)
-      {
-        HelpMessage = "Open the Market Terror window.",
-      });
+        this.CommandManager.AddHandler(command, new CommandInfo(this.OnOpenMarketBoardCommand)
+        {
+          HelpMessage = "Open the Market Terror window.",
+        });
+      }
 
       this.PluginInterface.UiBuilder.Draw += this.DrawUi;
       this.PluginInterface.UiBuilder.OpenConfigUi += this.OpenConfigUi;
@@ -319,8 +322,10 @@ namespace MarketTerror
         this.marketBoardWindow.Dispose();
 
         // Remove command handlers
-        this.CommandManager.RemoveHandler("/pmb");
-        this.CommandManager.RemoveHandler("/mt");
+        foreach (var command in OpenCommands)
+        {
+          this.CommandManager.RemoveHandler(command);
+        }
 
         // Remove context menu handler
         this.ContextMenu.OnMenuOpened -= this.OnContextMenuOpened;

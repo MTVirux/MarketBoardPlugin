@@ -3,7 +3,7 @@
   "Author": "MTVirux",
   "Name": "Market Terror",
   "Punchline": "Custom build of Market Board Plugin",
-  "Description": "Custom build of Market Board Plugin with Lifestream and FFXIVMT sales data. /pmb to open",
+  "Description": "Custom build of Market Board Plugin with Lifestream and FFXIVMT sales data.",
   "InternalName": "MarketTerror",
   "AssemblyVersion": "1.0.1.8",
   "RepoUrl": "https://github.com/MTVirux/MarketTerror",
