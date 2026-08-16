@@ -148,7 +148,7 @@ namespace MarketTerror.GUI.Components
 
       ImGui.SameLine();
       ImGui.SetCursorPosX(right - ImGui.CalcTextSize(hqValue).X);
-      Text(hqValue, this.context.Theme.Accent);
+      Text(hqValue, this.context.Theme.GilText);
     }
 
     private void DrawHeader(Item item, float scale)
