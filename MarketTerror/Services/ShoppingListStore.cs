@@ -40,6 +40,11 @@ namespace MarketTerror.Services
       }
     }
 
+    /// <summary>
+    /// Gets a number that changes whenever the list does, so views can tell when to rebuild.
+    /// </summary>
+    public int Revision { get; private set; }
+
     /// <inheritdoc/>
     public int Count => this.items.Count;
 
@@ -90,6 +95,48 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
+    /// Updates the price and world of the entries whose item is already on the list.
+    /// </summary>
+    /// <param name="entries">The freshly priced entries.</param>
+    public void Replace(IEnumerable<SavedItem> entries)
+    {
+      ArgumentNullException.ThrowIfNull(entries);
+
+      var changed = false;
+
+      foreach (var entry in entries)
+      {
+        var existing = this.items.Find(i => i.SourceItem.RowId == entry.SourceItem.RowId);
+
+        if (existing != null)
+        {
+          existing.Price = entry.Price;
+          existing.World = entry.World;
+          changed = true;
+        }
+      }
+
+      if (changed)
+      {
+        this.Save();
+      }
+    }
+
+    /// <summary>
+    /// Empties the shopping list.
+    /// </summary>
+    public void Clear()
+    {
+      if (this.items.Count == 0)
+      {
+        return;
+      }
+
+      this.items.Clear();
+      this.Save();
+    }
+
+    /// <summary>
     /// Removes every entry matching a condition.
     /// </summary>
     /// <param name="match">The condition an entry has to match to be removed.</param>
@@ -114,6 +161,8 @@ namespace MarketTerror.Services
 
     private void Save()
     {
+      this.Revision++;
+
       var stored = this.plugin.Config.ShoppingList;
       stored.Clear();
 

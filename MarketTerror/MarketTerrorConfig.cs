@@ -91,6 +91,21 @@ namespace MarketTerror
     public ICollection<uint> Favorites { get; } = new List<uint>();
 
     /// <summary>
+    /// Gets or sets a value indicating whether copying the shopping list includes the item names.
+    /// </summary>
+    public bool ShoppingListCopyName { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether copying the shopping list includes the prices.
+    /// </summary>
+    public bool ShoppingListCopyPrice { get; set; } = true;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether copying the shopping list includes the worlds.
+    /// </summary>
+    public bool ShoppingListCopyWorld { get; set; } = true;
+
+    /// <summary>
     /// Gets the saved shopping list, so it survives a plugin reload.
     /// </summary>
     [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale whenever the shopping list changes")]

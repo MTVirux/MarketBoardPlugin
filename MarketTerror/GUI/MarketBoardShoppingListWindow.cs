@@ -9,10 +9,12 @@ namespace MarketTerror.GUI
   using System.Globalization;
   using System.Linq;
   using System.Numerics;
+  using System.Text;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
   using Dalamud.Interface.Windowing;
   using MarketTerror.GUI.Theme;
+  using MarketTerror.Helpers;
   using MarketTerror.Models.ShoppingList;
 
   /// <summary>
@@ -37,6 +39,8 @@ namespace MarketTerror.GUI
     private int lastCount;
 
     private int sortColumn = -1;
+
+    private int sortedRevision = -1;
 
     private bool sortAscending = true;
 
@@ -128,6 +132,8 @@ namespace MarketTerror.GUI
         return;
       }
 
+      this.DrawActionBar();
+
       if (!ImGui.BeginTable("shoppingList", 4, TableFlags))
       {
         return;
@@ -190,6 +196,157 @@ namespace MarketTerror.GUI
       }
     }
 
+    private void DrawActionBar()
+    {
+      var worlds = this.Plugin.MarketBoardContext.Worlds;
+      var busy = this.Plugin.ShoppingListBulkAdd.IsRunning;
+
+      ImGui.BeginDisabled(busy || !worlds.HasSelection);
+
+      if (ImGui.Button("Refresh"))
+      {
+        this.Plugin.ShoppingListBulkAdd.StartRefresh(
+          this.Plugin.ShoppingList.Select(i => i.SourceItem).ToArray(),
+          worlds.QueryTarget);
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Price every item on the list again.");
+
+      ImGui.SameLine();
+
+      if (ImGui.Button("Copy"))
+      {
+        ImGui.OpenPopup("shoppingListCopy");
+      }
+
+      Utilities.HoverTooltip("Copy the list to the clipboard.");
+      this.DrawCopyPopup();
+
+      ImGui.SameLine();
+
+      ImGui.BeginDisabled(busy);
+
+      if (ImGui.Button("Clear"))
+      {
+        this.Plugin.ShoppingList.Clear();
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Remove every item from the list.");
+
+      this.DrawTotal();
+
+      ImGui.Separator();
+    }
+
+    private void DrawTotal()
+    {
+      var total = this.Plugin.ShoppingList.Sum(i => i.Price);
+      var text = "Total: " + (this.Plugin.Config.PriceIconShown
+        ? total.ToString("C", this.Plugin.NumberFormatInfo)
+        : total.ToString("N0", CultureInfo.CurrentCulture));
+
+      ImGui.SameLine();
+
+      var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(text).X;
+      if (padding > 0)
+      {
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
+      }
+
+      ImGui.AlignTextToFramePadding();
+      ImGui.PushStyleColor(ImGuiCol.Text, this.theme.GilText);
+      ImGui.Text(text);
+      ImGui.PopStyleColor();
+    }
+
+    private void DrawCopyPopup()
+    {
+      if (!ImGui.BeginPopup("shoppingListCopy"))
+      {
+        return;
+      }
+
+      var config = this.Plugin.Config;
+
+      this.DrawCopyOption("Item name", config.ShoppingListCopyName, v => config.ShoppingListCopyName = v);
+      this.DrawCopyOption("Price", config.ShoppingListCopyPrice, v => config.ShoppingListCopyPrice = v);
+      this.DrawCopyOption("World", config.ShoppingListCopyWorld, v => config.ShoppingListCopyWorld = v);
+
+      ImGui.Separator();
+
+      ImGui.BeginDisabled(!config.ShoppingListCopyName && !config.ShoppingListCopyPrice && !config.ShoppingListCopyWorld);
+
+      if (ImGui.Button("Copy to clipboard"))
+      {
+        this.CopyList();
+        ImGui.CloseCurrentPopup();
+      }
+
+      ImGui.EndDisabled();
+      ImGui.EndPopup();
+    }
+
+    private void DrawCopyOption(string label, bool value, Action<bool> setter)
+    {
+      var current = value;
+
+      if (ImGui.Checkbox(label, ref current))
+      {
+        setter(current);
+        this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
+      }
+    }
+
+    private void CopyList()
+    {
+      var config = this.Plugin.Config;
+
+      // The rows are copied in the order they are shown, unless the sorted view is out of date.
+      IReadOnlyList<SavedItem> rows = this.sortedItems.Count == this.Plugin.ShoppingList.Count
+        ? this.sortedItems
+        : this.Plugin.ShoppingList;
+
+      var builder = new StringBuilder();
+
+      foreach (var item in rows)
+      {
+        var parts = new List<string>();
+
+        if (config.ShoppingListCopyName)
+        {
+          parts.Add(item.SourceItem.Name.ExtractText());
+        }
+
+        if (config.ShoppingListCopyPrice)
+        {
+          parts.Add(item.Price.ToString("N0", CultureInfo.CurrentCulture));
+        }
+
+        if (config.ShoppingListCopyWorld)
+        {
+          parts.Add(item.World);
+        }
+
+        builder.AppendLine(string.Join(" - ", parts));
+      }
+
+      var text = builder.ToString().TrimEnd();
+
+      if (text.Length == 0)
+      {
+        return;
+      }
+
+      ImGui.SetClipboardText(text);
+
+      if (config.ClipboardNotificationsEnabled)
+      {
+        this.Plugin.NotifyClipboardCopied($"{rows.Count} shopping list rows");
+      }
+    }
+
     private void UpdateSort()
     {
       var specs = ImGui.TableGetSortSpecs();
@@ -211,13 +368,14 @@ namespace MarketTerror.GUI
 
       specs.SpecsDirty = false;
 
-      if (column == this.sortColumn && ascending == this.sortAscending && this.sortedItems.Count == this.Plugin.ShoppingList.Count)
+      if (column == this.sortColumn && ascending == this.sortAscending && this.sortedRevision == this.Plugin.ShoppingList.Revision)
       {
         return;
       }
 
       this.sortColumn = column;
       this.sortAscending = ascending;
+      this.sortedRevision = this.Plugin.ShoppingList.Revision;
 
       this.sortedItems.Clear();
       this.sortedItems.AddRange(this.SortItems());

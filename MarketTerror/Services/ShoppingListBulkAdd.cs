@@ -36,6 +36,8 @@ namespace MarketTerror.Services
 
     private Task? job;
 
+    private bool refreshing;
+
     private bool isDisposed;
 
     /// <summary>
@@ -75,24 +77,17 @@ namespace MarketTerror.Services
     /// <param name="queryTarget">The world, data centre or region to price the items against.</param>
     public void Start(string categoryName, IReadOnlyList<Item> items, string queryTarget)
     {
-      ArgumentNullException.ThrowIfNull(items);
+      this.StartJob(categoryName, items, queryTarget, false);
+    }
 
-      if (this.IsRunning || items.Count == 0)
-      {
-        return;
-      }
-
-      this.cancellation?.Dispose();
-      this.cancellation = new CancellationTokenSource();
-
-      var token = this.cancellation.Token;
-      var queued = items.ToArray();
-
-      this.CategoryName = categoryName;
-      this.Processed = 0;
-      this.Total = queued.Length;
-
-      this.job = Task.Run(() => this.Run(queued, queryTarget, token), token);
+    /// <summary>
+    /// Starts pricing the items already on the buy list again, unless a job is already running.
+    /// </summary>
+    /// <param name="items">The items to price again.</param>
+    /// <param name="queryTarget">The world, data centre or region to price the items against.</param>
+    public void StartRefresh(IReadOnlyList<Item> items, string queryTarget)
+    {
+      this.StartJob("the shopping list", items, queryTarget, true);
     }
 
     /// <summary>
@@ -115,6 +110,29 @@ namespace MarketTerror.Services
       this.cancellation?.Dispose();
       this.cancellation = null;
       this.isDisposed = true;
+    }
+
+    private void StartJob(string categoryName, IReadOnlyList<Item> items, string queryTarget, bool refresh)
+    {
+      ArgumentNullException.ThrowIfNull(items);
+
+      if (this.IsRunning || items.Count == 0)
+      {
+        return;
+      }
+
+      this.cancellation?.Dispose();
+      this.cancellation = new CancellationTokenSource();
+
+      var token = this.cancellation.Token;
+      var queued = items.ToArray();
+
+      this.CategoryName = categoryName;
+      this.Processed = 0;
+      this.Total = queued.Length;
+      this.refreshing = refresh;
+
+      this.job = Task.Run(() => this.Run(queued, queryTarget, token), token);
     }
 
     private async Task Run(IReadOnlyList<Item> items, string queryTarget, CancellationToken token)
@@ -169,7 +187,7 @@ namespace MarketTerror.Services
           token.ThrowIfCancellationRequested();
 
           // The buy list is read while the window draws, so it may only be touched on the framework thread.
-          await this.plugin.Framework.RunOnFrameworkThread(() => this.Append(entries)).ConfigureAwait(false);
+          await this.plugin.Framework.RunOnFrameworkThread(() => this.Apply(entries)).ConfigureAwait(false);
 
           this.Processed += chunk.Length;
         }
@@ -180,8 +198,14 @@ namespace MarketTerror.Services
       }
     }
 
-    private void Append(IReadOnlyList<SavedItem> entries)
+    private void Apply(IReadOnlyList<SavedItem> entries)
     {
+      if (this.refreshing)
+      {
+        this.plugin.ShoppingList.Replace(entries);
+        return;
+      }
+
       var listed = this.plugin.ShoppingList.Select(s => s.SourceItem.RowId).ToHashSet();
 
       this.plugin.ShoppingList.AddRange(entries.Where(e => listed.Add(e.SourceItem.RowId)));

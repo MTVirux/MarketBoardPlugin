@@ -225,6 +225,11 @@ namespace MarketTerror
     public ShoppingListBulkAdd ShoppingListBulkAdd { get; init; }
 
     /// <summary>
+    /// Gets the state and services shared by the main window's components.
+    /// </summary>
+    public MarketBoardContext MarketBoardContext => this.marketBoardWindow.Context;
+
+    /// <summary>
     /// Gets the number format info.
     /// </summary>
     public NumberFormatInfo NumberFormatInfo { get; init; } = (NumberFormatInfo)CultureInfo.CurrentCulture.NumberFormat.Clone();
