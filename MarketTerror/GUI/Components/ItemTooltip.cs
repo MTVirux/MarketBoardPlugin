@@ -14,20 +14,15 @@ namespace MarketTerror.GUI.Components
   using Lumina.Excel.Sheets;
 
   /// <summary>
-  /// Draws an in-game style tooltip for an item, rebuilt in ImGui from the game's item sheets.
+  /// Draws an in-game style tooltip for an item, rebuilt in ImGui from the game's item sheets
+  /// and coloured from the active theme.
   /// </summary>
   public sealed class ItemTooltip
   {
     private const float WrapWidth = 340.0f;
     private const float IconSize = 40.0f;
     private const float HqColumnWidth = 54.0f;
-
-    private const uint BackgroundColor = 0xE61E1414;
-    private const uint FrameColor = 0x558C8C8C;
-    private const uint LabelColor = 0xFF9A9A9A;
-    private const uint ValueColor = 0xFFF0F0F0;
-    private const uint DescriptionColor = 0xFFC8C8C8;
-    private const uint HqColor = 0xFF4AD2FF;
+    private const float BorderSize = 1.0f;
 
     private readonly MarketBoardContext context;
 
@@ -48,22 +43,22 @@ namespace MarketTerror.GUI.Components
     {
       var scale = ImGui.GetIO().FontGlobalScale;
 
-      ImGui.PushStyleColor(ImGuiCol.PopupBg, BackgroundColor);
-      ImGui.PushStyleColor(ImGuiCol.Border, FrameColor);
+      ImGui.PushStyleColor(ImGuiCol.PopupBg, this.context.Theme.PanelBg);
+      ImGui.PushStyleColor(ImGuiCol.Border, this.context.Theme.Border);
       ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(12.0f, 10.0f) * scale);
-      ImGui.PushStyleVar(ImGuiStyleVar.WindowBorderSize, 1.0f);
+      ImGui.PushStyleVar(ImGuiStyleVar.PopupBorderSize, BorderSize);
 
       ImGui.BeginTooltip();
       ImGui.PushTextWrapPos(RightEdge());
 
       this.DrawHeader(item, scale);
-      DrawFlags(item);
-      DrawLevels(item);
-      DrawCombatStats(item);
-      DrawBonuses(item);
-      DrawSetBonus(item);
-      DrawCustomisation(item);
-      DrawDescription(item);
+      this.DrawFlags(item);
+      this.DrawLevels(item);
+      this.DrawCombatStats(item);
+      this.DrawBonuses(item);
+      this.DrawSetBonus(item);
+      this.DrawCustomisation(item);
+      this.DrawDescription(item);
       this.DrawFooter(item);
 
       ImGui.PopTextWrapPos();
@@ -72,15 +67,6 @@ namespace MarketTerror.GUI.Components
       ImGui.PopStyleVar(2);
       ImGui.PopStyleColor(2);
     }
-
-    private static uint RarityColor(byte rarity) => rarity switch
-    {
-      2 => 0xFF64D964,
-      3 => 0xFFE8A445,
-      4 => 0xFFF08CC6,
-      7 => 0xFFCC9FFF,
-      _ => 0xFFFFFFFF,
-    };
 
     private static float RightEdge()
     {
@@ -94,46 +80,63 @@ namespace MarketTerror.GUI.Components
         : value.ToString(CultureInfo.CurrentCulture);
     }
 
-    private static void Label(string text)
+    private static void Text(string text, uint color)
     {
-      ImGui.PushStyleColor(ImGuiCol.Text, LabelColor);
+      ImGui.PushStyleColor(ImGuiCol.Text, color);
       ImGui.TextUnformatted(text);
       ImGui.PopStyleColor();
     }
 
     /// <summary>
-    /// Draws a dim label on the left and a bright value pinned to the right edge.
+    /// Item rarity keeps its own colours: it is data about the item rather than window chrome,
+    /// so common items fall back to the theme and everything rarer keeps the familiar tint.
     /// </summary>
-    private static void Row(string label, string value)
+    private uint RarityColor(byte rarity) => rarity switch
     {
-      Label(label);
+      2 => 0xFF64D964,
+      3 => 0xFFE8A445,
+      4 => 0xFFF08CC6,
+      7 => 0xFFCC9FFF,
+      _ => this.context.Theme.TextBright,
+    };
+
+    private void Label(string text)
+    {
+      Text(text, this.context.Theme.TextDim);
+    }
+
+    private void Row(string label, string value)
+    {
+      this.Row(label, value, this.context.Theme.Text);
+    }
+
+    /// <summary>
+    /// Draws a dim label on the left and a value pinned to the right edge.
+    /// </summary>
+    private void Row(string label, string value, uint valueColor)
+    {
+      this.Label(label);
       ImGui.SameLine();
       ImGui.SetCursorPosX(RightEdge() - ImGui.CalcTextSize(value).X);
-
-      ImGui.PushStyleColor(ImGuiCol.Text, ValueColor);
-      ImGui.TextUnformatted(value);
-      ImGui.PopStyleColor();
+      Text(value, valueColor);
     }
 
     /// <summary>
     /// Draws a stat line with the normal quality value and, where one exists, the high quality
     /// total in its own column against the right edge.
     /// </summary>
-    private static void StatRow(string label, string value, string hqValue)
+    private void StatRow(string label, string value, string hqValue)
     {
       var right = RightEdge();
       var hqColumn = HqColumnWidth * ImGui.GetIO().FontGlobalScale;
 
-      Label(label);
+      this.Label(label);
 
       if (value.Length > 0)
       {
         ImGui.SameLine();
         ImGui.SetCursorPosX(right - hqColumn - ImGui.CalcTextSize(value).X);
-
-        ImGui.PushStyleColor(ImGuiCol.Text, ValueColor);
-        ImGui.TextUnformatted(value);
-        ImGui.PopStyleColor();
+        Text(value, this.context.Theme.Text);
       }
 
       if (hqValue.Length == 0)
@@ -143,13 +146,37 @@ namespace MarketTerror.GUI.Components
 
       ImGui.SameLine();
       ImGui.SetCursorPosX(right - ImGui.CalcTextSize(hqValue).X);
-
-      ImGui.PushStyleColor(ImGuiCol.Text, HqColor);
-      ImGui.TextUnformatted(hqValue);
-      ImGui.PopStyleColor();
+      Text(hqValue, this.context.Theme.Accent);
     }
 
-    private static void DrawFlags(Item item)
+    private void DrawHeader(Item item, float scale)
+    {
+      using var icon = this.context.Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup
+      {
+        IconId = item.Icon,
+      }).GetWrapOrDefault();
+
+      if (icon != null)
+      {
+        ImGui.Image(icon.Handle, new Vector2(IconSize, IconSize) * scale);
+        ImGui.SameLine();
+      }
+
+      ImGui.BeginGroup();
+
+      Text(item.Name.ExtractText(), this.RarityColor(item.Rarity));
+
+      var category = item.ItemUICategory.ValueNullable?.Name.ExtractText() ?? string.Empty;
+
+      if (category.Length > 0)
+      {
+        this.Label(category);
+      }
+
+      ImGui.EndGroup();
+    }
+
+    private void DrawFlags(Item item)
     {
       var flags = new List<string>();
 
@@ -175,11 +202,11 @@ namespace MarketTerror.GUI.Components
 
       if (flags.Count > 0)
       {
-        Label(string.Join("   ", flags));
+        this.Label(string.Join("   ", flags));
       }
     }
 
-    private static void DrawLevels(Item item)
+    private void DrawLevels(Item item)
     {
       var itemLevel = item.LevelItem.RowId;
       var jobs = item.ClassJobCategory.ValueNullable?.Name.ExtractText() ?? string.Empty;
@@ -193,23 +220,21 @@ namespace MarketTerror.GUI.Components
 
       if (itemLevel > 0)
       {
-        Row("Item Level", itemLevel.ToString(CultureInfo.CurrentCulture));
+        this.Row("Item Level", itemLevel.ToString(CultureInfo.CurrentCulture));
       }
 
       if (item.LevelEquip > 0)
       {
-        Row("Equip Level", item.LevelEquip.ToString(CultureInfo.CurrentCulture));
+        this.Row("Equip Level", item.LevelEquip.ToString(CultureInfo.CurrentCulture));
       }
 
       if (jobs.Length > 0)
       {
-        ImGui.PushStyleColor(ImGuiCol.Text, ValueColor);
-        ImGui.TextUnformatted(jobs);
-        ImGui.PopStyleColor();
+        Text(jobs, this.context.Theme.Text);
       }
     }
 
-    private static void DrawCombatStats(Item item)
+    private void DrawCombatStats(Item item)
     {
       var rows = new List<(string Label, string Value)>();
 
@@ -265,11 +290,11 @@ namespace MarketTerror.GUI.Components
 
       foreach (var row in rows)
       {
-        Row(row.Label, row.Value);
+        this.Row(row.Label, row.Value);
       }
     }
 
-    private static void DrawBonuses(Item item)
+    private void DrawBonuses(Item item)
     {
       var specials = new Dictionary<uint, (string Name, int Value)>();
 
@@ -322,16 +347,16 @@ namespace MarketTerror.GUI.Components
       if (rows.Exists(row => row.Hq.Length > 0))
       {
         ImGui.SetCursorPosX(RightEdge() - ImGui.CalcTextSize("HQ").X);
-        Label("HQ");
+        this.Label("HQ");
       }
 
       foreach (var row in rows)
       {
-        StatRow(row.Label, row.Value, row.Hq);
+        this.StatRow(row.Label, row.Value, row.Hq);
       }
     }
 
-    private static void DrawSetBonus(Item item)
+    private void DrawSetBonus(Item item)
     {
       var name = item.ItemSpecialBonus.ValueNullable?.Name.ExtractText() ?? string.Empty;
 
@@ -341,10 +366,10 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.Separator();
-      Label(name);
+      this.Label(name);
     }
 
-    private static void DrawCustomisation(Item item)
+    private void DrawCustomisation(Item item)
     {
       var rows = new List<(string Label, string Value)>();
 
@@ -377,11 +402,11 @@ namespace MarketTerror.GUI.Components
 
       foreach (var row in rows)
       {
-        Row(row.Label, row.Value);
+        this.Row(row.Label, row.Value);
       }
     }
 
-    private static void DrawDescription(Item item)
+    private void DrawDescription(Item item)
     {
       var description = item.Description.ExtractText().Replace('\r', '\n');
 
@@ -391,39 +416,7 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.Separator();
-
-      ImGui.PushStyleColor(ImGuiCol.Text, DescriptionColor);
-      ImGui.TextUnformatted(description);
-      ImGui.PopStyleColor();
-    }
-
-    private void DrawHeader(Item item, float scale)
-    {
-      using var icon = this.context.Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup
-      {
-        IconId = item.Icon,
-      }).GetWrapOrDefault();
-
-      if (icon != null)
-      {
-        ImGui.Image(icon.Handle, new Vector2(IconSize, IconSize) * scale);
-        ImGui.SameLine();
-      }
-
-      ImGui.BeginGroup();
-
-      ImGui.PushStyleColor(ImGuiCol.Text, RarityColor(item.Rarity));
-      ImGui.TextUnformatted(item.Name.ExtractText());
-      ImGui.PopStyleColor();
-
-      var category = item.ItemUICategory.ValueNullable?.Name.ExtractText() ?? string.Empty;
-
-      if (category.Length > 0)
-      {
-        Label(category);
-      }
-
-      ImGui.EndGroup();
+      Text(description, this.context.Theme.TextDim);
     }
 
     private void DrawFooter(Item item)
@@ -440,12 +433,15 @@ namespace MarketTerror.GUI.Components
 
       if (hasPrice)
       {
-        Row("Sells to vendor", item.PriceLow.ToString("C", this.context.Plugin.NumberFormatInfo));
+        this.Row(
+          "Sells to vendor",
+          item.PriceLow.ToString("C", this.context.Plugin.NumberFormatInfo),
+          this.context.Theme.GilText);
       }
 
       if (hasStack)
       {
-        Row("Stack", item.StackSize.ToString("N0", CultureInfo.CurrentCulture));
+        this.Row("Stack", item.StackSize.ToString("N0", CultureInfo.CurrentCulture));
       }
     }
   }
