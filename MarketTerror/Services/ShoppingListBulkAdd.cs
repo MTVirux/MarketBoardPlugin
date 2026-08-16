@@ -83,33 +83,27 @@ namespace MarketTerror.Services
     public bool IsRunning => this.job is { IsCompleted: false };
 
     /// <summary>
-    /// Gets how full the progress bar should be, from 0 to 1.
+    /// Gets the item count the progress display should show.
     /// </summary>
     /// <remarks>
-    /// The chunk being worked on is counted in gradually over its cooldown and request, so the bar
-    /// creeps forward instead of standing still and then jumping a whole chunk at a time.
+    /// The chunk being worked on is counted in one item at a time, evenly spread over its cooldown
+    /// and request, so the count ticks up instead of standing still and then jumping a whole chunk.
     /// </remarks>
-    public float Progress
+    public int Counted
     {
       get
       {
-        if (this.Total <= 0)
+        if (this.pendingChunkSize <= 0)
         {
-          return 0f;
+          return this.Processed;
         }
 
-        var done = (float)this.Processed;
+        var elapsed = (DateTime.UtcNow - this.pendingStartedUtc).TotalMilliseconds;
+        var ramp = Math.Clamp(elapsed / this.pendingDurationMilliseconds, 0d, 1d);
+        var ticked = this.pendingBaseline + (int)(this.pendingChunkSize * ramp);
 
-        if (this.pendingChunkSize > 0)
-        {
-          var elapsed = (DateTime.UtcNow - this.pendingStartedUtc).TotalMilliseconds;
-          var ramp = Math.Clamp(elapsed / this.pendingDurationMilliseconds, 0d, 1d);
-
-          // Never below Processed, so the bar cannot fall back once the chunk lands.
-          done = Math.Max(done, this.pendingBaseline + (float)(this.pendingChunkSize * ramp));
-        }
-
-        return Math.Clamp(done / this.Total, 0f, 1f);
+        // Never below Processed, so the count cannot fall back once the chunk lands.
+        return Math.Max(this.Processed, ticked);
       }
     }
 

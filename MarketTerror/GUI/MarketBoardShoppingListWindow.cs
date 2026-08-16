@@ -413,9 +413,8 @@ namespace MarketTerror.GUI
         return;
       }
 
-      var progress = bulkAdd.Progress;
+      var processed = bulkAdd.Counted;
       var total = bulkAdd.Total;
-      var processed = (int)(progress * total);
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
       ImGui.TextWrapped($"Pricing {bulkAdd.CategoryName}...");
@@ -425,7 +424,7 @@ namespace MarketTerror.GUI
       var barWidth = ImGui.GetContentRegionAvail().X - cancelWidth - ImGui.GetStyle().ItemSpacing.X;
 
       ImGui.ProgressBar(
-        progress,
+        total > 0 ? processed / (float)total : 0f,
         new Vector2(barWidth, 0),
         $"{processed} / {total}");
 
