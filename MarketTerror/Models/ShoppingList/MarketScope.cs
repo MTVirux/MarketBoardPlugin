@@ -12,16 +12,21 @@ namespace MarketTerror.Models.ShoppingList
     /// <summary>
     /// The selected world only.
     /// </summary>
-    World,
+    World = 0,
 
     /// <summary>
     /// Every world on the selected world's data centre.
     /// </summary>
-    DataCentre,
+    DataCentre = 1,
 
     /// <summary>
     /// Every data centre in the selected world's region.
     /// </summary>
-    Region,
+    Region = 2,
+
+    /// <summary>
+    /// The selected world's region, with the Oceania data centre priced alongside it.
+    /// </summary>
+    RegionWithOceania = 3,
   }
 }

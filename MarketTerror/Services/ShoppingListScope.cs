@@ -20,6 +20,11 @@ namespace MarketTerror.Services
   /// </remarks>
   public sealed class ShoppingListScope
   {
+    /// <summary>
+    /// Oceania sits on its own, so it is only ever priced when it is asked for by name.
+    /// </summary>
+    private const string OceaniaRegion = "Oceania";
+
     private readonly MarketTerrorPlugin plugin;
 
     private readonly List<WorldEntry> worlds = new List<WorldEntry>();
@@ -61,9 +66,9 @@ namespace MarketTerror.Services
     public MarketScope Scope => this.plugin.Config.ShoppingListScopeLevel;
 
     /// <summary>
-    /// Gets the world, data centre or region name the prices are fetched for.
+    /// Gets the world, data centre or region names the prices are fetched for, cheapest answer winning.
     /// </summary>
-    public string QueryTarget
+    public IReadOnlyList<string> QueryTargets
     {
       get
       {
@@ -71,17 +76,25 @@ namespace MarketTerror.Services
 
         if (entry == null)
         {
-          return string.Empty;
+          return Array.Empty<string>();
         }
 
         return this.Scope switch
         {
-          MarketScope.DataCentre => entry.DataCentre,
-          MarketScope.Region => entry.Region,
-          _ => entry.Name,
+          MarketScope.DataCentre => new[] { entry.DataCentre },
+          MarketScope.Region => new[] { entry.Region },
+          MarketScope.RegionWithOceania => entry.Region == OceaniaRegion
+            ? new[] { entry.Region }
+            : new[] { entry.Region, OceaniaRegion },
+          _ => new[] { entry.Name },
         };
       }
     }
+
+    /// <summary>
+    /// Gets the query targets as one label, for tooltips.
+    /// </summary>
+    public string QueryTargetLabel => string.Join(" and ", this.QueryTargets);
 
     /// <summary>
     /// Gets the selected world, falling back to the character's home world the first time it is known.

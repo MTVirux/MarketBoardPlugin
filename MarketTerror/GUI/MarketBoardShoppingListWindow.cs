@@ -27,6 +27,17 @@ namespace MarketTerror.GUI
       ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp |
       ImGuiTableFlags.Sortable | ImGuiTableFlags.SortTristate;
 
+    /// <summary>
+    /// The scopes as the picker lists them, widest reach first.
+    /// </summary>
+    private static readonly MarketScope[] ScopeOrder =
+    {
+      MarketScope.RegionWithOceania,
+      MarketScope.Region,
+      MarketScope.DataCentre,
+      MarketScope.World,
+    };
+
     private readonly TerrorTheme theme;
 
     private readonly List<SavedItem> sortedItems = new List<SavedItem>();
@@ -120,10 +131,12 @@ namespace MarketTerror.GUI
     public override void Draw()
     {
       this.DrawBulkAddProgress();
-      this.DrawScopePickers();
 
       if (this.Plugin.ShoppingList.Count == 0)
       {
+        this.DrawScopePickers(false);
+        ImGui.Separator();
+
         if (!this.Plugin.ShoppingListBulkAdd.IsRunning)
         {
           ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
@@ -136,7 +149,10 @@ namespace MarketTerror.GUI
 
       this.DrawActionBar();
 
-      if (!ImGui.BeginTable("shoppingList", 4, TableFlags))
+      // The total keeps its own row pinned under the table, so it stays put while the list scrolls.
+      var footerHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y;
+
+      if (!ImGui.BeginTable("shoppingList", 4, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
       {
         return;
       }
@@ -148,6 +164,7 @@ namespace MarketTerror.GUI
         "Action",
         ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed,
         (72 * ImGui.GetIO().FontGlobalScale) + ImGui.GetStyle().ItemSpacing.X);
+      ImGui.TableSetupScrollFreeze(0, 1);
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
       ImGui.TableHeadersRow();
@@ -216,6 +233,9 @@ namespace MarketTerror.GUI
 
       ImGui.EndTable();
 
+      ImGui.Separator();
+      this.DrawTotal();
+
       foreach (var item in todel)
       {
         this.Plugin.ShoppingList.Remove(item);
@@ -226,7 +246,7 @@ namespace MarketTerror.GUI
     {
       if (ImGui.BeginCombo("##shoppingListScope", ScopeLabel(scope.Scope)))
       {
-        foreach (var level in Enum.GetValues<MarketScope>())
+        foreach (var level in ScopeOrder)
         {
           var isSelected = level == scope.Scope;
 
@@ -244,7 +264,7 @@ namespace MarketTerror.GUI
         ImGui.EndCombo();
       }
 
-      var target = scope.QueryTarget;
+      var target = scope.QueryTargetLabel;
       Utilities.HoverTooltip(target.Length > 0
         ? $"How far the searches reach. Prices come from {target}."
         : "How far the searches reach around the picked world.");
@@ -254,20 +274,51 @@ namespace MarketTerror.GUI
     {
       return scope switch
       {
-        MarketScope.DataCentre => "Data Centre",
+        MarketScope.RegionWithOceania => "Region + Oceania",
         MarketScope.Region => "Region",
+        MarketScope.DataCentre => "Data Centre",
         _ => "World",
       };
     }
 
-    private void DrawScopePickers()
+    /// <summary>
+    /// Draws the world and scope combos.
+    /// </summary>
+    /// <param name="sameLine">
+    /// True to right-align them at the end of the action bar, false to give them a row of their own.
+    /// </param>
+    private void DrawScopePickers(bool sameLine)
     {
       var scope = this.Plugin.ShoppingListScope;
-      var scopeWidth = 130 * ImGui.GetIO().FontGlobalScale;
+      var scale = ImGui.GetIO().FontGlobalScale;
+      var spacing = ImGui.GetStyle().ItemSpacing.X;
+
+      if (sameLine)
+      {
+        ImGui.SameLine();
+      }
+
+      var available = ImGui.GetContentRegionAvail().X;
+      var scopeWidth = 140 * scale;
+      var worldWidth = sameLine ? 150 * scale : available - scopeWidth - spacing;
+
+      if (scopeWidth + worldWidth + spacing > available)
+      {
+        // Share what is left rather than spilling out of the window.
+        var share = Math.Max(available - spacing, 80 * scale);
+        scopeWidth = share * 0.5f;
+        worldWidth = share - scopeWidth;
+      }
+
+      var padding = available - worldWidth - scopeWidth - spacing;
+      if (padding > 0)
+      {
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
+      }
 
       ImGui.BeginDisabled(this.Plugin.ShoppingListBulkAdd.IsRunning);
 
-      ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - scopeWidth - ImGui.GetStyle().ItemSpacing.X);
+      ImGui.SetNextItemWidth(worldWidth);
       this.DrawWorldPicker(scope);
 
       ImGui.SameLine();
@@ -276,8 +327,6 @@ namespace MarketTerror.GUI
       DrawScopePicker(scope);
 
       ImGui.EndDisabled();
-
-      ImGui.Separator();
     }
 
     private void DrawWorldPicker(ShoppingListScope scope)
@@ -330,7 +379,7 @@ namespace MarketTerror.GUI
       {
         this.Plugin.ShoppingListBulkAdd.StartRefresh(
           this.Plugin.ShoppingList.Select(i => i.SourceItem).ToArray(),
-          scope.QueryTarget);
+          scope.QueryTargets);
       }
 
       ImGui.EndDisabled();
@@ -358,7 +407,7 @@ namespace MarketTerror.GUI
       ImGui.EndDisabled();
       Utilities.HoverTooltip("Remove every item from the list.");
 
-      this.DrawTotal();
+      this.DrawScopePickers(true);
 
       ImGui.Separator();
     }
@@ -369,8 +418,6 @@ namespace MarketTerror.GUI
       var text = "Total Cost: " + (this.Plugin.Config.PriceIconShown
         ? total.ToString("C", this.Plugin.NumberFormatInfo)
         : total.ToString("N0", CultureInfo.CurrentCulture));
-
-      ImGui.SameLine();
 
       var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(text).X;
       if (padding > 0)

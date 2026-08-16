@@ -371,7 +371,7 @@ namespace MarketTerror.GUI.Components
 
         if (ImGui.Selectable("Add all to the shopping list"))
         {
-          bulkAdd.Start(categoryName, missing, scope.QueryTarget);
+          bulkAdd.Start(categoryName, missing, scope.QueryTargets);
         }
 
         if (busy)
