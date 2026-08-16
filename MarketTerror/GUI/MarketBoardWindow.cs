@@ -54,7 +54,7 @@ namespace MarketTerror.GUI
 
     private readonly StatsPanel statsPanel;
 
-    private readonly StatusFooter statusFooter;
+    private readonly LinksPopup linksPopup;
 
     private IDisposable? themeScope;
 
@@ -131,7 +131,20 @@ namespace MarketTerror.GUI
       this.listingsTable = new ListingsTable(this.context);
       this.historyTable = new HistoryTable(this.context);
       this.statsPanel = new StatsPanel(this.context);
-      this.statusFooter = new StatusFooter(this.context);
+      this.linksPopup = new LinksPopup(this.context);
+
+      this.TitleBarButtons.Add(new TitleBarButton
+      {
+        Icon = FontAwesomeIcon.Heart,
+        IconOffset = new Vector2(2, 1),
+        Click = _ => this.linksPopup.Open(),
+        ShowTooltip = () =>
+        {
+          ImGui.BeginTooltip();
+          ImGui.Text("Links");
+          ImGui.EndTooltip();
+        },
+      });
     }
 
     /// <summary>
@@ -244,9 +257,9 @@ namespace MarketTerror.GUI
         }
       }
 
-      this.statusFooter.Draw();
-
       ImGui.EndChild();
+
+      this.linksPopup.Draw();
     }
 
     /// <summary>
