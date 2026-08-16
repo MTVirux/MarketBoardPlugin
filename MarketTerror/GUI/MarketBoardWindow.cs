@@ -241,7 +241,11 @@ namespace MarketTerror.GUI
       }
 
       ImGui.SameLine(0.0f, 0.0f);
+
+      // Drop the horizontal padding so the headings, separators and tables run to the panel's edges.
+      ImGui.PushStyleVar(ImGuiStyleVar.WindowPadding, new Vector2(0.0f, ImGui.GetStyle().WindowPadding.Y));
       ImGui.BeginChild("tabColumn", new Vector2(0, 0), true, ImGuiWindowFlags.NoScrollbar);
+      ImGui.PopStyleVar();
 
       if (this.context.SelectedItem?.RowId > 0)
       {

@@ -61,7 +61,7 @@ namespace MarketTerror.GUI.Components
       ImGui.TableSetupColumn("Retainer");
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.TextDim);
-      ImGui.TableHeadersRow();
+      DrawHeaders();
       ImGui.PopStyleColor();
 
       var listingsSnapshot = this.context.MarketData.MarketData?.Listings.ToArray();
@@ -76,6 +76,34 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndTable();
+    }
+
+    /// <summary>
+    /// The offset that centres text in the HQ column. Its left edge is flush with the table, so the
+    /// drawable width is the cell plus the padding held back on the right.
+    /// </summary>
+    /// <param name="text">The text to centre.</param>
+    /// <returns>The distance to move the cursor right by.</returns>
+    private static float CenterOffset(string text)
+    {
+      var width = ImGui.GetContentRegionAvail().X + ImGui.GetStyle().CellPadding.X;
+
+      return Math.Max((width - ImGui.CalcTextSize(text).X) * 0.5f, 0.0f);
+    }
+
+    private static void DrawHeaders()
+    {
+      ImGui.TableNextRow(ImGuiTableRowFlags.Headers);
+
+      ImGui.TableSetColumnIndex(0);
+      ImGui.SetCursorPosX(ImGui.GetCursorPosX() + CenterOffset("HQ"));
+      ImGui.TableHeader("HQ");
+
+      for (var column = 1; column < ImGui.TableGetColumnCount(); column++)
+      {
+        ImGui.TableSetColumnIndex(column);
+        ImGui.TableHeader(ImGui.TableGetColumnName(column));
+      }
     }
 
     private static void DrawRightAligned(string text)
@@ -108,12 +136,21 @@ namespace MarketTerror.GUI.Components
       ImGui.TableNextRow();
       ImGui.TableSetColumnIndex(0);
 
-      ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.Accent);
+      var cursor = ImGui.GetCursorPos();
+      var hqOffset = CenterOffset(SeIconChar.HighQuality.AsString());
+
       var clicked = ImGui.Selectable(
-        $"{(listing.Hq ? SeIconChar.HighQuality.AsString() : string.Empty)}##listing{index}",
+        $"##listing{index}",
         this.context.SelectedListing == index,
         ImGuiSelectableFlags.SpanAllColumns);
-      ImGui.PopStyleColor();
+
+      if (listing.Hq)
+      {
+        ImGui.SetCursorPos(new Vector2(cursor.X + hqOffset, cursor.Y));
+        ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.Accent);
+        ImGui.Text(SeIconChar.HighQuality.AsString());
+        ImGui.PopStyleColor();
+      }
 
       if (clicked)
       {
