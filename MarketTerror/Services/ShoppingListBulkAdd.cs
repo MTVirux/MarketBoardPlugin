@@ -173,6 +173,11 @@ namespace MarketTerror.Services
       this.refreshing = refresh;
       this.pendingChunkSize = 0;
 
+      if (refresh)
+      {
+        this.plugin.ShoppingList.MarkRefreshing();
+      }
+
       this.job = Task.Run(() => this.Run(queued, queryTarget, token), token);
     }
 
@@ -243,7 +248,7 @@ namespace MarketTerror.Services
           token.ThrowIfCancellationRequested();
 
           // The buy list is read while the window draws, so it may only be touched on the framework thread.
-          await this.plugin.Framework.RunOnFrameworkThread(() => this.Apply(entries)).ConfigureAwait(false);
+          await this.plugin.Framework.RunOnFrameworkThread(() => this.Apply(entries, chunk)).ConfigureAwait(false);
 
           // How long this chunk really took, so the next one paces its count against a measured time.
           requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - cooldown);
@@ -254,13 +259,22 @@ namespace MarketTerror.Services
       {
         this.plugin.Log.Debug($"Cancelled adding {this.CategoryName} to the buy list.");
       }
+      finally
+      {
+        if (this.refreshing)
+        {
+          // Anything skipped or cancelled keeps the price it already had.
+          await this.plugin.Framework.RunOnFrameworkThread(() => this.plugin.ShoppingList.ClearRefreshing()).ConfigureAwait(false);
+        }
+      }
     }
 
-    private void Apply(IReadOnlyList<SavedItem> entries)
+    private void Apply(IReadOnlyList<SavedItem> entries, IReadOnlyList<Item> chunk)
     {
       if (this.refreshing)
       {
         this.plugin.ShoppingList.Replace(entries);
+        this.plugin.ShoppingList.ClearRefreshing(chunk.Select(i => i.RowId));
         return;
       }
 

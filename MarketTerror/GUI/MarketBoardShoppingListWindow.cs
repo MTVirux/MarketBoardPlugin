@@ -161,16 +161,18 @@ namespace MarketTerror.GUI
         ImGui.Text(item.SourceItem.Name.ExtractText());
 
         ImGui.TableSetColumnIndex(1);
-        var price = this.Plugin.Config.PriceIconShown
-          ? item.Price.ToString("C", this.Plugin.NumberFormatInfo)
-          : item.Price.ToString("N0", CultureInfo.CurrentCulture);
+        var price = item.Refreshing
+          ? "Refreshing"
+          : this.Plugin.Config.PriceIconShown
+            ? item.Price.ToString("C", this.Plugin.NumberFormatInfo)
+            : item.Price.ToString("N0", CultureInfo.CurrentCulture);
         var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(price).X;
         if (padding > 0)
         {
           ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
         }
 
-        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.GilText);
+        ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing ? this.theme.TextDim : this.theme.GilText);
         ImGui.Text(price);
         ImGui.PopStyleColor();
 

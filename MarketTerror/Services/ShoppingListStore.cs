@@ -7,6 +7,7 @@ namespace MarketTerror.Services
   using System;
   using System.Collections;
   using System.Collections.Generic;
+  using System.Linq;
   using Lumina.Excel.Sheets;
   using MarketTerror.Models.ShoppingList;
 
@@ -119,6 +120,34 @@ namespace MarketTerror.Services
       if (changed)
       {
         this.Save();
+      }
+    }
+
+    /// <summary>
+    /// Marks every entry as waiting for a new price, so the table can say so until one lands.
+    /// </summary>
+    public void MarkRefreshing()
+    {
+      foreach (var item in this.items)
+      {
+        item.Refreshing = true;
+      }
+    }
+
+    /// <summary>
+    /// Clears the waiting flag set by <see cref="MarkRefreshing"/>.
+    /// </summary>
+    /// <param name="itemIds">The items to clear it for, or null for the whole list.</param>
+    public void ClearRefreshing(IEnumerable<uint>? itemIds = null)
+    {
+      var ids = itemIds?.ToHashSet();
+
+      foreach (var item in this.items)
+      {
+        if (ids == null || ids.Contains(item.SourceItem.RowId))
+        {
+          item.Refreshing = false;
+        }
       }
     }
 

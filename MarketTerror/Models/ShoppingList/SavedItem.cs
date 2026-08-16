@@ -42,6 +42,11 @@ namespace MarketTerror.Models.ShoppingList
     public string World { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the entry is waiting for a new price.
+    /// </summary>
+    public bool Refreshing { get; set; }
+
+    /// <summary>
     /// Builds an entry from the cheapest listing of a market data response.
     /// </summary>
     /// <param name="sourceItem">The item the market data belongs to.</param>
