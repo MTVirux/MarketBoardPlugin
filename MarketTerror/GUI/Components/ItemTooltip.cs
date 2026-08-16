@@ -529,7 +529,11 @@ namespace MarketTerror.GUI.Components
 
     private void DrawDescription(Item item)
     {
-      var description = item.Description.ExtractText().Replace('\r', '\n');
+      // Each line break in a description arrives as a carriage return and line feed pair, so the
+      // pair has to collapse before any lone carriage return is converted, or every break doubles.
+      var description = item.Description.ExtractText()
+        .Replace("\r\n", "\n", StringComparison.Ordinal)
+        .Replace('\r', '\n');
 
       if (string.IsNullOrWhiteSpace(description))
       {
