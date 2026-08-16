@@ -9,6 +9,8 @@ namespace MarketTerror.Helpers
   using System.Globalization;
   using System.Threading;
   using Dalamud.Game.Network.Structures;
+  using Dalamud.Game.Text.SeStringHandling;
+  using Dalamud.Game.Text.SeStringHandling.Payloads;
   using Dalamud.Plugin.Services;
   using FFXIVClientStructs.FFXIV.Client.UI;
   using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -151,6 +153,29 @@ namespace MarketTerror.Helpers
       {
         ((AtkUnitBase*)addonPtr)->Close(true);
       }
+    }
+
+    /// <summary>
+    /// Checks whether a prompt is about the item being bought.
+    /// </summary>
+    /// <param name="prompt">The parsed prompt.</param>
+    /// <param name="buy">What is being bought.</param>
+    /// <returns>True when the prompt names the item.</returns>
+    /// <remarks>
+    /// The item link the prompt is written with carries the row id, which beats reading the name: the
+    /// game writes it in lower case mid-sentence, and other languages do their own thing with it.
+    /// </remarks>
+    private static bool NamesItem(SeString prompt, BuyRequest buy)
+    {
+      foreach (var payload in prompt.Payloads)
+      {
+        if (payload is ItemPayload item && item.ItemId % HqItemIdOffset == buy.ItemId)
+        {
+          return true;
+        }
+      }
+
+      return prompt.TextValue.Contains(buy.ItemName, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -390,7 +415,11 @@ namespace MarketTerror.Helpers
       }
 
       var buy = this.request!;
-      var prompt = addon->PromptText->NodeText.ToString();
+
+      // The prompt carries the item as a link, so its raw text is full of payload bytes. Only the
+      // parsed text is readable, and the payload is the surest way to tell which item it is about.
+      var parsed = SeString.Parse(addon->PromptText->NodeText.AsSpan());
+      var prompt = parsed.TextValue;
 
       if (string.Equals(prompt, this.answeredPrompt, StringComparison.Ordinal))
       {
@@ -409,7 +438,7 @@ namespace MarketTerror.Helpers
       }
 
       // A gil figure is written with separators, so allow a rounding gil either way rather than an exact compare.
-      var namesItem = prompt.Contains(buy.ItemName, StringComparison.OrdinalIgnoreCase);
+      var namesItem = NamesItem(parsed, buy);
       var withinLimit = asked >= 0 && asked <= Math.Ceiling(buy.TotalLimit) + 1;
 
       if (!namesItem || !withinLimit)
