@@ -15,6 +15,7 @@ namespace MarketTerror.Helpers
   using Dalamud.Plugin.Ipc;
   using Dalamud.Plugin.Services;
   using FFXIVClientStructs.FFXIV.Client.UI;
+  using FFXIVClientStructs.FFXIV.Client.UI.Agent;
   using FFXIVClientStructs.FFXIV.Component.GUI;
   using InteropGenerator.Runtime;
 
@@ -163,27 +164,51 @@ namespace MarketTerror.Helpers
     /// <summary>
     /// Describes a results row for the verbose log.
     /// </summary>
+    /// <param name="index">The index of the row.</param>
     /// <param name="label">The raw label of the row.</param>
     /// <returns>The row's item ID and name.</returns>
-    private static string DescribeRow(CStringPointer label)
+    private static unsafe string DescribeRow(int index, CStringPointer label)
     {
-      if (!label.HasValue)
+      var text = label.HasValue ? SeString.Parse(label.AsSpan()).TextValue.Trim() : "<empty>";
+      var agentItemId = GetResultItemId(index);
+      return agentItemId == 0 ? $"id none \"{text}\"" : $"id {agentItemId} \"{text}\"";
+    }
+
+    /// <summary>
+    /// Reads the item ID the game stored for a search result row. The visible labels are truncated
+    /// display text without an item link, so the agent's buffer is the only reliable source.
+    /// </summary>
+    /// <param name="index">The index of the row.</param>
+    /// <returns>The item ID, or zero when the buffer has no entry for that row.</returns>
+    private static unsafe uint GetResultItemId(int index)
+    {
+      var agent = AgentItemSearch.Instance();
+      if (agent == null || agent->ItemBuffer == null || index < 0 || index >= (int)agent->ItemCount)
       {
-        return "<empty>";
+        return 0;
       }
 
-      var parsed = SeString.Parse(label.AsSpan());
-      var text = parsed.TextValue.Trim();
+      return agent->ItemBuffer[index] % HqItemIdOffset;
+    }
 
-      foreach (var payload in parsed.Payloads)
+    /// <summary>
+    /// Strips the ellipsis the game appends when a name is too long for the results column.
+    /// </summary>
+    /// <param name="text">The visible row text.</param>
+    /// <returns>The visible prefix, or an empty string when the text was not truncated.</returns>
+    private static string TrimEllipsis(string text)
+    {
+      if (text.EndsWith("...", StringComparison.Ordinal))
       {
-        if (payload is ItemPayload item)
-        {
-          return $"id {item.ItemId} \"{text}\"";
-        }
+        return text[..^3].TrimEnd();
       }
 
-      return $"id none \"{text}\"";
+      if (text.EndsWith('…'))
+      {
+        return text[..^1].TrimEnd();
+      }
+
+      return string.Empty;
     }
 
     private bool Arm(string name, uint id, State initialState, long timeoutMs)
@@ -401,7 +426,7 @@ namespace MarketTerror.Helpers
         var rowCount = results->GetItemCount();
         for (var i = 0; i < rowCount; i++)
         {
-          if (!this.RowMatchesItem(results->GetItemLabel(i)))
+          if (!this.RowMatchesItem(i, results->GetItemLabel(i)))
           {
             continue;
           }
@@ -422,7 +447,7 @@ namespace MarketTerror.Helpers
 
           for (var i = 0; i < rowCount; i++)
           {
-            this.log.Verbose($"Market Board result {i}: {DescribeRow(results->GetItemLabel(i))}");
+            this.log.Verbose($"Market Board result {i}: {DescribeRow(i, results->GetItemLabel(i))}");
           }
         }
 
@@ -436,13 +461,19 @@ namespace MarketTerror.Helpers
     }
 
     /// <summary>
-    /// Checks whether a results row is the item that was searched for. Rows carry an item link payload,
-    /// so the row's own item ID is matched first and the visible name is only a fallback.
+    /// Checks whether a results row is the item that was searched for. The row's item ID comes from the
+    /// search agent; the visible label is only a fallback because the game truncates long names.
     /// </summary>
+    /// <param name="index">The index of the row.</param>
     /// <param name="label">The raw label of the row.</param>
     /// <returns>True when the row is the searched item.</returns>
-    private bool RowMatchesItem(CStringPointer label)
+    private unsafe bool RowMatchesItem(int index, CStringPointer label)
     {
+      if (GetResultItemId(index) == this.itemId)
+      {
+        return true;
+      }
+
       if (!label.HasValue)
       {
         return false;
@@ -458,7 +489,15 @@ namespace MarketTerror.Helpers
         }
       }
 
-      return string.Equals(parsed.TextValue.Trim(), this.itemName, StringComparison.OrdinalIgnoreCase);
+      var text = parsed.TextValue.Trim();
+      if (string.Equals(text, this.itemName, StringComparison.OrdinalIgnoreCase))
+      {
+        return true;
+      }
+
+      var visiblePrefix = TrimEllipsis(text);
+      return visiblePrefix.Length > 0
+        && this.itemName.StartsWith(visiblePrefix, StringComparison.OrdinalIgnoreCase);
     }
   }
 }
