@@ -20,6 +20,9 @@ namespace MarketTerror.GUI.Components
   /// </summary>
   public sealed class ListingsTable
   {
+    /// <summary>How much of the table's width the line under the heading covers.</summary>
+    private const float HeadingUnderlineWidth = 0.9f;
+
     private readonly MarketBoardContext context;
 
     /// <summary>
@@ -43,7 +46,7 @@ namespace MarketTerror.GUI.Components
       ImGui.Text("Current listings (Includes 5% GST)");
       this.context.TitleFont.Pop();
 
-      DrawHeadingUnderline(ImGui.GetItemRectSize().X);
+      DrawHeadingUnderline(ImGui.GetContentRegionAvail().X * HeadingUnderlineWidth);
 
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
