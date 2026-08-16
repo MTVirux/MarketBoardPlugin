@@ -148,7 +148,7 @@ namespace MarketTerror.Helpers
     /// <param name="force">True to run regardless of the auto-search settings.</param>
     public void TryFillNow(string name, uint id, Action<bool>? onFinished = null, bool force = false)
     {
-      var addon = string.IsNullOrWhiteSpace(name) ? nint.Zero : this.gameGui.GetAddonByName(AddonName);
+      nint addon = string.IsNullOrWhiteSpace(name) ? nint.Zero : this.gameGui.GetAddonByName(AddonName);
 
       if (addon == nint.Zero)
       {

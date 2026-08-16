@@ -223,7 +223,7 @@ namespace MarketTerror.Helpers
 
     private unsafe void TrySelectListing()
     {
-      var addonPtr = this.gameGui.GetAddonByName(ResultAddonName);
+      nint addonPtr = this.gameGui.GetAddonByName(ResultAddonName);
       if (addonPtr == nint.Zero)
       {
         return;
@@ -302,7 +302,7 @@ namespace MarketTerror.Helpers
 
     private unsafe void TryAnswerConfirm()
     {
-      var addonPtr = this.gameGui.GetAddonByName(ConfirmAddonName);
+      nint addonPtr = this.gameGui.GetAddonByName(ConfirmAddonName);
       if (addonPtr == nint.Zero)
       {
         return;
