@@ -66,11 +66,11 @@ namespace MarketTerror.GUI
       this.IsOpen = true;
       this.RespectCloseHotkey = false;
       this.ShowCloseButton = true;
-      this.Size = new Vector2(400, 150);
+      this.Size = new Vector2(560, 150);
       this.SizeCondition = ImGuiCond.FirstUseEver;
       this.SizeConstraints = new WindowSizeConstraints
       {
-        MinimumSize = new Vector2(400, 150),
+        MinimumSize = new Vector2(560, 150),
         MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
       };
 
@@ -159,13 +159,15 @@ namespace MarketTerror.GUI
       // The footer keeps its own row pinned under the table, so it stays put while the list scrolls.
       var footerHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y;
 
-      if (!ImGui.BeginTable("shoppingList", 4, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
+      if (!ImGui.BeginTable("shoppingList", 6, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
       {
         return;
       }
 
       ImGui.TableSetupColumn("Name");
       ImGui.TableSetupColumn("Price");
+      ImGui.TableSetupColumn("Qty");
+      ImGui.TableSetupColumn("Total");
       ImGui.TableSetupColumn("World");
       ImGui.TableSetupColumn(
         "Action",
@@ -201,23 +203,26 @@ namespace MarketTerror.GUI
         }
 
         ImGui.TableSetColumnIndex(1);
-        var price = this.PriceText(item);
-        var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(price).X;
-        if (padding > 0)
-        {
-          ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
-        }
-
         ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
-        ImGui.Text(price);
+        RightAligned(this.PriceText(item));
         ImGui.PopStyleColor();
 
         ImGui.TableSetColumnIndex(2);
+        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+        RightAligned(item.Unlisted || item.Quantity <= 0 ? NoValue : item.Quantity.ToString("N0", CultureInfo.CurrentCulture));
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(3);
+        ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
+        RightAligned(this.TotalText(item));
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(4);
         ImGui.Text(item.Unlisted ? NoValue : item.World);
 
         var buttonSize = new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
 
-        ImGui.TableSetColumnIndex(3);
+        ImGui.TableSetColumnIndex(5);
 
         var travel = false;
 
@@ -283,6 +288,22 @@ namespace MarketTerror.GUI
       var milliseconds = stats.Milliseconds.ToString("N0", CultureInfo.CurrentCulture);
 
       return $"{items} over {queries} @ {stats.Scope} in {milliseconds} ms";
+    }
+
+    /// <summary>
+    /// Draws text pushed to the right edge of the cell it is in.
+    /// </summary>
+    /// <param name="text">The text to draw.</param>
+    private static void RightAligned(string text)
+    {
+      var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(text).X;
+
+      if (padding > 0)
+      {
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
+      }
+
+      ImGui.Text(text);
     }
 
     /// <summary>
@@ -412,9 +433,31 @@ namespace MarketTerror.GUI
         : item.Price.ToString("N0", CultureInfo.CurrentCulture);
     }
 
+    /// <summary>
+    /// Formats the gil the whole listing behind a row costs.
+    /// </summary>
+    /// <param name="item">The row to format.</param>
+    /// <returns>The text to draw in the total cell.</returns>
+    private string TotalText(SavedItem item)
+    {
+      if (item.Refreshing)
+      {
+        return "Refreshing";
+      }
+
+      if (item.Unlisted || item.Quantity <= 0)
+      {
+        return NoValue;
+      }
+
+      return this.Plugin.Config.PriceIconShown
+        ? item.Total.ToString("C", this.Plugin.NumberFormatInfo)
+        : item.Total.ToString("N0", CultureInfo.CurrentCulture);
+    }
+
     private void DrawFooter()
     {
-      var total = this.Plugin.ShoppingList.Sum(i => i.Price);
+      var total = this.Plugin.ShoppingList.Sum(i => i.Total);
       var text = "Total Cost: " + (this.Plugin.Config.PriceIconShown
         ? total.ToString("C", this.Plugin.NumberFormatInfo)
         : total.ToString("N0", CultureInfo.CurrentCulture));
@@ -580,6 +623,14 @@ namespace MarketTerror.GUI
             ? items.OrderBy(i => i.Price)
             : items.OrderByDescending(i => i.Price);
         case 2:
+          return this.sortAscending
+            ? items.OrderBy(i => i.Quantity)
+            : items.OrderByDescending(i => i.Quantity);
+        case 3:
+          return this.sortAscending
+            ? items.OrderBy(i => i.Total)
+            : items.OrderByDescending(i => i.Total);
+        case 4:
           return this.sortAscending
             ? items.OrderBy(i => i.World, StringComparer.CurrentCultureIgnoreCase)
             : items.OrderByDescending(i => i.World, StringComparer.CurrentCultureIgnoreCase);
