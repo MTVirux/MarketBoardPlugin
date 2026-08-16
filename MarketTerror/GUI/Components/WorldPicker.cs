@@ -61,8 +61,8 @@ namespace MarketTerror.GUI.Components
       var current = selection.DefaultWorld;
 
       Utilities.HoverTooltip(current.Length > 0 && current != previous
-        ? $"Your world\nRight-click to go back to {current}."
-        : "Your world");
+        ? $"Current world override\nRight-click to go back to {current}."
+        : "Current world override");
 
       if (onChanged != null && selection.SelectedWorld != previous)
       {

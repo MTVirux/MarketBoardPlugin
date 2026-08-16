@@ -48,11 +48,7 @@ namespace MarketTerror.GUI.Components
         ImGui.EndCombo();
       }
 
-      var target = selection.QueryTargetLabel;
-
-      Utilities.HoverTooltip(target.Length > 0
-        ? $"How far the searches reach. Prices come from {target}."
-        : "How far the searches reach around the picked world.");
+      Utilities.HoverTooltip("Scope to search in");
 
       if (picked < 0 || picked == current)
       {

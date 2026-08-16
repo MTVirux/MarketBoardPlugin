@@ -114,11 +114,6 @@ namespace MarketTerror.Services
     public string QueryTarget => this.Selected?.Query ?? string.Empty;
 
     /// <summary>
-    /// Gets the query targets as one label, for tooltips.
-    /// </summary>
-    public string QueryTargetLabel => string.Join(" and ", this.QueryTargets);
-
-    /// <summary>
     /// Gets a value indicating whether the selection spans more than one world, so listings carry their own world name.
     /// </summary>
     public bool IsMultiWorld => this.Scope != MarketScope.World;
