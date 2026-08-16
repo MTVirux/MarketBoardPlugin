@@ -24,11 +24,13 @@ namespace MarketTerror.Models.ShoppingList
     /// <param name="itemId">The row id of the saved item.</param>
     /// <param name="price">The price the item was saved at.</param>
     /// <param name="world">The world the price came from.</param>
-    public StoredItem(uint itemId, double price, string world)
+    /// <param name="unlisted">True when the last refresh found nothing on sale.</param>
+    public StoredItem(uint itemId, double price, string world, bool unlisted)
     {
       this.ItemId = itemId;
       this.Price = price;
       this.World = world;
+      this.Unlisted = unlisted;
     }
 
     /// <summary>
@@ -45,5 +47,10 @@ namespace MarketTerror.Models.ShoppingList
     /// Gets or sets the world the price came from.
     /// </summary>
     public string World { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the last refresh found nothing on sale.
+    /// </summary>
+    public bool Unlisted { get; set; }
   }
 }

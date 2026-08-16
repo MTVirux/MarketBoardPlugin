@@ -250,6 +250,10 @@ namespace MarketTerror.Services
       if (this.refreshing)
       {
         this.plugin.ShoppingList.Replace(entries);
+
+        // The items the scope had nothing for keep their row, but lose the price it no longer holds.
+        var priced = entries.Select(e => e.SourceItem.RowId).ToHashSet();
+        this.plugin.ShoppingList.MarkUnlisted(chunk.Where(i => !priced.Contains(i.RowId)).Select(i => i.RowId));
       }
       else
       {

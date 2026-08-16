@@ -47,6 +47,11 @@ namespace MarketTerror.Models.ShoppingList
     public bool Refreshing { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the last refresh found nothing on sale in the scope.
+    /// </summary>
+    public bool Unlisted { get; set; }
+
+    /// <summary>
     /// Builds an entry from the cheapest listing of a market data response.
     /// </summary>
     /// <param name="sourceItem">The item the market data belongs to.</param>

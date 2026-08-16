@@ -23,6 +23,11 @@ namespace MarketTerror.GUI
   /// </summary>
   public class MarketBoardShoppingListWindow : Window
   {
+    /// <summary>
+    /// What a row shows in place of a price or a world it does not have.
+    /// </summary>
+    private const string NoValue = "-";
+
     private const ImGuiTableFlags TableFlags =
       ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp |
       ImGuiTableFlags.Sortable | ImGuiTableFlags.SortTristate;
@@ -193,34 +198,40 @@ namespace MarketTerror.GUI
         ImGui.Text(item.SourceItem.Name.ExtractText());
 
         ImGui.TableSetColumnIndex(1);
-        var price = item.Refreshing
-          ? "Refreshing"
-          : this.Plugin.Config.PriceIconShown
-            ? item.Price.ToString("C", this.Plugin.NumberFormatInfo)
-            : item.Price.ToString("N0", CultureInfo.CurrentCulture);
+        var price = this.PriceText(item);
         var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(price).X;
         if (padding > 0)
         {
           ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
         }
 
-        ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing ? this.theme.TextDim : this.theme.GilText);
+        ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
         ImGui.Text(price);
         ImGui.PopStyleColor();
 
         ImGui.TableSetColumnIndex(2);
-        ImGui.Text(item.World);
+        ImGui.Text(item.Unlisted ? NoValue : item.World);
 
         var buttonSize = new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
 
         ImGui.TableSetColumnIndex(3);
 
-        ImGui.BeginDisabled(string.IsNullOrEmpty(item.World));
-        ImGui.PushFont(UiBuilder.IconFont);
-        var travel = ImGui.Button($"{(char)FontAwesomeIcon.Walking}##shoplistgo" + k, buttonSize);
-        ImGui.PopFont();
-        ImGui.EndDisabled();
-        Utilities.HoverTooltip($"Go to the market board on {item.World}.");
+        var travel = false;
+
+        // Nothing to travel to when the scope had no listings, but the gap keeps the bin where it was.
+        if (item.Unlisted)
+        {
+          ImGui.Dummy(buttonSize);
+        }
+        else
+        {
+          ImGui.BeginDisabled(string.IsNullOrEmpty(item.World));
+          ImGui.PushFont(UiBuilder.IconFont);
+          travel = ImGui.Button($"{(char)FontAwesomeIcon.Walking}##shoplistgo" + k, buttonSize);
+          ImGui.PopFont();
+          ImGui.EndDisabled();
+          Utilities.HoverTooltip($"Go to the market board on {item.World}.");
+        }
 
         ImGui.SameLine();
 
@@ -422,6 +433,23 @@ namespace MarketTerror.GUI
       ImGui.Separator();
     }
 
+    private string PriceText(SavedItem item)
+    {
+      if (item.Refreshing)
+      {
+        return "Refreshing";
+      }
+
+      if (item.Unlisted)
+      {
+        return NoValue;
+      }
+
+      return this.Plugin.Config.PriceIconShown
+        ? item.Price.ToString("C", this.Plugin.NumberFormatInfo)
+        : item.Price.ToString("N0", CultureInfo.CurrentCulture);
+    }
+
     private void DrawTotal()
     {
       var total = this.Plugin.ShoppingList.Sum(i => i.Price);
@@ -501,12 +529,12 @@ namespace MarketTerror.GUI
 
         if (config.ShoppingListCopyPrice)
         {
-          parts.Add(item.Price.ToString("N0", CultureInfo.CurrentCulture));
+          parts.Add(item.Unlisted ? NoValue : item.Price.ToString("N0", CultureInfo.CurrentCulture));
         }
 
         if (config.ShoppingListCopyWorld)
         {
-          parts.Add(item.World);
+          parts.Add(item.Unlisted ? NoValue : item.World);
         }
 
         builder.AppendLine(string.Join(" - ", parts));

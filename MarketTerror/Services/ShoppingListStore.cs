@@ -36,7 +36,7 @@ namespace MarketTerror.Services
 
         if (item.HasValue)
         {
-          this.items.Add(new SavedItem(item.Value, stored.Price, stored.World));
+          this.items.Add(new SavedItem(item.Value, stored.Price, stored.World) { Unlisted = stored.Unlisted });
         }
       }
     }
@@ -113,8 +113,41 @@ namespace MarketTerror.Services
         {
           existing.Price = entry.Price;
           existing.World = entry.World;
+          existing.Unlisted = false;
           changed = true;
         }
+      }
+
+      if (changed)
+      {
+        this.Save();
+      }
+    }
+
+    /// <summary>
+    /// Drops the price and world of the entries whose item found no listings, so their row shows dashes
+    /// instead of a price from a scope that is no longer the selected one.
+    /// </summary>
+    /// <param name="itemIds">The row ids of the items with nothing on sale.</param>
+    public void MarkUnlisted(IEnumerable<uint> itemIds)
+    {
+      ArgumentNullException.ThrowIfNull(itemIds);
+
+      var changed = false;
+
+      foreach (var id in itemIds)
+      {
+        var existing = this.items.Find(i => i.SourceItem.RowId == id);
+
+        if (existing == null || existing.Unlisted)
+        {
+          continue;
+        }
+
+        existing.Price = 0;
+        existing.World = string.Empty;
+        existing.Unlisted = true;
+        changed = true;
       }
 
       if (changed)
@@ -201,7 +234,7 @@ namespace MarketTerror.Services
 
       foreach (var item in this.items)
       {
-        stored.Add(new StoredItem(item.SourceItem.RowId, item.Price, item.World));
+        stored.Add(new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted));
       }
 
       this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
