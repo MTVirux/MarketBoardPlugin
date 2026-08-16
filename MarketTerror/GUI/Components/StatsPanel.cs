@@ -20,9 +20,17 @@ namespace MarketTerror.GUI.Components
   {
     private const ImGuiTableFlags GridFlags = ImGuiTableFlags.RowBg | ImGuiTableFlags.SizingStretchSame;
 
+    /// <summary>How far the mouse may sit from a sale point and still pick it, in pixels.</summary>
+    private const float SalePickRadius = 12f;
+
+    /// <summary>How much slack is left around the data when the price trend is refitted.</summary>
+    private const double ZoomOutMargin = 0.08;
+
     private static readonly char[] SpinnerFrames = ['|', '/', '-', '\\'];
 
     private readonly MarketBoardContext context;
+
+    private bool refitPriceTrend = true;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StatsPanel"/> class.
@@ -63,13 +71,15 @@ namespace MarketTerror.GUI.Components
         this.context.OpenStatsSection = -1;
       }
 
-      ImGui.SetNextItemOpen(this.context.OpenStatsSection == 1, ImGuiCond.Always);
+      var priceTrendWasOpen = this.context.OpenStatsSection == 1;
+      ImGui.SetNextItemOpen(priceTrendWasOpen, ImGuiCond.Always);
       if (ImGui.CollapsingHeader("Price trend##statsPriceHeader"))
       {
         this.context.OpenStatsSection = 1;
-        DrawPriceTrend(marketData);
+        this.refitPriceTrend |= !priceTrendWasOpen;
+        this.DrawPriceTrend(marketData);
       }
-      else if (this.context.OpenStatsSection == 1)
+      else if (priceTrendWasOpen)
       {
         this.context.OpenStatsSection = -1;
       }
@@ -98,36 +108,26 @@ namespace MarketTerror.GUI.Components
       }
     }
 
-    private static void DrawPriceTrend(MarketDataResponse marketData)
+    private static void SetupFittedAxes(double[] xs, double[] ys)
     {
-      var priceChildHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
-      ImGui.BeginChild("priceChild", new Vector2(-1, priceChildHeight), false);
-
-      var x = new List<float>();
-      var y = new List<float>();
-      foreach (var historyEntry in marketData.RecentHistory ?? new List<MarketDataRecentHistory>())
+      var xMin = xs[0];
+      var xMax = xs[0];
+      var yMin = ys[0];
+      var yMax = ys[0];
+      for (var i = 1; i < xs.Length; i++)
       {
-        x.Add(historyEntry.Timestamp);
-        y.Add(historyEntry.PricePerUnit);
+        xMin = Math.Min(xMin, xs[i]);
+        xMax = Math.Max(xMax, xs[i]);
+        yMin = Math.Min(yMin, ys[i]);
+        yMax = Math.Max(yMax, ys[i]);
       }
 
-      if (x.Count > 0)
-      {
-        var xa = x.ToArray();
-        var ya = y.ToArray();
-        if (ImPlot.BeginPlot("##statsPricePlot", new Vector2(-1, priceChildHeight - 30)))
-        {
-          ImPlot.SetupAxisScale(ImAxis.X1, ImPlotScale.Time);
-          ImPlot.PlotLine("Price", ref xa[0], ref ya[0], xa.Length);
-          ImPlot.EndPlot();
-        }
-      }
-      else
-      {
-        ImGui.Text("No recent history available to draw price trend.");
-      }
+      // A single sale, or a run of identical prices, has no range to pad, so fall back to a
+      // half hour either side and a tenth of the price.
+      var xPad = Math.Max((xMax - xMin) * ZoomOutMargin, 1800);
+      var yPad = Math.Max((yMax - yMin) * ZoomOutMargin, Math.Max(yMax * 0.1, 1));
 
-      ImGui.EndChild();
+      ImPlot.SetupAxesLimits(xMin - xPad, xMax + xPad, Math.Max(0, yMin - yPad), yMax + yPad, ImPlotCond.Always);
     }
 
     private static void DrawVolume(MarketDataResponse marketData)
@@ -197,6 +197,90 @@ namespace MarketTerror.GUI.Components
     {
       ImGui.TableSetColumnIndex(column);
       ImGui.Text(text);
+    }
+
+    private void DrawPriceTrend(MarketDataResponse marketData)
+    {
+      var priceChildHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
+      ImGui.BeginChild("priceChild", new Vector2(-1, priceChildHeight), false);
+
+      var sales = marketData.RecentHistory ?? new List<MarketDataRecentHistory>();
+      var x = new List<double>();
+      var y = new List<double>();
+      foreach (var historyEntry in sales)
+      {
+        x.Add(historyEntry.Timestamp);
+        y.Add(historyEntry.PricePerUnit);
+      }
+
+      if (x.Count > 0)
+      {
+        var xa = x.ToArray();
+        var ya = y.ToArray();
+        if (ImPlot.BeginPlot("##statsPricePlot", new Vector2(-1, priceChildHeight - 30)))
+        {
+          ImPlot.SetupAxisScale(ImAxis.X1, ImPlotScale.Time);
+
+          if (this.refitPriceTrend)
+          {
+            SetupFittedAxes(xa, ya);
+            this.refitPriceTrend = false;
+          }
+
+          ImPlot.SetNextMarkerStyle(ImPlotMarker.Circle, 3f);
+          ImPlot.PlotLine("Price", ref xa[0], ref ya[0], xa.Length);
+          this.DrawHoveredSale(sales, xa, ya);
+          ImPlot.EndPlot();
+        }
+      }
+      else
+      {
+        ImGui.Text("No recent history available to draw price trend.");
+      }
+
+      ImGui.EndChild();
+    }
+
+    private void DrawHoveredSale(IList<MarketDataRecentHistory> sales, double[] xs, double[] ys)
+    {
+      if (!ImPlot.IsPlotHovered())
+      {
+        return;
+      }
+
+      var mouse = ImGui.GetMousePos();
+      var nearest = -1;
+      var nearestDistance = float.MaxValue;
+      for (var i = 0; i < xs.Length; i++)
+      {
+        var distance = Vector2.Distance(ImPlot.PlotToPixels(xs[i], ys[i]), mouse);
+        if (distance < nearestDistance)
+        {
+          nearestDistance = distance;
+          nearest = i;
+        }
+      }
+
+      if (nearest < 0 || nearestDistance > SalePickRadius)
+      {
+        return;
+      }
+
+      var markerX = new[] { xs[nearest] };
+      var markerY = new[] { ys[nearest] };
+      ImPlot.SetNextMarkerStyle(ImPlotMarker.Circle, 6f);
+      ImPlot.PlotScatter("##statsPriceHover", ref markerX[0], ref markerY[0], 1);
+
+      var sale = sales[nearest];
+      var currency = this.context.Plugin.NumberFormatInfo;
+      var soldAt = DateTimeOffset.FromUnixTimeSeconds(sale.Timestamp).LocalDateTime;
+
+      ImGui.BeginTooltip();
+      ImGui.Text($"Unit price: {sale.PricePerUnit.ToString("C", currency)}");
+      ImGui.Text($"Quantity: {sale.Quantity.ToString("N0", CultureInfo.CurrentCulture)}");
+      ImGui.Text($"Total: {sale.Total.ToString("C", currency)}");
+      ImGui.Text($"Date: {soldAt.ToString("g", CultureInfo.CurrentCulture)}");
+      ImGui.EndTooltip();
     }
 
     private void DrawKpis(MarketDataResponse marketData)
