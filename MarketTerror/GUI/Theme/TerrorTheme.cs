@@ -40,7 +40,6 @@ namespace MarketTerror.GUI.Theme
       { ThemeColor.Accent, Rgb(0x74, 0x1C, 0x1C) },
       { ThemeColor.AccentDim, Rgb(0x4A, 0x13, 0x10) },
       { ThemeColor.AccentHover, Rgb(0x8A, 0x1E, 0x18) },
-      { ThemeColor.HeaderBg, Rgb(0x0C, 0x0C, 0x0D) },
       { ThemeColor.RowAlt, Rgb(0x18, 0x18, 0x18) },
       { ThemeColor.Text, Rgb(0xE8, 0xE6, 0xE3) },
       { ThemeColor.TextDim, Rgb(0x83, 0x80, 0x81) },
@@ -80,11 +79,6 @@ namespace MarketTerror.GUI.Theme
     /// Gets the hovered accent colour, used for hovered rows and tabs and the market data resize bar.
     /// </summary>
     public uint AccentHover => this.Resolve(ThemeColor.AccentHover, ImGuiCol.HeaderHovered);
-
-    /// <summary>
-    /// Gets the background of a table's heading and column labels.
-    /// </summary>
-    public uint HeaderBg => this.Resolve(ThemeColor.HeaderBg, ImGuiCol.TableHeaderBg);
 
     /// <summary>
     /// Gets the alternating table row colour.
@@ -276,7 +270,7 @@ namespace MarketTerror.GUI.Theme
       ImGui.PushStyleColor(ImGuiCol.Tab, this.Get(ThemeColor.Tab));
       ImGui.PushStyleColor(ImGuiCol.TabHovered, this.Get(ThemeColor.AccentHover));
       ImGui.PushStyleColor(ImGuiCol.TabActive, this.Get(ThemeColor.TabActive));
-      ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, this.Get(ThemeColor.HeaderBg));
+      ImGui.PushStyleColor(ImGuiCol.TableHeaderBg, this.Get(ThemeColor.PanelBg));
       ImGui.PushStyleColor(ImGuiCol.TableBorderStrong, this.Get(ThemeColor.Border));
       ImGui.PushStyleColor(ImGuiCol.TableBorderLight, this.Get(ThemeColor.Border));
       ImGui.PushStyleColor(ImGuiCol.TableRowBg, TransparentColor);

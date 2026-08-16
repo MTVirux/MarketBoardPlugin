@@ -42,9 +42,6 @@ namespace MarketTerror.GUI.Theme
     /// <summary>The background of a hovered row.</summary>
     AccentHover,
 
-    /// <summary>The background behind a table's heading and column labels.</summary>
-    HeaderBg,
-
     /// <summary>The alternating table row background.</summary>
     RowAlt,
 
