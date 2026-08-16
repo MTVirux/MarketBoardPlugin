@@ -307,40 +307,32 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Draws the listings and history tables, split by a bar the user can drag to resize them.
+    /// Draws the listings and history cards, split by a bar the user can drag to resize them.
     /// </summary>
     /// <param name="scale">The current UI scale.</param>
     private void DrawMarketData(float scale)
     {
       var spacing = ImGui.GetStyle().ItemSpacing.Y;
-
-      this.titleFontHandle.Push();
-      var headingHeight = ImGui.GetTextLineHeightWithSpacing();
-      this.titleFontHandle.Pop();
-
-      // Each heading is followed by a separator line, which costs a pixel plus its own spacing.
-      headingHeight += 1.0f + spacing;
-
       var available = ImGui.GetContentRegionAvail().Y;
 
       if (this.plugin.Config.RecentHistoryDisabled)
       {
-        this.listingsTable.Draw(available - headingHeight - spacing);
+        this.listingsTable.Draw(available - spacing);
         return;
       }
 
       var splitterHeight = ImGui.GetTextLineHeight() * 0.5f;
 
-      // The two tables and the splitter each add an item spacing below themselves.
-      var usable = available - (headingHeight * 2) - splitterHeight - (spacing * 3);
+      // The two cards and the splitter each add an item spacing below themselves.
+      var usable = available - splitterHeight - (spacing * 3);
 
       if (usable <= 0.0f)
       {
         return;
       }
 
-      // Keep enough room in either table for its header row and a couple of entries.
-      var minRatio = Math.Min(0.4f, ImGui.GetTextLineHeightWithSpacing() * 3.0f / usable);
+      // Keep enough room in either card for its heading, its column labels and a couple of entries.
+      var minRatio = Math.Min(0.4f, this.MinCardHeight(spacing) / usable);
       var ratio = Math.Clamp(this.plugin.Config.MarketDataSplitRatio, minRatio, 1.0f - minRatio);
       var listingsHeight = usable * ratio;
 
@@ -364,6 +356,22 @@ namespace MarketTerror.GUI
       }
 
       this.historyTable.Draw(usable - listingsHeight);
+    }
+
+    /// <summary>
+    /// The height a card needs for its border, heading, separator and a few rows of its table.
+    /// </summary>
+    /// <param name="spacing">The vertical item spacing.</param>
+    /// <returns>The minimum card height in pixels.</returns>
+    private float MinCardHeight(float spacing)
+    {
+      this.titleFontHandle.Push();
+      var height = ImGui.GetTextLineHeightWithSpacing();
+      this.titleFontHandle.Pop();
+
+      return height + 1.0f + spacing
+        + (ImGui.GetTextLineHeightWithSpacing() * 3.0f)
+        + (ImGui.GetStyle().WindowPadding.Y * 2.0f);
     }
 
     /// <summary>

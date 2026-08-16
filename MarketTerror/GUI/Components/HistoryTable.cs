@@ -30,11 +30,13 @@ namespace MarketTerror.GUI.Components
     }
 
     /// <summary>
-    /// Draws the recent history heading and table.
+    /// Draws the recent history card: its heading and table.
     /// </summary>
-    /// <param name="tableHeight">The height of the table, as computed by the window.</param>
-    public void Draw(float tableHeight)
+    /// <param name="cardHeight">The height of the card, as computed by the window.</param>
+    public void Draw(float cardHeight)
     {
+      ImGui.BeginChild("recentHistoryCard", new Vector2(0.0f, cardHeight), true, ImGuiWindowFlags.NoScrollbar);
+
       this.context.TitleFont.Push();
       ImGui.Text("Recent history");
       this.context.TitleFont.Pop();
@@ -44,8 +46,9 @@ namespace MarketTerror.GUI.Components
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
 
-      if (!ImGui.BeginTable("recentHistory", 6, flags, new Vector2(0.0f, tableHeight)))
+      if (!ImGui.BeginTable("recentHistory", 6, flags, new Vector2(0.0f, ImGui.GetContentRegionAvail().Y)))
       {
+        ImGui.EndChild();
         return;
       }
 
@@ -72,6 +75,7 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndTable();
+      ImGui.EndChild();
     }
 
     private static void DrawRightAligned(string text)
