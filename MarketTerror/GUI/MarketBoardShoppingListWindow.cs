@@ -243,7 +243,7 @@ namespace MarketTerror.GUI
     private void DrawTotal()
     {
       var total = this.Plugin.ShoppingList.Sum(i => i.Price);
-      var text = "Total: " + (this.Plugin.Config.PriceIconShown
+      var text = "Total Cost: " + (this.Plugin.Config.PriceIconShown
         ? total.ToString("C", this.Plugin.NumberFormatInfo)
         : total.ToString("N0", CultureInfo.CurrentCulture));
 
