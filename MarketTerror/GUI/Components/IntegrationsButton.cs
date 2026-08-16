@@ -10,33 +10,18 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
   using Dalamud.Interface.Windowing;
+  using MarketTerror.Services;
 
   /// <summary>
   /// The title bar button reporting which optional plugins and services MarketTerror is currently working with.
   /// </summary>
   public static class IntegrationsButton
   {
-    private static readonly Vector4 OkColor = new(0.3f, 0.85f, 0.5f, 1.0f);
-
     private static readonly Vector4 IdleColor = new(0.45f, 0.45f, 0.45f, 1.0f);
-
-    private static readonly Vector4 DownColor = new(0.9f, 0.35f, 0.3f, 1.0f);
 
     private static readonly Vector4 PartialColor = new(0.98f, 0.75f, 0.15f, 1.0f);
 
     private static readonly Vector4 AllGoodColor = new(1.0f, 1.0f, 1.0f, 1.0f);
-
-    private enum State
-    {
-      /// <summary>The integration is installed or answering.</summary>
-      Ok,
-
-      /// <summary>The integration is absent, or has not been contacted yet.</summary>
-      Idle,
-
-      /// <summary>The integration is expected to answer but did not.</summary>
-      Down,
-    }
 
     /// <summary>
     /// Builds the integrations button.
@@ -51,10 +36,8 @@ namespace MarketTerror.GUI.Components
       {
         Icon = FontAwesomeIcon.Link,
         IconOffset = new Vector2(2, 1),
-        IconColor = AggregateColor(All(context)),
-
-        // A read-only indicator, but Dalamud invokes Click unconditionally, so it cannot be null.
-        Click = _ => { },
+        IconColor = AggregateColor(context.Integrations.All),
+        Click = _ => context.Plugin.OpenIntegrations(),
         ShowTooltip = () => DrawTooltip(context),
       };
     }
@@ -73,78 +56,34 @@ namespace MarketTerror.GUI.Components
       ArgumentNullException.ThrowIfNull(button);
       ArgumentNullException.ThrowIfNull(context);
 
-      button.IconColor = AggregateColor(All(context));
-    }
-
-    private static IReadOnlyList<Integration> All(MarketBoardContext context)
-    {
-      return
-      [
-        Lifestream(context.Plugin.IsLifestreamInstalled),
-        Universalis(context.MarketData.IsUniversalisUp),
-        Ffxivmt(context.MarketData.IsFFXIVMTUp),
-      ];
-    }
-
-    private static Integration Lifestream(bool installed)
-    {
-      var detail = installed
-        ? "Clicking a listing can travel to its world and open the Market Board there."
-        : "Listing clicks stay where you are. Install Lifestream to travel to the\nlisting's world automatically.";
-
-      return installed
-        ? new Integration("Lifestream", State.Ok, "installed", detail)
-        : new Integration("Lifestream", State.Idle, "not detected", detail);
-    }
-
-    private static Integration Universalis(bool? up)
-    {
-      if (up == null)
-      {
-        return new Integration("Universalis", State.Idle, "checking", "Listings and sale history come from Universalis as you browse.");
-      }
-
-      return up.Value
-        ? new Integration("Universalis", State.Ok, "reachable", "Listings and sale history come from Universalis as you browse.")
-        : new Integration("Universalis", State.Down, "not answering", "Listings and sale history cannot be fetched right now.\nCheck status.universalis.app.");
-    }
-
-    private static Integration Ffxivmt(bool? up)
-    {
-      if (up == null)
-      {
-        return new Integration("FFXIVMT", State.Idle, "checking", "Gilflux rankings in the Stats tab come from the FFXIVMT API.");
-      }
-
-      return up.Value
-        ? new Integration("FFXIVMT", State.Ok, "reachable", "Gilflux rankings in the Stats tab come from the FFXIVMT API.")
-        : new Integration("FFXIVMT", State.Down, "not answering", "The FFXIVMT API is not answering, so the Stats tab has no rankings to show.");
+      context.Integrations.Update();
+      button.IconColor = AggregateColor(context.Integrations.All);
     }
 
     /// <summary>
-    /// White once everything is live so the button reads as ordinary; colour is spent only on what
-    /// needs attention, unlike the per-integration text colour.
+    /// White once nothing needs attention so the button reads as ordinary; colour is spent only on
+    /// what does, unlike the per-integration text colour. A dismissed warning counts as settled.
     /// </summary>
     /// <param name="integrations">The integrations to summarise.</param>
     /// <returns>The colour of the button icon.</returns>
     private static Vector4 AggregateColor(IReadOnlyList<Integration> integrations)
     {
-      var ok = 0;
+      var settled = 0;
 
       foreach (var integration in integrations)
       {
-        if (integration.State == State.Ok)
+        if (!integration.IsWarning || integration.Dismissed)
         {
-          ok++;
+          settled++;
         }
       }
 
-      if (ok == 0)
+      if (settled == 0)
       {
         return IdleColor;
       }
 
-      return ok == integrations.Count ? AllGoodColor : PartialColor;
+      return settled == integrations.Count ? AllGoodColor : PartialColor;
     }
 
     private static void DrawTooltip(MarketBoardContext context)
@@ -154,7 +93,7 @@ namespace MarketTerror.GUI.Components
       ImGui.Text("Integrations");
       ImGui.Separator();
 
-      foreach (var integration in All(context))
+      foreach (var integration in context.Integrations.All)
       {
         ImGui.PushFont(UiBuilder.IconFont);
         ImGui.TextColored(integration.Color, $"{(char)FontAwesomeIcon.Circle}");
@@ -163,26 +102,21 @@ namespace MarketTerror.GUI.Components
         ImGui.SameLine();
         ImGui.TextColored(integration.Color, $"{integration.Name} - {integration.Status}");
 
+        if (integration.Dismissed)
+        {
+          ImGui.SameLine();
+          ImGui.TextDisabled("(dismissed)");
+        }
+
         ImGui.Indent();
         ImGui.TextDisabled(integration.Detail);
         ImGui.Unindent();
       }
 
-      ImGui.EndTooltip();
-    }
+      ImGui.Separator();
+      ImGui.TextDisabled("Click to manage integrations.");
 
-    /// <summary>
-    /// One optional plugin or service MarketTerror works with but never requires. The wording lives
-    /// here so the tooltip and the settings window cannot drift apart.
-    /// </summary>
-    private readonly record struct Integration(string Name, State State, string Status, string Detail)
-    {
-      public Vector4 Color => this.State switch
-      {
-        State.Ok => OkColor,
-        State.Down => DownColor,
-        _ => IdleColor,
-      };
+      ImGui.EndTooltip();
     }
   }
 }

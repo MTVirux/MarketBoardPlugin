@@ -153,6 +153,11 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// Gets the state and services shared by every component of this window.
+    /// </summary>
+    public MarketBoardContext Context => this.context;
+
+    /// <summary>
     /// Gets or sets the current search string.
     /// </summary>
     public string SearchString

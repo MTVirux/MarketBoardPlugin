@@ -135,6 +135,12 @@ namespace MarketTerror
     public bool TerrorSkinEnabled { get; set; } = true;
 
     /// <summary>
+    /// Gets the names of the integrations whose warnings the user has dismissed.
+    /// </summary>
+    /// <remarks>A name is dropped as soon as its integration works again, so a later failure warns afresh.</remarks>
+    public ICollection<string> DismissedIntegrationWarnings { get; } = new List<string>();
+
+    /// <summary>
     /// Gets the Terror skin colours that have been changed from their defaults, keyed by colour name.
     /// </summary>
     /// <remarks>Colours left at their default are not stored, so shipped defaults can change freely.</remarks>

@@ -59,6 +59,8 @@ namespace MarketTerror
 
     private readonly ThemeEditorWindow themeEditorWindow;
 
+    private readonly IntegrationsWindow integrationsWindow;
+
     /// <summary>
     /// Gets the window system.
     /// </summary>
@@ -132,11 +134,13 @@ namespace MarketTerror
       this.marketBoardConfigWindow = new MarketTerrorConfigWindow(this);
       this.marketBoardShoppingListWindow = new MarketBoardShoppingListWindow(this);
       this.themeEditorWindow = new ThemeEditorWindow(this);
+      this.integrationsWindow = new IntegrationsWindow(this.marketBoardWindow.Context);
 
       this.windowSystem.AddWindow(this.marketBoardWindow);
       this.windowSystem.AddWindow(this.marketBoardConfigWindow);
       this.windowSystem.AddWindow(this.marketBoardShoppingListWindow);
       this.windowSystem.AddWindow(this.themeEditorWindow);
+      this.windowSystem.AddWindow(this.integrationsWindow);
 
       // Set up command handlers
       foreach (var command in OpenCommands)
@@ -311,6 +315,14 @@ namespace MarketTerror
     public void OpenThemeEditor()
     {
       this.themeEditorWindow.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Opens the integrations window.
+    /// </summary>
+    public void OpenIntegrations()
+    {
+      this.integrationsWindow.IsOpen = true;
     }
 
     /// <summary>
