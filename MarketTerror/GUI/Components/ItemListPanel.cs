@@ -12,7 +12,7 @@ namespace MarketTerror.GUI.Components
   using Lumina.Excel.Sheets;
 
   /// <summary>
-  /// The scrollable item list: the whole catalogue, the search results or the favourites.
+  /// The scrollable item list: the whole catalogue, the search results, the favourites or the history.
   /// </summary>
   public sealed class ItemListPanel
   {
@@ -42,6 +42,10 @@ namespace MarketTerror.GUI.Components
       if (this.context.ItemListTab == ItemListTab.Favorites)
       {
         this.DrawFavorites();
+      }
+      else if (this.context.ItemListTab == ItemListTab.History)
+      {
+        this.DrawHistory();
       }
       else
       {
@@ -112,6 +116,11 @@ namespace MarketTerror.GUI.Components
           this.context.ItemListTab = ItemListTab.Favorites;
         }
 
+        if (DrawTab(FontAwesomeIcon.History, "historyTab", "Recently viewed", ImGuiTabItemFlags.None))
+        {
+          this.context.ItemListTab = ItemListTab.History;
+        }
+
         ImGui.EndTabBar();
       }
 
@@ -123,6 +132,55 @@ namespace MarketTerror.GUI.Components
       ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.TextDim);
       ImGui.Text(label);
       ImGui.PopStyleColor();
+    }
+
+    private void DrawHistory()
+    {
+      this.DrawHeading("History");
+      ImGui.Separator();
+      var sheet = this.context.Plugin.DataManager.Excel.GetSheet<Item>();
+      foreach (var id in this.context.Config.History.ToArray())
+      {
+        var item = sheet.GetRowOrDefault(id);
+        if (!item.HasValue)
+        {
+          continue;
+        }
+
+        var itemName = item.Value.Name.ExtractText();
+
+        if (ImGui.Selectable($"{itemName}", this.context.SelectedItem?.RowId == id))
+        {
+          this.context.SelectItem(id, true);
+        }
+
+        if (ImGui.BeginPopupContextItem($"historyItemContextMenu{id}"))
+        {
+          if (this.context.SelectedItem?.RowId != item.Value.RowId)
+          {
+            this.context.SelectItem(item.Value.RowId);
+          }
+
+          if (ImGui.Selectable("Add to the shopping list"))
+          {
+            this.context.TryAddCheapestToShoppingList(item.Value, false);
+          }
+
+          if (ImGui.Selectable("Add to the favorites"))
+          {
+            this.context.Config.Favorites.Add(item.Value.RowId);
+          }
+
+          if (ImGui.Selectable("Remove from history"))
+          {
+            this.context.Config.History.Remove(item.Value.RowId);
+          }
+
+          ImGui.EndPopup();
+        }
+
+        ImGui.OpenPopupOnItemClick($"historyItemContextMenu{id}", ImGuiPopupFlags.MouseButtonRight);
+      }
     }
 
     private void DrawFavorites()

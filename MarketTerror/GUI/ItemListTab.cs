@@ -23,5 +23,10 @@ namespace MarketTerror.GUI
     /// The favourited items.
     /// </summary>
     Favorites,
+
+    /// <summary>
+    /// The recently viewed items.
+    /// </summary>
+    History,
   }
 }
