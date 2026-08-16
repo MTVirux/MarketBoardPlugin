@@ -61,6 +61,8 @@ namespace MarketTerror.GUI
 
     private bool sortAscending = true;
 
+    private string worldFilter = string.Empty;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardShoppingListWindow"/> class.
     /// </summary>
@@ -367,11 +369,32 @@ namespace MarketTerror.GUI
 
       if (ImGui.BeginCombo("##shoppingListWorld", selected.Length > 0 ? selected : "Pick a world"))
       {
+        if (ImGui.IsWindowAppearing())
+        {
+          this.worldFilter = string.Empty;
+          ImGui.SetKeyboardFocusHere();
+        }
+
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputTextWithHint("##shoppingListWorldFilter", "Search worlds", ref this.worldFilter, 64);
+        ImGui.Separator();
+
+        var filter = this.worldFilter.Trim();
         var lastGroup = string.Empty;
+        var matches = 0;
 
         foreach (var world in scope.Worlds)
         {
           var group = $"{world.Region} - {world.DataCentre}";
+
+          if (filter.Length > 0 &&
+              world.Name.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0 &&
+              group.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+          {
+            continue;
+          }
+
+          matches++;
 
           if (group != lastGroup)
           {
@@ -392,6 +415,13 @@ namespace MarketTerror.GUI
           {
             ImGui.SetItemDefaultFocus();
           }
+        }
+
+        if (matches == 0)
+        {
+          ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+          ImGui.Text("No worlds match.");
+          ImGui.PopStyleColor();
         }
 
         ImGui.EndCombo();
