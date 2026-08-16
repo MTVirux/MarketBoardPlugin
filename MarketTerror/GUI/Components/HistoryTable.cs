@@ -39,6 +39,8 @@ namespace MarketTerror.GUI.Components
       ImGui.Text("Recent history");
       this.context.TitleFont.Pop();
 
+      ImGui.Separator();
+
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
 

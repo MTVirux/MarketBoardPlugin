@@ -41,6 +41,8 @@ namespace MarketTerror.GUI.Components
       ImGui.Text("Current listings (Includes 5%% GST)");
       this.context.TitleFont.Pop();
 
+      ImGui.Separator();
+
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
 

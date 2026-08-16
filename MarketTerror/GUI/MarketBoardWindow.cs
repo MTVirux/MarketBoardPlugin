@@ -312,11 +312,15 @@ namespace MarketTerror.GUI
     /// <param name="scale">The current UI scale.</param>
     private void DrawMarketData(float scale)
     {
+      var spacing = ImGui.GetStyle().ItemSpacing.Y;
+
       this.titleFontHandle.Push();
       var headingHeight = ImGui.GetTextLineHeightWithSpacing();
       this.titleFontHandle.Pop();
 
-      var spacing = ImGui.GetStyle().ItemSpacing.Y;
+      // Each heading is followed by a separator line, which costs a pixel plus its own spacing.
+      headingHeight += 1.0f + spacing;
+
       var available = ImGui.GetContentRegionAvail().Y;
 
       if (this.plugin.Config.RecentHistoryDisabled)
