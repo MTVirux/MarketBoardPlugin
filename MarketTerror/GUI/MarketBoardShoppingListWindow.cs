@@ -188,7 +188,7 @@ namespace MarketTerror.GUI
 
         ImGui.BeginDisabled(string.IsNullOrEmpty(item.World));
         ImGui.PushFont(UiBuilder.IconFont);
-        var travel = ImGui.Button($"{(char)FontAwesomeIcon.Store}##shoplistgo" + k, buttonSize);
+        var travel = ImGui.Button($"{(char)FontAwesomeIcon.Walking}##shoplistgo" + k, buttonSize);
         ImGui.PopFont();
         ImGui.EndDisabled();
         Utilities.HoverTooltip($"Go to the market board on {item.World}.");
