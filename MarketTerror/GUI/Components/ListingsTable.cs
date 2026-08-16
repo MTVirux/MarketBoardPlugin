@@ -43,7 +43,7 @@ namespace MarketTerror.GUI.Components
       ImGui.Text("Current listings (Includes 5% GST)");
       this.context.TitleFont.Pop();
 
-      ImGui.Separator();
+      DrawHeadingUnderline(ImGui.GetItemRectSize().X);
 
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
@@ -76,6 +76,18 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndTable();
+    }
+
+    private static void DrawHeadingUnderline(float width)
+    {
+      var start = ImGui.GetCursorScreenPos();
+
+      ImGui.GetWindowDrawList().AddLine(
+        start,
+        start + new Vector2(width, 0.0f),
+        ImGui.GetColorU32(ImGuiCol.Separator));
+
+      ImGui.Dummy(new Vector2(width, 1.0f));
     }
 
     private static void DrawRightAligned(string text)
