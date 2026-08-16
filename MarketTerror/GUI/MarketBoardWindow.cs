@@ -135,7 +135,7 @@ namespace MarketTerror.GUI
       this.statsPanel = new StatsPanel(this.context);
       this.linksPopup = new LinksPopup(this.context);
 
-      this.integrationsButton = IntegrationsButton.Build(this.plugin);
+      this.integrationsButton = IntegrationsButton.Build(this.context);
       this.TitleBarButtons.Add(this.integrationsButton);
 
       this.TitleBarButtons.Add(new TitleBarButton
@@ -179,7 +179,7 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void PreDraw()
     {
-      IntegrationsButton.Refresh(this.integrationsButton, this.plugin);
+      IntegrationsButton.Refresh(this.integrationsButton, this.context);
       this.themeScope = this.theme.Push();
     }
 

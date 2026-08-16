@@ -62,6 +62,12 @@ namespace MarketTerror.Services
     public bool IsUniversalisUp { get; private set; }
 
     /// <summary>
+    /// Gets a value indicating whether the last gilflux fetch reached the FFXIVMT API, or null when
+    /// no item has been looked up yet. There is no status endpoint, so the fetches are the probe.
+    /// </summary>
+    public bool? IsFFXIVMTUp { get; private set; }
+
+    /// <summary>
     /// Empties the market data cache.
     /// </summary>
     public void ClearCache()
@@ -185,6 +191,8 @@ namespace MarketTerror.Services
                 queryTarget,
                 cancellationTokenSource.Token)
               .ConfigureAwait(false);
+
+            this.IsFFXIVMTUp = true;
           }
           catch (OperationCanceledException)
           {
@@ -194,6 +202,7 @@ namespace MarketTerror.Services
           {
             this.plugin.Log.Warning(ex, "Failed to fetch FFXIVMT gilflux data.");
             this.Gilflux = null;
+            this.IsFFXIVMTUp = false;
           }
           finally
           {
