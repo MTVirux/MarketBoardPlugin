@@ -59,6 +59,10 @@ namespace MarketTerror.GUI.Components
       var scale = ImGui.GetIO().FontGlobalScale;
       var buttonSize = new Vector2(200 * scale, 0);
 
+      ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetColorU32(ImGuiCol.ScrollbarGrab));
+      ImGui.PushStyleColor(ImGuiCol.ButtonHovered, ImGui.GetColorU32(ImGuiCol.ScrollbarGrabHovered));
+      ImGui.PushStyleColor(ImGuiCol.ButtonActive, ImGui.GetColorU32(ImGuiCol.ScrollbarGrabActive));
+
       if (this.context.MarketData.IsUniversalisUp != false)
       {
         if (ImGui.Button("Data provided by Universalis", buttonSize))
@@ -87,6 +91,7 @@ namespace MarketTerror.GUI.Components
         Utilities.OpenBrowser("https://github.com/MTVirux/SeaOfTerror");
       }
 
+      ImGui.PopStyleColor(3);
       ImGui.EndPopup();
     }
   }
