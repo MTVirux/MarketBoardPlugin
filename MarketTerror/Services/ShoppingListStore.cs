@@ -135,20 +135,24 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Clears the waiting flag set by <see cref="MarkRefreshing"/>.
+    /// Clears the waiting flag set by <see cref="MarkRefreshing"/> from every entry.
     /// </summary>
-    /// <param name="itemIds">The items to clear it for, or null for the whole list.</param>
-    public void ClearRefreshing(IEnumerable<uint>? itemIds = null)
+    public void ClearRefreshing()
     {
-      var ids = itemIds?.ToHashSet();
-
       foreach (var item in this.items)
       {
-        if (ids == null || ids.Contains(item.SourceItem.RowId))
-        {
-          item.Refreshing = false;
-        }
+        item.Refreshing = false;
       }
+    }
+
+    /// <summary>
+    /// Gets the entry for an item.
+    /// </summary>
+    /// <param name="itemId">The row id of the item to look for.</param>
+    /// <returns>The entry, or null when the item is not on the list.</returns>
+    public SavedItem? Find(uint itemId)
+    {
+      return this.items.Find(i => i.SourceItem.RowId == itemId);
     }
 
     /// <summary>
