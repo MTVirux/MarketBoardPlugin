@@ -4,6 +4,8 @@
 
 namespace MarketTerror.Models.FFXIVMT
 {
+  using System.Collections.Generic;
+  using System.Diagnostics.CodeAnalysis;
   using System.Text.Json.Serialization;
 
   /// <summary>
@@ -48,52 +50,53 @@ namespace MarketTerror.Models.FFXIVMT
     public string? Region { get; set; }
 
     /// <summary>
-    /// Gets or sets the all-time gilflux ranking (total gil moved).
+    /// Gets or sets the gilflux rankings (total gil moved), keyed by timeframe name.
     /// </summary>
-    [JsonPropertyName("ranking_alltime")]
-    public long RankingAlltime { get; set; }
+    [JsonPropertyName("rankings")]
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Setter required for JSON deserialization")]
+    public IDictionary<string, long> Rankings { get; set; } = new Dictionary<string, long>();
 
     /// <summary>
-    /// Gets or sets the 1-hour gilflux (total gil moved in last hour).
+    /// Gets the 1-hour gilflux (total gil moved in last hour).
     /// </summary>
-    [JsonPropertyName("ranking_1h")]
-    public long Ranking1h { get; set; }
+    [JsonIgnore]
+    public long Ranking1h => this.GetRanking("1h");
 
     /// <summary>
-    /// Gets or sets the 3-hour gilflux (total gil moved in last 3 hours).
+    /// Gets the 3-hour gilflux (total gil moved in last 3 hours).
     /// </summary>
-    [JsonPropertyName("ranking_3h")]
-    public long Ranking3h { get; set; }
+    [JsonIgnore]
+    public long Ranking3h => this.GetRanking("3h");
 
     /// <summary>
-    /// Gets or sets the 6-hour gilflux (total gil moved in last 6 hours).
+    /// Gets the 6-hour gilflux (total gil moved in last 6 hours).
     /// </summary>
-    [JsonPropertyName("ranking_6h")]
-    public long Ranking6h { get; set; }
+    [JsonIgnore]
+    public long Ranking6h => this.GetRanking("6h");
 
     /// <summary>
-    /// Gets or sets the 12-hour gilflux (total gil moved in last 12 hours).
+    /// Gets the 12-hour gilflux (total gil moved in last 12 hours).
     /// </summary>
-    [JsonPropertyName("ranking_12h")]
-    public long Ranking12h { get; set; }
+    [JsonIgnore]
+    public long Ranking12h => this.GetRanking("12h");
 
     /// <summary>
-    /// Gets or sets the 1-day gilflux (total gil moved in last day).
+    /// Gets the 1-day gilflux (total gil moved in last day).
     /// </summary>
-    [JsonPropertyName("ranking_1d")]
-    public long Ranking1d { get; set; }
+    [JsonIgnore]
+    public long Ranking1d => this.GetRanking("1d");
 
     /// <summary>
-    /// Gets or sets the 3-day gilflux (total gil moved in last 3 days).
+    /// Gets the 3-day gilflux (total gil moved in last 3 days).
     /// </summary>
-    [JsonPropertyName("ranking_3d")]
-    public long Ranking3d { get; set; }
+    [JsonIgnore]
+    public long Ranking3d => this.GetRanking("3d");
 
     /// <summary>
-    /// Gets or sets the 7-day gilflux (total gil moved in last 7 days).
+    /// Gets the 7-day gilflux (total gil moved in last 7 days).
     /// </summary>
-    [JsonPropertyName("ranking_7d")]
-    public long Ranking7d { get; set; }
+    [JsonIgnore]
+    public long Ranking7d => this.GetRanking("7d");
 
     /// <summary>
     /// Gets or sets the last update timestamp in milliseconds.
@@ -106,5 +109,8 @@ namespace MarketTerror.Models.FFXIVMT
     /// </summary>
     [JsonPropertyName("last_sale_time")]
     public long LastSaleTime { get; set; }
+
+    private long GetRanking(string timeframe)
+      => this.Rankings != null && this.Rankings.TryGetValue(timeframe, out var value) ? value : 0;
   }
 }

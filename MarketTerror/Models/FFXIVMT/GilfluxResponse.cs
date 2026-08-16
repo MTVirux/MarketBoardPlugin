@@ -4,6 +4,8 @@
 
 namespace MarketTerror.Models.FFXIVMT
 {
+  using System.Collections.Generic;
+  using System.Diagnostics.CodeAnalysis;
   using System.Text.Json.Serialization;
 
   /// <summary>
@@ -24,16 +26,18 @@ namespace MarketTerror.Models.FFXIVMT
     public string? Message { get; set; }
 
     /// <summary>
-    /// Gets or sets the JSON-encoded gilflux ranking data.
+    /// Gets or sets the gilflux ranking data, one entry per world in the requested scope.
     /// </summary>
     [JsonPropertyName("data")]
-    public string? Data { get; set; }
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Setter required for JSON deserialization")]
+    public IList<GilfluxRankingItem> Data { get; set; } = new List<GilfluxRankingItem>();
 
     /// <summary>
-    /// Gets or sets the JSON-encoded gilflux timeframe definitions in milliseconds.
+    /// Gets or sets the gilflux timeframe definitions in milliseconds, keyed by timeframe name.
     /// </summary>
     [JsonPropertyName("gilflux_timeframe_in_ms")]
-    public string? GilfluxTimeframeInMs { get; set; }
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Setter required for JSON deserialization")]
+    public IDictionary<string, long> GilfluxTimeframeInMs { get; set; } = new Dictionary<string, long>();
 
     /// <summary>
     /// Gets or sets the request ID.

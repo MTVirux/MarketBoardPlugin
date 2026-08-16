@@ -5,7 +5,6 @@
 namespace MarketTerror.Helpers
 {
   using System;
-  using System.Collections.Generic;
   using System.Net.Http;
   using System.Text.Json;
   using System.Threading;
@@ -108,14 +107,12 @@ namespace MarketTerror.Helpers
           .DeserializeAsync<GilfluxResponse>(content, cancellationToken: cancellationToken)
           .ConfigureAwait(false);
 
-        if (envelope?.Status != true || string.IsNullOrEmpty(envelope.Data))
+        if (envelope?.Status != true || envelope.Data is not { Count: > 0 })
         {
           return null;
         }
 
-        var rankings = JsonSerializer.Deserialize<IList<GilfluxRankingItem>>(envelope.Data);
-
-        return rankings is { Count: > 0 } ? rankings[0] : null;
+        return envelope.Data[0];
       }
       catch (OperationCanceledException)
       {
