@@ -210,9 +210,21 @@ namespace MarketTerror.GUI
           _ => item.Unlisted ? this.theme.TextDim : this.theme.Text,
         };
 
+        var name = item.SourceItem.Name.ExtractText();
+
         ImGui.PushStyleColor(ImGuiCol.Text, nameColor);
-        ImGui.Text(item.SourceItem.Name.ExtractText());
+        ImGui.Text(name);
         ImGui.PopStyleColor();
+
+        if (ImGui.BeginPopupContextItem($"shoplistName{k}"))
+        {
+          if (ImGui.Selectable("Copy name to clipboard"))
+          {
+            this.Plugin.MarketBoardContext.CopyToClipboard(name);
+          }
+
+          ImGui.EndPopup();
+        }
 
         ImGui.TableSetColumnIndex(1);
         ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
