@@ -5,7 +5,7 @@ Market board information plugin for XIVLauncher / Dalamud
 
 ## Usage
 
-Open the window with `/pmb` or `/mt`, or from the plugin installer.
+Open the window with `/pmb`, `/mt` or `/marketterror`, or from the plugin installer.
 
 ## Features
 
