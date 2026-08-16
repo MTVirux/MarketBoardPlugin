@@ -18,7 +18,7 @@ namespace MarketTerror.GUI.Components
   {
     private readonly MarketBoardContext context;
 
-    private bool wasSearchEmpty = true;
+    private bool wasSearchTabHidden = true;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemListPanel"/> class.
@@ -92,7 +92,7 @@ namespace MarketTerror.GUI.Components
 
     private void DrawTabs()
     {
-      var searching = !string.IsNullOrEmpty(this.context.SearchString);
+      var searching = !string.IsNullOrEmpty(this.context.SearchString) || this.context.HasActiveFilters;
       var hasFavorites = this.context.Config.Favorites.Count > 0;
       var hasHistory = this.context.Config.History.Count > 0;
 
@@ -110,12 +110,12 @@ namespace MarketTerror.GUI.Components
           this.context.ItemListTab = ItemListTab.All;
         }
 
-        // Selecting the tab as it appears saves a click when the user starts typing.
+        // Selecting the tab as it appears saves a click when the user starts typing or sets a filter.
         if (searching && DrawTab(
           FontAwesomeIcon.Search,
           "searchTab",
           "Search results",
-          this.wasSearchEmpty ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+          this.wasSearchTabHidden ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
         {
           this.context.ItemListTab = ItemListTab.Search;
         }
@@ -133,7 +133,7 @@ namespace MarketTerror.GUI.Components
         ImGui.EndTabBar();
       }
 
-      this.wasSearchEmpty = !searching;
+      this.wasSearchTabHidden = !searching;
     }
 
     private void DrawHistory()

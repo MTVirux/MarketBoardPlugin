@@ -17,6 +17,8 @@ namespace MarketTerror.GUI.Components
   /// </summary>
   public sealed class ItemSearchPanel
   {
+    private const uint ActiveFilterColor = 0xFF4C4CFFu;
+
     private static readonly string[] TopLevelLabels = new[] { "Weapons", "Armor", "Items", "Housing" };
 
     private static readonly (byte Rarity, string Label)[] RarityOptions = new[]
@@ -57,8 +59,12 @@ namespace MarketTerror.GUI.Components
       ImGui.SameLine();
       ImGui.SetCursorPosY(previousYCursor);
       var buttonSize = new Vector2(32 * scale, 1.5f * ImGui.GetItemRectSize().Y);
+      var iconColor = this.context.HasActiveFilters
+        ? ActiveFilterColor
+        : this.context.AdvancedSearchOpen ? this.context.Theme.Accent : this.context.Theme.Text;
+
       ImGui.PushFont(UiBuilder.IconFont);
-      ImGui.PushStyleColor(ImGuiCol.Text, this.context.AdvancedSearchOpen ? this.context.Theme.Accent : this.context.Theme.Text);
+      ImGui.PushStyleColor(ImGuiCol.Text, iconColor);
       if (ImGui.Button($"{(char)FontAwesomeIcon.Search}", buttonSize))
       {
         this.context.AdvancedSearchOpen = !this.context.AdvancedSearchOpen;

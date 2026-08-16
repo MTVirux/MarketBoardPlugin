@@ -180,6 +180,19 @@ namespace MarketTerror.GUI
     public bool AdvancedSearchOpen { get; set; }
 
     /// <summary>
+    /// Gets a value indicating whether any advanced search filter is set to something other than its default.
+    /// </summary>
+    public bool HasActiveFilters =>
+      this.SelectedCategories.Count > 0
+      || this.SelectedRarities.Count > 0
+      || this.SelectedClassJob != null
+      || (this.CanReadUnlockState && this.UnlockFilter != null)
+      || this.MinLevel != 0
+      || this.MaxLevel != DefaultMaxLevel
+      || this.MinItemLevel != 0
+      || this.MaxItemLevel != DefaultMaxItemLevel;
+
+    /// <summary>
     /// Builds the item filter matching the current advanced search settings.
     /// </summary>
     /// <param name="searchString">The item name fragment to search for.</param>
