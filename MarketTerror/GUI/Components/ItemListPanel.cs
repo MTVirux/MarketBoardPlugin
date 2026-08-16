@@ -356,10 +356,13 @@ namespace MarketTerror.GUI.Components
       var bulkAdd = this.context.Plugin.ShoppingListBulkAdd;
       var buyList = this.context.Plugin.ShoppingList;
 
+      // The buy list window's own scope, so adding and refreshing price against the same place.
+      var scope = this.context.Plugin.ShoppingListScope;
+
       if (missing.Length > 0)
       {
         // The prices come from Universalis a chunk at a time, so only one category can be added at once.
-        var busy = bulkAdd.IsRunning || !this.context.Worlds.HasSelection;
+        var busy = bulkAdd.IsRunning || !scope.HasSelection;
 
         if (busy)
         {
@@ -368,7 +371,7 @@ namespace MarketTerror.GUI.Components
 
         if (ImGui.Selectable("Add all to the shopping list"))
         {
-          bulkAdd.Start(categoryName, missing, this.context.Worlds.QueryTarget);
+          bulkAdd.Start(categoryName, missing, scope.QueryTarget);
         }
 
         if (busy)

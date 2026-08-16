@@ -13,6 +13,7 @@ namespace MarketTerror.Services
   using Lumina.Excel.Sheets;
   using Lumina.Extensions;
   using MarketTerror.Extensions;
+  using MarketTerror.Helpers;
 
   /// <summary>
   /// The list of worlds the market board can be queried against, and which one is selected.
@@ -136,15 +137,7 @@ namespace MarketTerror.Services
             return (w.Name.ExtractText(), displayName);
           });
 
-        var regionName = this.plugin.PlayerState.HomeWorld.Value.DataCenter.Value.Region.RowId switch
-        {
-          1 => "Japan",
-          2 => "North-America",
-          3 => "Europe",
-          4 => "Oceania",
-          5 => "中国",
-          _ => string.Empty,
-        };
+        var regionName = WorldRegions.GetName(this.plugin.PlayerState.HomeWorld.Value.DataCenter.Value.Region.RowId);
 
         this.worlds.Clear();
         this.worlds.Add((regionName, $"Cross-DC {SeIconChar.CrossWorld.ToChar()}"));

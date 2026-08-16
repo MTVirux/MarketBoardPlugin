@@ -16,6 +16,7 @@ namespace MarketTerror.GUI
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
   using MarketTerror.Models.ShoppingList;
+  using MarketTerror.Services;
 
   /// <summary>
   /// The market board config window.
@@ -119,6 +120,7 @@ namespace MarketTerror.GUI
     public override void Draw()
     {
       this.DrawBulkAddProgress();
+      this.DrawScopePickers();
 
       if (this.Plugin.ShoppingList.Count == 0)
       {
@@ -220,18 +222,115 @@ namespace MarketTerror.GUI
       }
     }
 
+    private static void DrawScopePicker(ShoppingListScope scope)
+    {
+      if (ImGui.BeginCombo("##shoppingListScope", ScopeLabel(scope.Scope)))
+      {
+        foreach (var level in Enum.GetValues<MarketScope>())
+        {
+          var isSelected = level == scope.Scope;
+
+          if (ImGui.Selectable(ScopeLabel(level), isSelected))
+          {
+            scope.SelectScope(level);
+          }
+
+          if (isSelected)
+          {
+            ImGui.SetItemDefaultFocus();
+          }
+        }
+
+        ImGui.EndCombo();
+      }
+
+      var target = scope.QueryTarget;
+      Utilities.HoverTooltip(target.Length > 0
+        ? $"How far the searches reach. Prices come from {target}."
+        : "How far the searches reach around the picked world.");
+    }
+
+    private static string ScopeLabel(MarketScope scope)
+    {
+      return scope switch
+      {
+        MarketScope.DataCentre => "Data Centre",
+        MarketScope.Region => "Region",
+        _ => "World",
+      };
+    }
+
+    private void DrawScopePickers()
+    {
+      var scope = this.Plugin.ShoppingListScope;
+      var scopeWidth = 130 * ImGui.GetIO().FontGlobalScale;
+
+      ImGui.BeginDisabled(this.Plugin.ShoppingListBulkAdd.IsRunning);
+
+      ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - scopeWidth - ImGui.GetStyle().ItemSpacing.X);
+      this.DrawWorldPicker(scope);
+
+      ImGui.SameLine();
+
+      ImGui.SetNextItemWidth(scopeWidth);
+      DrawScopePicker(scope);
+
+      ImGui.EndDisabled();
+
+      ImGui.Separator();
+    }
+
+    private void DrawWorldPicker(ShoppingListScope scope)
+    {
+      var selected = scope.SelectedWorld;
+
+      if (ImGui.BeginCombo("##shoppingListWorld", selected.Length > 0 ? selected : "Pick a world"))
+      {
+        var lastGroup = string.Empty;
+
+        foreach (var world in scope.Worlds)
+        {
+          var group = $"{world.Region} - {world.DataCentre}";
+
+          if (group != lastGroup)
+          {
+            lastGroup = group;
+            ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+            ImGui.Text(group);
+            ImGui.PopStyleColor();
+          }
+
+          var isSelected = world.Name == selected;
+
+          if (ImGui.Selectable(world.Name, isSelected))
+          {
+            scope.SelectWorld(world.Name);
+          }
+
+          if (isSelected)
+          {
+            ImGui.SetItemDefaultFocus();
+          }
+        }
+
+        ImGui.EndCombo();
+      }
+
+      Utilities.HoverTooltip("The world you are shopping from.");
+    }
+
     private void DrawActionBar()
     {
-      var worlds = this.Plugin.MarketBoardContext.Worlds;
+      var scope = this.Plugin.ShoppingListScope;
       var busy = this.Plugin.ShoppingListBulkAdd.IsRunning;
 
-      ImGui.BeginDisabled(busy || !worlds.HasSelection);
+      ImGui.BeginDisabled(busy || !scope.HasSelection);
 
       if (ImGui.Button("Refresh"))
       {
         this.Plugin.ShoppingListBulkAdd.StartRefresh(
           this.Plugin.ShoppingList.Select(i => i.SourceItem).ToArray(),
-          worlds.QueryTarget);
+          scope.QueryTarget);
       }
 
       ImGui.EndDisabled();

@@ -106,6 +106,16 @@ namespace MarketTerror
     public bool ShoppingListCopyWorld { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets the world the shopping list shops from, or an empty string to follow the character's home world.
+    /// </summary>
+    public string ShoppingListScopeWorld { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets how wide the shopping list prices around <see cref="ShoppingListScopeWorld"/>.
+    /// </summary>
+    public MarketScope ShoppingListScopeLevel { get; set; } = MarketScope.DataCentre;
+
+    /// <summary>
     /// Gets the saved shopping list, so it survives a plugin reload.
     /// </summary>
     [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale whenever the shopping list changes")]
