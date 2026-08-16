@@ -35,6 +35,7 @@ namespace MarketTerror.Helpers
     private const long ConfirmTimeoutMs = 10000;
     private const long ResultTimeoutMs = 15000;
     private const uint HqItemIdOffset = 1000000;
+    private const int MaxWarningPrompts = 2;
     private const int YesButton = 0;
     private const int NoButton = 1;
 
@@ -47,6 +48,8 @@ namespace MarketTerror.Helpers
     private State state = State.Idle;
     private BuyRequest? request;
     private Action<BuyResult>? onFinished;
+    private string answeredPrompt = string.Empty;
+    private int warningPrompts;
     private long deadlineTick;
     private long startTick;
     private long lastOfferingsTick;
@@ -108,6 +111,8 @@ namespace MarketTerror.Helpers
       this.state = State.WaitingListings;
       this.startTick = Environment.TickCount64;
       this.deadlineTick = this.startTick + ListingsTimeoutMs;
+      this.answeredPrompt = string.Empty;
+      this.warningPrompts = 0;
       this.targetListingId = 0;
       this.targetUnitPrice = 0;
     }
@@ -386,7 +391,22 @@ namespace MarketTerror.Helpers
 
       var buy = this.request!;
       var prompt = addon->PromptText->NodeText.ToString();
+
+      if (string.Equals(prompt, this.answeredPrompt, StringComparison.Ordinal))
+      {
+        // The prompt already said yes to is still on screen; wait for the next one.
+        return;
+      }
+
       var asked = LargestNumber(prompt);
+
+      // The game asks its own questions before the price, such as having already learned the action an
+      // item teaches. A prompt without a single figure in it cannot be the one asking for gil.
+      if (asked < 0)
+      {
+        this.AnswerWarning(addon, prompt);
+        return;
+      }
 
       // A gil figure is written with separators, so allow a rounding gil either way rather than an exact compare.
       var namesItem = prompt.Contains(buy.ItemName, StringComparison.OrdinalIgnoreCase);
@@ -405,6 +425,32 @@ namespace MarketTerror.Helpers
 
       this.state = State.WaitingResult;
       this.deadlineTick = Environment.TickCount64 + ResultTimeoutMs;
+    }
+
+    /// <summary>
+    /// Says yes to a question the game asks before it gets round to the price.
+    /// </summary>
+    /// <param name="addon">The prompt.</param>
+    /// <param name="prompt">Its text.</param>
+    /// <remarks>
+    /// Only a handful are answered, and only while a buy is in flight, so an unrelated dialog that
+    /// happens to be up cannot be clicked through. The gil check on the price prompt still has to pass.
+    /// </remarks>
+    private unsafe void AnswerWarning(AddonSelectYesno* addon, string prompt)
+    {
+      if (this.warningPrompts >= MaxWarningPrompts)
+      {
+        this.log.Warning($"Gave up on a Market Board purchase of \"{this.request!.ItemName}\": still being asked \"{prompt}\"");
+        addon->AtkUnitBase.FireCallbackInt(NoButton);
+        this.Finish(BuyResult.Failed("the board kept asking questions"));
+        return;
+      }
+
+      this.warningPrompts++;
+      this.answeredPrompt = prompt;
+
+      this.log.Information($"Answering yes to a Market Board prompt with no price in it: \"{prompt}\"");
+      addon->AtkUnitBase.FireCallbackInt(YesButton);
     }
 
     private unsafe void TryReadResult()
