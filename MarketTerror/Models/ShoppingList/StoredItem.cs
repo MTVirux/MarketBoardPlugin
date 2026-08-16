@@ -25,12 +25,16 @@ namespace MarketTerror.Models.ShoppingList
     /// <param name="price">The price the item was saved at.</param>
     /// <param name="world">The world the price came from.</param>
     /// <param name="unlisted">True when the last refresh found nothing on sale.</param>
-    public StoredItem(uint itemId, double price, string world, bool unlisted)
+    /// <param name="quantity">The stack size of the listing the price came from.</param>
+    /// <param name="hq">True when the listing the price came from is high quality.</param>
+    public StoredItem(uint itemId, double price, string world, bool unlisted, long quantity, bool hq)
     {
       this.ItemId = itemId;
       this.Price = price;
       this.World = world;
       this.Unlisted = unlisted;
+      this.Quantity = quantity;
+      this.Hq = hq;
     }
 
     /// <summary>
@@ -52,5 +56,15 @@ namespace MarketTerror.Models.ShoppingList
     /// Gets or sets a value indicating whether the last refresh found nothing on sale.
     /// </summary>
     public bool Unlisted { get; set; }
+
+    /// <summary>
+    /// Gets or sets the stack size of the listing the price came from, or 0 when it is unknown.
+    /// </summary>
+    public long Quantity { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the listing the price came from is high quality.
+    /// </summary>
+    public bool Hq { get; set; }
   }
 }

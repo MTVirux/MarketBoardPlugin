@@ -36,7 +36,10 @@ namespace MarketTerror.Services
 
         if (item.HasValue)
         {
-          this.items.Add(new SavedItem(item.Value, stored.Price, stored.World) { Unlisted = stored.Unlisted });
+          this.items.Add(new SavedItem(item.Value, stored.Price, stored.World, stored.Quantity, stored.Hq)
+          {
+            Unlisted = stored.Unlisted,
+          });
         }
       }
     }
@@ -113,6 +116,9 @@ namespace MarketTerror.Services
         {
           existing.Price = entry.Price;
           existing.World = entry.World;
+          existing.Quantity = entry.Quantity;
+          existing.Hq = entry.Hq;
+          existing.Outcome = BuyOutcome.None;
           existing.Unlisted = false;
           changed = true;
         }
@@ -145,6 +151,9 @@ namespace MarketTerror.Services
         }
 
         existing.Price = 0;
+        existing.Quantity = 0;
+        existing.Hq = false;
+        existing.Outcome = BuyOutcome.None;
         existing.World = string.Empty;
         existing.Unlisted = true;
         changed = true;
@@ -175,6 +184,17 @@ namespace MarketTerror.Services
       foreach (var item in this.items)
       {
         item.Refreshing = false;
+      }
+    }
+
+    /// <summary>
+    /// Forgets the buy outcome of every entry, so a new pricing job starts from uncoloured rows.
+    /// </summary>
+    public void ClearOutcomes()
+    {
+      foreach (var item in this.items)
+      {
+        item.Outcome = BuyOutcome.None;
       }
     }
 
@@ -234,7 +254,7 @@ namespace MarketTerror.Services
 
       foreach (var item in this.items)
       {
-        stored.Add(new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted));
+        stored.Add(new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted, item.Quantity, item.Hq));
       }
 
       this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
