@@ -63,10 +63,10 @@ namespace MarketTerror.GUI.Components
         var searching = this.context.ItemListTab == ItemListTab.Search;
 
         // The advanced search only ever narrows the search tab; the all items tab stays the whole catalogue.
-        this.context.Catalog.ApplyFilter(
+        var rebuilt = this.context.Catalog.ApplyFilter(
           searching ? this.context.BuildFilter(this.context.SearchString) : ItemFilter.None);
 
-        this.DrawCategoryTree(itemTextSize, searching);
+        this.DrawCategoryTree(itemTextSize, searching, rebuilt);
       }
 
       ImGui.EndChild();
@@ -218,13 +218,14 @@ namespace MarketTerror.GUI.Components
       }
     }
 
-    private void DrawCategoryTree(Vector2 itemTextSize, bool searching)
+    private void DrawCategoryTree(Vector2 itemTextSize, bool searching, bool resultsChanged)
     {
       foreach (var category in this.context.Catalog.FilteredCategories)
       {
         if (searching)
         {
-          ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+          // A fresh set of results opens up, but a category the user closed stays closed until then.
+          ImGui.SetNextItemOpen(true, resultsChanged ? ImGuiCond.Always : ImGuiCond.Once);
         }
 
         var categoryName = category.Key.Name.ExtractText();
@@ -254,6 +255,9 @@ namespace MarketTerror.GUI.Components
               }
 
               ImGui.SetCursorPosY(y);
+
+              // The loop's own step would otherwise skip the first item back inside the region.
+              i--;
               continue;
             }
 

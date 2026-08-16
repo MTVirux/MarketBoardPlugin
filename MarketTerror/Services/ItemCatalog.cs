@@ -39,6 +39,8 @@ namespace MarketTerror.Services
 
     private ItemFilter? lastFilter;
 
+    private int lastUnreadable = int.MaxValue;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemCatalog"/> class.
     /// </summary>
@@ -88,16 +90,25 @@ namespace MarketTerror.Services
     public IReadOnlyList<KeyValuePair<ItemSearchCategory, List<Item>>> FilteredCategories => this.filtered;
 
     /// <summary>
-    /// Recomputes the filtered categories, but only when the filter differs from the one already applied.
+    /// Recomputes the filtered categories, but only when the filter differs from the one already applied
+    /// or the last pass left unlock states the game could not read.
     /// </summary>
     /// <param name="filter">The criteria an item has to match.</param>
-    public void ApplyFilter(ItemFilter filter)
+    /// <returns>True when the filtered categories were rebuilt.</returns>
+    public bool ApplyFilter(ItemFilter filter)
     {
       ArgumentNullException.ThrowIfNull(filter);
 
       if (this.lastFilter != null && this.lastFilter.SameAs(filter))
       {
-        return;
+        if (!this.WorthReadingAgain(this.lastFilter))
+        {
+          return false;
+        }
+      }
+      else
+      {
+        this.lastUnreadable = int.MaxValue;
       }
 
       this.filtered = this.sortedCategoriesAndItems
@@ -112,8 +123,10 @@ namespace MarketTerror.Services
       {
         this.log.Debug(
           $"Collection filter kept {this.filtered.Sum(kv => kv.Value.Count)} items, "
-          + $"read {filter.UnlockProbed} unlock states, {filter.UnlockUnknown} of them unreadable");
+          + $"read {filter.UnlockProbed} unlock states, {filter.UnlockUnreadable} of them unreadable");
       }
+
+      return true;
     }
 
     /// <summary>
@@ -161,6 +174,25 @@ namespace MarketTerror.Services
       }
 
       return itemName;
+    }
+
+    /// <summary>
+    /// The game pages item rows in as they are asked for, so the first sweep of the catalogue reads back
+    /// as unreadable for the rows it has not loaded yet, and those items drop out of the collection filter.
+    /// Sweeping again is only worth it while each pass reads more of them than the one before.
+    /// </summary>
+    /// <param name="applied">The filter already applied.</param>
+    /// <returns>True when another pass would find items the last one missed.</returns>
+    private bool WorthReadingAgain(ItemFilter applied)
+    {
+      if (applied.UnlockUnreadable == 0 || applied.UnlockUnreadable >= this.lastUnreadable)
+      {
+        return false;
+      }
+
+      this.lastUnreadable = applied.UnlockUnreadable;
+
+      return true;
     }
 
     private List<KeyValuePair<ItemSearchCategory, List<Item>>> SortCategoriesAndItems(IDataManager dataManager, IPluginLog log)

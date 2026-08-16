@@ -32,6 +32,66 @@ namespace MarketTerror.Helpers
     }
 
     /// <summary>
+    /// Reads the unlock state of an item for the character that is currently logged in.
+    /// </summary>
+    /// <param name="playerState">The player state.</param>
+    /// <param name="item">The item to check.</param>
+    /// <returns>The state the game reported, telling a missing state apart from a failed read.</returns>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "A broken game signature must not take the tooltip down every frame")]
+    public static unsafe UnlockState Read(IPlayerState playerState, Item item)
+    {
+      ArgumentNullException.ThrowIfNull(playerState);
+
+      // Only items that trigger an action can unlock anything, so everything else answers without a game read.
+      if (item.ItemAction.RowId == 0)
+      {
+        return UnlockState.NotUnlockable;
+      }
+
+      if (Known.TryGetValue(item.RowId, out var known))
+      {
+        return known ? UnlockState.Unlocked : UnlockState.Locked;
+      }
+
+      // The unlock tables are empty until the character has loaded, and every item reads as locked until then.
+      if (!playerState.IsLoaded)
+      {
+        return UnlockState.Unreadable;
+      }
+
+      try
+      {
+        var uiState = UIState.Instance();
+
+        // The game pages item rows in as they are asked for, so a row can be missing on the first sweep.
+        var row = ExdModule.GetItemRowById(item.RowId);
+
+        if (uiState == null || row == null)
+        {
+          return UnlockState.Unreadable;
+        }
+
+        var state = uiState->IsItemActionUnlocked(row) switch
+        {
+          Unlocked => UnlockState.Unlocked,
+          Locked => UnlockState.Locked,
+          _ => UnlockState.NotUnlockable,
+        };
+
+        if (state != UnlockState.NotUnlockable)
+        {
+          Known[item.RowId] = state == UnlockState.Unlocked;
+        }
+
+        return state;
+      }
+      catch (Exception)
+      {
+        return UnlockState.Unreadable;
+      }
+    }
+
+    /// <summary>
     /// Checks the unlock state of an item for the character that is currently logged in.
     /// </summary>
     /// <param name="playerState">The player state.</param>
@@ -40,57 +100,14 @@ namespace MarketTerror.Helpers
     /// True when the character has already unlocked the item, false when it has not, and null
     /// when the item is not the kind of item that unlocks anything or the game could not be read.
     /// </returns>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "A broken game signature must not take the tooltip down every frame")]
-    public static unsafe bool? IsUnlocked(IPlayerState playerState, Item item)
+    public static bool? IsUnlocked(IPlayerState playerState, Item item)
     {
-      ArgumentNullException.ThrowIfNull(playerState);
-
-      // Only items that trigger an action can unlock anything, so everything else answers without a game read.
-      if (item.ItemAction.RowId == 0)
+      return Read(playerState, item) switch
       {
-        return null;
-      }
-
-      if (Known.TryGetValue(item.RowId, out var known))
-      {
-        return known;
-      }
-
-      // The unlock tables are empty until the character has loaded, and every item reads as locked until then.
-      if (!playerState.IsLoaded)
-      {
-        return null;
-      }
-
-      try
-      {
-        var uiState = UIState.Instance();
-        var row = ExdModule.GetItemRowById(item.RowId);
-
-        if (uiState == null || row == null)
-        {
-          return null;
-        }
-
-        var state = uiState->IsItemActionUnlocked(row) switch
-        {
-          Unlocked => (bool?)true,
-          Locked => false,
-          _ => null,
-        };
-
-        // A failed read must not be remembered, or one bad frame hides the item for the whole session.
-        if (state != null)
-        {
-          Known[item.RowId] = state.Value;
-        }
-
-        return state;
-      }
-      catch (Exception)
-      {
-        return null;
-      }
+        UnlockState.Unlocked => true,
+        UnlockState.Locked => false,
+        _ => null,
+      };
     }
   }
 }

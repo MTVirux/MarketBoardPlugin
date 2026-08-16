@@ -10,6 +10,7 @@ namespace MarketTerror.Services
   using Dalamud.Utility;
   using Lumina.Excel.Sheets;
   using MarketTerror.Extensions;
+  using MarketTerror.Helpers;
 
   /// <summary>
   /// The criteria an item has to match to appear in the item list.
@@ -20,7 +21,7 @@ namespace MarketTerror.Services
 
     private readonly HashSet<byte> rarities;
 
-    private readonly Func<Item, bool?>? unlockProbe;
+    private readonly Func<Item, UnlockState>? unlockProbe;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemFilter"/> class.
@@ -45,7 +46,7 @@ namespace MarketTerror.Services
       int maxItemLevel,
       ClassJob? classJob,
       bool? unlocked = null,
-      Func<Item, bool?>? unlockProbe = null)
+      Func<Item, UnlockState>? unlockProbe = null)
     {
       this.SearchString = searchString ?? string.Empty;
       this.categories = new HashSet<uint>(categories ?? Enumerable.Empty<uint>());
@@ -113,9 +114,9 @@ namespace MarketTerror.Services
     public int UnlockProbed { get; private set; }
 
     /// <summary>
-    /// Gets the number of those reads that came back without a state.
+    /// Gets the number of those reads the game could not answer, so they are worth trying again.
     /// </summary>
-    public int UnlockUnknown { get; private set; }
+    public int UnlockUnreadable { get; private set; }
 
     /// <summary>
     /// Checks whether a category survives the filter.
@@ -169,13 +170,16 @@ namespace MarketTerror.Services
 
       this.UnlockProbed++;
 
-      if (state == null)
+      // The item is only hidden for now; the catalogue reads it again while these keep dropping.
+      if (state == UnlockState.Unreadable)
       {
-        this.UnlockUnknown++;
+        this.UnlockUnreadable++;
+
+        return false;
       }
 
       // Items that unlock nothing report no state, so they drop out of both unlock states.
-      return state == this.Unlocked;
+      return state == (this.Unlocked.Value ? UnlockState.Unlocked : UnlockState.Locked);
     }
 
     /// <summary>
