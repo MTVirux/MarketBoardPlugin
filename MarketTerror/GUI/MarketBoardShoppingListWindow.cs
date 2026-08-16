@@ -81,7 +81,8 @@ namespace MarketTerror.GUI
     /// Gets a value indicating whether the window is currently on screen.
     /// </summary>
     public bool IsShown =>
-      !this.hidden && (this.Plugin.ShoppingList.Count > 0 || this.forceShown || this.Plugin.ShoppingListBulkAdd.IsRunning);
+      !this.hidden
+      && (this.Plugin.ShoppingList.Count > 0 || this.forceShown || this.Plugin.ShoppingListBulkAdd.IsRunning || this.Plugin.ShoppingListBuyer.IsRunning);
 
     private MarketTerrorPlugin Plugin { get; init; }
 
@@ -138,6 +139,7 @@ namespace MarketTerror.GUI
     public override void Draw()
     {
       this.DrawBulkAddProgress();
+      this.DrawBuyProgress();
 
       if (this.Plugin.ShoppingList.Count == 0)
       {
@@ -172,7 +174,7 @@ namespace MarketTerror.GUI
       ImGui.TableSetupColumn(
         "Action",
         ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed,
-        (72 * ImGui.GetIO().FontGlobalScale) + ImGui.GetStyle().ItemSpacing.X);
+        (112 * ImGui.GetIO().FontGlobalScale) + ImGui.GetStyle().ItemSpacing.X);
       ImGui.TableSetupScrollFreeze(0, 1);
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
@@ -190,17 +192,17 @@ namespace MarketTerror.GUI
 
         ImGui.TableSetColumnIndex(0);
 
-        if (item.Unlisted)
+        var nameColor = item.Outcome switch
         {
-          ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
-        }
+          BuyOutcome.Bought => this.theme.BuySuccess,
+          BuyOutcome.BoughtCheaper => this.theme.BuyBargain,
+          BuyOutcome.Failed => this.theme.BuyFailed,
+          _ => item.Unlisted ? this.theme.TextDim : this.theme.Text,
+        };
 
+        ImGui.PushStyleColor(ImGuiCol.Text, nameColor);
         ImGui.Text(item.SourceItem.Name.ExtractText());
-
-        if (item.Unlisted)
-        {
-          ImGui.PopStyleColor();
-        }
+        ImGui.PopStyleColor();
 
         ImGui.TableSetColumnIndex(1);
         ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
@@ -223,6 +225,21 @@ namespace MarketTerror.GUI
         var buttonSize = new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
 
         ImGui.TableSetColumnIndex(5);
+
+        var canBuy = this.Plugin.ShoppingListBuyer.CanBuy(item, out var buyBlockedReason)
+          && !this.Plugin.ShoppingListBuyer.IsRunning
+          && !this.Plugin.ShoppingListBulkAdd.IsRunning;
+
+        ImGui.BeginDisabled(!canBuy);
+        ImGui.PushFont(UiBuilder.IconFont);
+        var buy = ImGui.Button($"{(char)FontAwesomeIcon.ShoppingCart}##shoplistbuy" + k, buttonSize);
+        ImGui.PopFont();
+        ImGui.EndDisabled();
+        Utilities.HoverTooltip(buyBlockedReason.Length > 0
+          ? buyBlockedReason
+          : $"Buy this listing on {item.World} if it is still there at {this.PriceText(item)} or less.");
+
+        ImGui.SameLine();
 
         var travel = false;
 
@@ -255,6 +272,11 @@ namespace MarketTerror.GUI
         if (travel)
         {
           this.Plugin.MarketBoardContext.GoToMarketBoard(item.World, item.SourceItem, true);
+        }
+
+        if (buy)
+        {
+          this.Plugin.ShoppingListBuyer.BuyOne(item);
         }
 
         k += 1;
@@ -388,6 +410,20 @@ namespace MarketTerror.GUI
 
       ImGui.EndDisabled();
       Utilities.HoverTooltip("Price every item on the list again.");
+
+      ImGui.SameLine();
+
+      var buyer = this.Plugin.ShoppingListBuyer;
+
+      ImGui.BeginDisabled(busy || buyer.IsRunning || !this.Plugin.Config.ShoppingListBuyEnabled);
+
+      if (ImGui.Button("Buy all"))
+      {
+        buyer.BuyAll(this.Plugin.ShoppingList.ToArray());
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Buy every row still listed at or below its price, closest worlds first.");
 
       ImGui.SameLine();
 
@@ -668,6 +704,40 @@ namespace MarketTerror.GUI
       if (ImGui.Button("Cancel"))
       {
         bulkAdd.Cancel();
+      }
+
+      ImGui.Separator();
+    }
+
+    /// <summary>
+    /// Draws how far a buy run has got, and the button that stops it.
+    /// </summary>
+    private void DrawBuyProgress()
+    {
+      var buyer = this.Plugin.ShoppingListBuyer;
+
+      if (!buyer.IsRunning)
+      {
+        return;
+      }
+
+      ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+      ImGui.TextWrapped($"Buying {buyer.CurrentItemName}...");
+      ImGui.PopStyleColor();
+
+      var cancelWidth = ImGui.CalcTextSize("Cancel").X + (ImGui.GetStyle().FramePadding.X * 2);
+      var barWidth = ImGui.GetContentRegionAvail().X - cancelWidth - ImGui.GetStyle().ItemSpacing.X;
+
+      ImGui.ProgressBar(
+        buyer.Total > 0 ? buyer.Done / (float)buyer.Total : 0f,
+        new Vector2(barWidth, 0),
+        $"{buyer.Done} / {buyer.Total}");
+
+      ImGui.SameLine();
+
+      if (ImGui.Button("Cancel##buyRun"))
+      {
+        buyer.Cancel();
       }
 
       ImGui.Separator();
