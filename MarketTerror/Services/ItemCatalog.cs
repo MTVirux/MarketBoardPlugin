@@ -27,6 +27,8 @@ namespace MarketTerror.Services
 
     private readonly IEnumerable<Item> items;
 
+    private readonly IPluginLog log;
+
     private readonly List<KeyValuePair<ItemSearchCategory, List<Item>>> sortedCategoriesAndItems;
 
     private readonly List<ItemSearchCategory> categories;
@@ -47,6 +49,7 @@ namespace MarketTerror.Services
       ArgumentNullException.ThrowIfNull(dataManager);
       ArgumentNullException.ThrowIfNull(log);
 
+      this.log = log;
       this.items = dataManager.GetExcelSheet<Item>();
 
       this.classJobs = dataManager.GetExcelSheet<ClassJob>()!
@@ -104,6 +107,13 @@ namespace MarketTerror.Services
         .ToList();
 
       this.lastFilter = filter;
+
+      if (filter.Unlocked != null)
+      {
+        this.log.Debug(
+          $"Collection filter kept {this.filtered.Sum(kv => kv.Value.Count)} items, "
+          + $"read {filter.UnlockProbed} unlock states, {filter.UnlockUnknown} of them unreadable");
+      }
     }
 
     /// <summary>

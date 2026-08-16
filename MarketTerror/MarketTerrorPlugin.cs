@@ -186,6 +186,10 @@ namespace MarketTerror
       // Set up context menu
       this.ContextMenu.OnMenuOpened += this.OnContextMenuOpened;
 
+      // The remembered unlock states belong to one character, so drop them when the character changes
+      this.ClientState.Login += ItemUnlock.Forget;
+      this.ClientState.Logout += this.OnLogout;
+
       // Set up number format
       if (this.NumberFormatInfo != null)
       {
@@ -425,6 +429,10 @@ namespace MarketTerror
         // Remove context menu handler
         this.ContextMenu.OnMenuOpened -= this.OnContextMenuOpened;
 
+        // Remove character change handlers
+        this.ClientState.Login -= ItemUnlock.Forget;
+        this.ClientState.Logout -= this.OnLogout;
+
         // Dispose clients
         this.FFXIVMTClient.Dispose();
 
@@ -520,6 +528,16 @@ namespace MarketTerror
     private IExposedPlugin? FindPlugin(string internalName)
     {
       return this.PluginInterface.InstalledPlugins.FirstOrDefault(p => p.InternalName == internalName);
+    }
+
+    /// <summary>
+    /// Drops the remembered unlock states when the character logs out.
+    /// </summary>
+    /// <param name="type">The logout type.</param>
+    /// <param name="code">The logout code.</param>
+    private void OnLogout(int type, int code)
+    {
+      ItemUnlock.Forget();
     }
 
     private void OnContextMenuOpened(IMenuOpenedArgs args)

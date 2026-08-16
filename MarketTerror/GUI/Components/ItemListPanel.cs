@@ -11,6 +11,7 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
   using Lumina.Excel.Sheets;
+  using MarketTerror.Services;
 
   /// <summary>
   /// The scrollable item list: the whole catalogue, the search results, the favourites or the history.
@@ -61,8 +62,9 @@ namespace MarketTerror.GUI.Components
       {
         var searching = this.context.ItemListTab == ItemListTab.Search;
 
+        // The advanced search only ever narrows the search tab; the all items tab stays the whole catalogue.
         this.context.Catalog.ApplyFilter(
-          this.context.BuildFilter(searching ? this.context.SearchString : string.Empty));
+          searching ? this.context.BuildFilter(this.context.SearchString) : ItemFilter.None);
 
         this.DrawCategoryTree(itemTextSize, searching);
       }

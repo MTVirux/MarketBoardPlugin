@@ -209,7 +209,7 @@ namespace MarketTerror.GUI
         this.MaxItemLevel,
         this.SelectedClassJob,
         this.CanReadUnlockState ? this.UnlockFilter : null,
-        id => ItemUnlock.IsUnlocked(this.Plugin.ClientState, id));
+        item => ItemUnlock.IsUnlocked(this.Plugin.PlayerState, item));
     }
 
     /// <summary>

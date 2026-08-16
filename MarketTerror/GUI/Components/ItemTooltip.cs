@@ -292,7 +292,7 @@ namespace MarketTerror.GUI.Components
 
     private void DrawUnlockState(Item item)
     {
-      var unlocked = ItemUnlock.IsUnlocked(this.context.Plugin.ClientState, item.RowId);
+      var unlocked = ItemUnlock.IsUnlocked(this.context.Plugin.PlayerState, item);
 
       if (unlocked == null)
       {

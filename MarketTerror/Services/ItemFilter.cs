@@ -20,7 +20,7 @@ namespace MarketTerror.Services
 
     private readonly HashSet<byte> rarities;
 
-    private readonly Func<uint, bool?>? unlockProbe;
+    private readonly Func<Item, bool?>? unlockProbe;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemFilter"/> class.
@@ -45,7 +45,7 @@ namespace MarketTerror.Services
       int maxItemLevel,
       ClassJob? classJob,
       bool? unlocked = null,
-      Func<uint, bool?>? unlockProbe = null)
+      Func<Item, bool?>? unlockProbe = null)
     {
       this.SearchString = searchString ?? string.Empty;
       this.categories = new HashSet<uint>(categories ?? Enumerable.Empty<uint>());
@@ -58,6 +58,19 @@ namespace MarketTerror.Services
       this.Unlocked = unlocked;
       this.unlockProbe = unlockProbe;
     }
+
+    /// <summary>
+    /// Gets a filter that keeps the whole catalogue.
+    /// </summary>
+    public static ItemFilter None { get; } = new ItemFilter(
+      string.Empty,
+      Array.Empty<uint>(),
+      Array.Empty<byte>(),
+      0,
+      int.MaxValue,
+      0,
+      int.MaxValue,
+      null);
 
     /// <summary>
     /// Gets the item name fragment to search for.
@@ -93,6 +106,16 @@ namespace MarketTerror.Services
     /// Gets the unlock state to keep, or null to keep every item.
     /// </summary>
     public bool? Unlocked { get; }
+
+    /// <summary>
+    /// Gets the number of items whose unlock state was read while this filter was applied.
+    /// </summary>
+    public int UnlockProbed { get; private set; }
+
+    /// <summary>
+    /// Gets the number of those reads that came back without a state.
+    /// </summary>
+    public int UnlockUnknown { get; private set; }
 
     /// <summary>
     /// Checks whether a category survives the filter.
@@ -142,8 +165,17 @@ namespace MarketTerror.Services
         return true;
       }
 
+      var state = this.unlockProbe(item);
+
+      this.UnlockProbed++;
+
+      if (state == null)
+      {
+        this.UnlockUnknown++;
+      }
+
       // Items that unlock nothing report no state, so they drop out of both unlock states.
-      return this.unlockProbe(item.RowId) == this.Unlocked;
+      return state == this.Unlocked;
     }
 
     /// <summary>
