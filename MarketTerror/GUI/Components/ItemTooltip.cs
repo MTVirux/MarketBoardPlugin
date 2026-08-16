@@ -12,6 +12,7 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Interface.Textures;
   using Dalamud.Utility;
   using Lumina.Excel.Sheets;
+  using MarketTerror.Helpers;
 
   /// <summary>
   /// Draws an in-game style tooltip for an item, rebuilt in ImGui from the game's item sheets
@@ -53,6 +54,7 @@ namespace MarketTerror.GUI.Components
 
       this.DrawHeader(item, scale);
       this.DrawFlags(item);
+      this.DrawUnlockState(item);
       this.DrawLevels(item);
       this.DrawCombatStats(item);
       this.DrawBonuses(item);
@@ -204,6 +206,20 @@ namespace MarketTerror.GUI.Components
       {
         this.Label(string.Join("   ", flags));
       }
+    }
+
+    private void DrawUnlockState(Item item)
+    {
+      var unlocked = ItemUnlock.IsUnlocked(this.context.Plugin.ClientState, item.RowId);
+
+      if (unlocked == null)
+      {
+        return;
+      }
+
+      Text(
+        unlocked.Value ? "Already unlocked" : "Not unlocked",
+        unlocked.Value ? this.context.Theme.Accent : this.context.Theme.Text);
     }
 
     private void DrawLevels(Item item)
