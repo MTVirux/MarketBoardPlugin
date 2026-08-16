@@ -84,8 +84,10 @@ namespace MarketTerror.GUI.Components
     private void DrawTabs()
     {
       var searching = !string.IsNullOrEmpty(this.context.SearchString);
+      var hasFavorites = this.context.Config.Favorites.Count > 0;
 
-      if (!searching && this.context.ItemListTab == ItemListTab.Search)
+      if ((!searching && this.context.ItemListTab == ItemListTab.Search)
+        || (!hasFavorites && this.context.ItemListTab == ItemListTab.Favorites))
       {
         this.context.ItemListTab = ItemListTab.All;
       }
@@ -107,7 +109,7 @@ namespace MarketTerror.GUI.Components
           this.context.ItemListTab = ItemListTab.Search;
         }
 
-        if (DrawTab(FontAwesomeIcon.Star, "favoritesTab", "Favorites", ImGuiTabItemFlags.None))
+        if (hasFavorites && DrawTab(FontAwesomeIcon.Star, "favoritesTab", "Favorites", ImGuiTabItemFlags.None))
         {
           this.context.ItemListTab = ItemListTab.Favorites;
         }
