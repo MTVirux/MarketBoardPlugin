@@ -255,7 +255,6 @@ namespace MarketTerror.GUI
             ImGui.EndTabItem();
           }
 
-          ImGui.Separator();
           if (ImGui.BeginTabItem("Stats##statsTab"))
           {
             this.statsPanel.Draw();
