@@ -35,11 +35,7 @@ namespace MarketTerror.GUI.Components
     /// <param name="tableHeight">The height of the table, as computed by the window.</param>
     public void Draw(float tableHeight)
     {
-      this.context.TitleFont.Push();
-      ImGui.Text("Recent history");
-      this.context.TitleFont.Pop();
-
-      ImGui.Separator();
+      TableHeading.Draw(this.context, "Recent history");
 
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
