@@ -29,7 +29,6 @@ namespace MarketTerror.GUI
     private static readonly (string Heading, ThemeColor[] Colors)[] Sections =
     {
       ("Surfaces", new[] { ThemeColor.WindowBg, ThemeColor.PanelBg, ThemeColor.FrameBg, ThemeColor.FrameBgHovered, ThemeColor.FrameBgActive, ThemeColor.Border }),
-      ("Title bar", new[] { ThemeColor.TitleBg, ThemeColor.TitleBgActive }),
       ("Accent", new[] { ThemeColor.Accent, ThemeColor.AccentDim, ThemeColor.AccentHover }),
       ("Tabs", new[] { ThemeColor.Tab, ThemeColor.TabActive }),
       ("Text", new[] { ThemeColor.Text, ThemeColor.TextDim, ThemeColor.TextBright, ThemeColor.GilText }),

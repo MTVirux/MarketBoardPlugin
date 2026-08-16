@@ -24,12 +24,6 @@ namespace MarketTerror.GUI.Theme
     /// <summary>The background of an active input or button.</summary>
     FrameBgActive,
 
-    /// <summary>The title bar of an unfocused window.</summary>
-    TitleBg,
-
-    /// <summary>The title bar of the focused window.</summary>
-    TitleBgActive,
-
     /// <summary>Panel and table borders.</summary>
     Border,
 

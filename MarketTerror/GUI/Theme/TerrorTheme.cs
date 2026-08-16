@@ -15,13 +15,13 @@ namespace MarketTerror.GUI.Theme
   /// </summary>
   /// <remarks>
   /// Push the skin from <see cref="Dalamud.Interface.Windowing.Window.PreDraw"/> and dispose it in
-  /// <see cref="Dalamud.Interface.Windowing.Window.PostDraw"/>, so window and title bar colours are in
-  /// place before ImGui begins the window and are removed before any other plugin draws.
+  /// <see cref="Dalamud.Interface.Windowing.Window.PostDraw"/>, so window colours are in place before
+  /// ImGui begins the window and are removed before any other plugin draws.
   /// Every colour can be overridden from the configuration; unset colours fall back to the defaults here.
   /// </remarks>
   public sealed class TerrorTheme
   {
-    private const int PushedColorCount = 34;
+    private const int PushedColorCount = 31;
 
     private const int PushedStyleVarCount = 6;
 
@@ -34,8 +34,6 @@ namespace MarketTerror.GUI.Theme
       { ThemeColor.FrameBg, Rgb(0x1A, 0x1A, 0x1C) },
       { ThemeColor.FrameBgHovered, Rgb(0x24, 0x1A, 0x1A) },
       { ThemeColor.FrameBgActive, Rgb(0x23, 0x0C, 0x0C) },
-      { ThemeColor.TitleBg, Rgb(0x18, 0x12, 0x12) },
-      { ThemeColor.TitleBgActive, Rgb(0x6B, 0x1C, 0x16) },
       { ThemeColor.Border, Rgb(0x69, 0x00, 0x00) },
       { ThemeColor.Accent, Rgb(0x74, 0x1C, 0x1C) },
       { ThemeColor.AccentDim, Rgb(0x4A, 0x13, 0x10) },
@@ -251,9 +249,6 @@ namespace MarketTerror.GUI.Theme
       ImGui.PushStyleColor(ImGuiCol.FrameBg, this.Get(ThemeColor.FrameBg));
       ImGui.PushStyleColor(ImGuiCol.FrameBgHovered, this.Get(ThemeColor.FrameBgHovered));
       ImGui.PushStyleColor(ImGuiCol.FrameBgActive, this.Get(ThemeColor.FrameBgActive));
-      ImGui.PushStyleColor(ImGuiCol.TitleBg, this.Get(ThemeColor.TitleBg));
-      ImGui.PushStyleColor(ImGuiCol.TitleBgActive, this.Get(ThemeColor.TitleBgActive));
-      ImGui.PushStyleColor(ImGuiCol.TitleBgCollapsed, this.Get(ThemeColor.TitleBg));
       ImGui.PushStyleColor(ImGuiCol.ScrollbarBg, this.Get(ThemeColor.WindowBg));
       ImGui.PushStyleColor(ImGuiCol.ScrollbarGrab, this.Get(ThemeColor.FrameBgActive));
       ImGui.PushStyleColor(ImGuiCol.ScrollbarGrabHovered, this.Get(ThemeColor.AccentHover));
