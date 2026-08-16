@@ -11,7 +11,7 @@ namespace MarketTerror.GUI
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
   using Dalamud.Interface.Windowing;
-  using MarketTerror.Helpers;
+  using MarketTerror.GUI.Theme;
   using MarketTerror.Models.ShoppingList;
 
   /// <summary>
@@ -19,6 +19,13 @@ namespace MarketTerror.GUI
   /// </summary>
   public class MarketBoardShoppingListWindow : Window
   {
+    private const ImGuiTableFlags TableFlags =
+      ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp;
+
+    private readonly TerrorTheme theme;
+
+    private IDisposable? themeScope;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardShoppingListWindow"/> class.
     /// </summary>
@@ -39,9 +46,24 @@ namespace MarketTerror.GUI
         MinimumSize = new Vector2(400, 150),
         MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
       };
+
+      this.theme = new TerrorTheme(this.Plugin.Config);
     }
 
     private MarketTerrorPlugin Plugin { get; init; }
+
+    /// <inheritdoc/>
+    public override void PreDraw()
+    {
+      this.themeScope = this.theme.Push();
+    }
+
+    /// <inheritdoc/>
+    public override void PostDraw()
+    {
+      this.themeScope?.Dispose();
+      this.themeScope = null;
+    }
 
     /// <inheritdoc/>
     public override bool DrawConditions() => this.Plugin.ShoppingList.Count > 0;
@@ -49,36 +71,48 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void Draw()
     {
-      ImGui.Columns(4, "recentHistoryColumns");
-      ImGui.Text("Name");
-      ImGui.NextColumn();
-      ImGui.Text("Price");
-      ImGui.NextColumn();
-      ImGui.Text("World");
-      ImGui.NextColumn();
-      ImGui.Text("Action");
-      ImGui.NextColumn();
-      ImGui.Separator();
+      if (!ImGui.BeginTable("shoppingList", 4, TableFlags))
+      {
+        return;
+      }
+
+      ImGui.TableSetupColumn("Name");
+      ImGui.TableSetupColumn("Price");
+      ImGui.TableSetupColumn("World");
+      ImGui.TableSetupColumn("Action");
+
+      ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+      ImGui.TableHeadersRow();
+      ImGui.PopStyleColor();
 
       List<SavedItem> todel = new List<SavedItem>();
 
       int k = 0;
       foreach (var item in this.Plugin.ShoppingList)
       {
+        ImGui.TableNextRow();
+
+        ImGui.TableSetColumnIndex(0);
         ImGui.Text(item.SourceItem.Name.ExtractText());
-        ImGui.NextColumn();
-        if (this.Plugin.Config.PriceIconShown)
+
+        ImGui.TableSetColumnIndex(1);
+        var price = this.Plugin.Config.PriceIconShown
+          ? item.Price.ToString("C", this.Plugin.NumberFormatInfo)
+          : item.Price.ToString("N0", CultureInfo.CurrentCulture);
+        var padding = ImGui.GetContentRegionAvail().X - ImGui.CalcTextSize(price).X;
+        if (padding > 0)
         {
-          ImGui.Text(item.Price.ToString("C", this.Plugin.NumberFormatInfo));
-        }
-        else
-        {
-          ImGui.Text(item.Price.ToString("N0", CultureInfo.CurrentCulture));
+          ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
         }
 
-        ImGui.NextColumn();
+        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.GilText);
+        ImGui.Text(price);
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(2);
         ImGui.Text(item.World);
-        ImGui.NextColumn();
+
+        ImGui.TableSetColumnIndex(3);
         ImGui.PushFont(UiBuilder.IconFont);
         if (ImGui.Button($"{(char)FontAwesomeIcon.Slash}##shoplist" + k, new Vector2(32 * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y)))
         {
@@ -86,10 +120,10 @@ namespace MarketTerror.GUI
         }
 
         ImGui.PopFont();
-        ImGui.NextColumn();
-        ImGui.Separator();
         k += 1;
       }
+
+      ImGui.EndTable();
 
       foreach (var item in todel)
       {
