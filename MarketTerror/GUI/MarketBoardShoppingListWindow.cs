@@ -76,16 +76,23 @@ namespace MarketTerror.GUI
     }
 
     /// <inheritdoc/>
-    public override bool DrawConditions() => this.Plugin.ShoppingList.Count > 0 || this.forceShown;
+    public override bool DrawConditions() =>
+      this.Plugin.ShoppingList.Count > 0 || this.forceShown || this.Plugin.ShoppingListBulkAdd.IsRunning;
 
     /// <inheritdoc/>
     public override void Draw()
     {
+      this.DrawBulkAddProgress();
+
       if (this.Plugin.ShoppingList.Count == 0)
       {
-        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
-        ImGui.TextWrapped("Your buy list is empty. Add items from the item list right click menu.");
-        ImGui.PopStyleColor();
+        if (!this.Plugin.ShoppingListBulkAdd.IsRunning)
+        {
+          ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+          ImGui.TextWrapped("Your buy list is empty. Add items from the item list right click menu.");
+          ImGui.PopStyleColor();
+        }
+
         return;
       }
 
@@ -147,6 +154,40 @@ namespace MarketTerror.GUI
       {
         this.Plugin.ShoppingList.Remove(item);
       }
+    }
+
+    private void DrawBulkAddProgress()
+    {
+      var bulkAdd = this.Plugin.ShoppingListBulkAdd;
+
+      if (!bulkAdd.IsRunning)
+      {
+        return;
+      }
+
+      var processed = bulkAdd.Processed;
+      var total = bulkAdd.Total;
+
+      ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+      ImGui.TextWrapped($"Pricing {bulkAdd.CategoryName}...");
+      ImGui.PopStyleColor();
+
+      var cancelWidth = ImGui.CalcTextSize("Cancel").X + (ImGui.GetStyle().FramePadding.X * 2);
+      var barWidth = ImGui.GetContentRegionAvail().X - cancelWidth - ImGui.GetStyle().ItemSpacing.X;
+
+      ImGui.ProgressBar(
+        total > 0 ? processed / (float)total : 0f,
+        new Vector2(barWidth, 0),
+        $"{processed} / {total}");
+
+      ImGui.SameLine();
+
+      if (ImGui.Button("Cancel"))
+      {
+        bulkAdd.Cancel();
+      }
+
+      ImGui.Separator();
     }
   }
 }
