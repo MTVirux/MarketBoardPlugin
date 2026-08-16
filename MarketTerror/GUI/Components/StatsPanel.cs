@@ -227,9 +227,9 @@ namespace MarketTerror.GUI.Components
       DrawRow(label, "Min / Max", "Min / Max NQ", "Min / Max HQ");
       DrawRow(
         gil,
-        $"{marketData.MinPrice:N0} / {marketData.MaxPrice:N0}",
-        $"{marketData.MinPriceNq:N0} / {marketData.MaxPriceNq:N0}",
-        $"{marketData.MinPriceHq:N0} / {marketData.MaxPriceHq:N0}");
+        $"{marketData.MinPrice.ToString("C", currency)} / {marketData.MaxPrice.ToString("C", currency)}",
+        $"{marketData.MinPriceNq.ToString("C", currency)} / {marketData.MaxPriceNq.ToString("C", currency)}",
+        $"{marketData.MinPriceHq.ToString("C", currency)} / {marketData.MaxPriceHq.ToString("C", currency)}");
 
       DrawRow(label, "Sale Velocity", "Sale Velocity NQ", "Sale Velocity HQ");
       DrawRow(
