@@ -195,7 +195,18 @@ namespace MarketTerror.GUI
         ImGui.TableNextRow();
 
         ImGui.TableSetColumnIndex(0);
+
+        if (item.Unlisted)
+        {
+          ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+        }
+
         ImGui.Text(item.SourceItem.Name.ExtractText());
+
+        if (item.Unlisted)
+        {
+          ImGui.PopStyleColor();
+        }
 
         ImGui.TableSetColumnIndex(1);
         var price = this.PriceText(item);
