@@ -39,8 +39,10 @@ namespace MarketTerror.GUI.Components
     {
       var top = ImGui.GetCursorPosY();
 
+      var taxNote = this.context.Config.NoGilSalesTax ? "Excludes" : "Includes";
+
       this.context.TitleFont.Push();
-      ImGui.Text("Current listings (Includes 5% GST)");
+      ImGui.Text($"Current listings ({taxNote} 5% GST)");
       this.context.TitleFont.Pop();
 
       ImGui.Separator();

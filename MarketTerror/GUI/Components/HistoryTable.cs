@@ -38,7 +38,7 @@ namespace MarketTerror.GUI.Components
       var top = ImGui.GetCursorPosY();
 
       this.context.TitleFont.Push();
-      ImGui.Text("Recent history");
+      ImGui.Text("Recent sales");
       this.context.TitleFont.Pop();
 
       ImGui.Separator();
