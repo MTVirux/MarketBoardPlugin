@@ -149,6 +149,8 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void Draw()
     {
+      Utilities.RainbowText("EXPERIMENTAL");
+
       this.DrawBulkAddProgress();
       this.DrawBuyProgress();
 
