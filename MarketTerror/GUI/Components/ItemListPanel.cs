@@ -52,11 +52,7 @@ namespace MarketTerror.GUI.Components
         var searching = this.context.ItemListTab == ItemListTab.Search;
 
         this.context.Catalog.ApplyFilter(
-          searching ? this.context.SearchString : string.Empty,
-          this.context.ItemCategory,
-          this.context.MinLevel,
-          this.context.MaxLevel,
-          this.context.SelectedClassJob);
+          this.context.BuildFilter(searching ? this.context.SearchString : string.Empty));
 
         this.DrawCategoryTree(itemTextSize, searching);
       }

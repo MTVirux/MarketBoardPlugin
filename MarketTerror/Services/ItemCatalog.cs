@@ -12,7 +12,6 @@ namespace MarketTerror.Services
   using Dalamud.Plugin.Services;
   using Dalamud.Utility;
   using Lumina.Excel.Sheets;
-  using MarketTerror.Extensions;
 
   /// <summary>
   /// The searchable catalogue of marketable items, grouped by item search category.
@@ -28,21 +27,15 @@ namespace MarketTerror.Services
 
     private readonly IEnumerable<Item> items;
 
-    private readonly Dictionary<ItemSearchCategory, List<Item>> sortedCategoriesAndItems;
+    private readonly List<KeyValuePair<ItemSearchCategory, List<Item>>> sortedCategoriesAndItems;
+
+    private readonly List<ItemSearchCategory> categories;
 
     private readonly List<ClassJob> classJobs;
 
     private List<KeyValuePair<ItemSearchCategory, List<Item>>> filtered;
 
-    private string lastSearchString = string.Empty;
-
-    private int lastItemCategory;
-
-    private int lastMinLevel;
-
-    private int lastMaxLevel = 100;
-
-    private ClassJob? lastClassJob;
+    private ItemFilter? lastFilter;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemCatalog"/> class.
@@ -72,15 +65,19 @@ namespace MarketTerror.Services
         }).ToList() ?? new List<ClassJob>();
 
       this.sortedCategoriesAndItems = this.SortCategoriesAndItems(dataManager, log);
-      this.filtered = this.sortedCategoriesAndItems
-        .Select(kv => new KeyValuePair<ItemSearchCategory, List<Item>>(kv.Key, kv.Value))
-        .ToList();
+      this.categories = this.sortedCategoriesAndItems.Select(kv => kv.Key).ToList();
+      this.filtered = this.sortedCategoriesAndItems.ToList();
     }
 
     /// <summary>
     /// Gets the class jobs offered by the class filter, ordered by role.
     /// </summary>
     public IReadOnlyList<ClassJob> ClassJobs => this.classJobs;
+
+    /// <summary>
+    /// Gets every marketable item search category, in the order the market board lists them.
+    /// </summary>
+    public IReadOnlyList<ItemSearchCategory> Categories => this.categories;
 
     /// <summary>
     /// Gets the categories and items matching the filter last passed to <see cref="ApplyFilter"/>.
@@ -90,57 +87,23 @@ namespace MarketTerror.Services
     /// <summary>
     /// Recomputes the filtered categories, but only when the filter differs from the one already applied.
     /// </summary>
-    /// <param name="searchString">The item name fragment to search for.</param>
-    /// <param name="itemCategory">The top level category index, where 0 means all categories.</param>
-    /// <param name="minLevel">The minimum equip level.</param>
-    /// <param name="maxLevel">The maximum equip level.</param>
-    /// <param name="classJob">The class job to filter by, or null for all classes.</param>
-    public void ApplyFilter(string searchString, int itemCategory, int minLevel, int maxLevel, ClassJob? classJob)
+    /// <param name="filter">The criteria an item has to match.</param>
+    public void ApplyFilter(ItemFilter filter)
     {
-      if (searchString == this.lastSearchString
-        && itemCategory == this.lastItemCategory
-        && minLevel == this.lastMinLevel
-        && maxLevel == this.lastMaxLevel
-        && classJob?.RowId == this.lastClassJob?.RowId)
+      ArgumentNullException.ThrowIfNull(filter);
+
+      if (this.lastFilter != null && this.lastFilter.SameAs(filter))
       {
         return;
       }
 
-      var categories = this.sortedCategoriesAndItems
-        .Where(c => itemCategory == 0 || (itemCategory > 0 && c.Key.Category == itemCategory));
+      this.filtered = this.sortedCategoriesAndItems
+        .Where(kv => filter.IncludesCategory(kv.Key))
+        .Select(kv => new KeyValuePair<ItemSearchCategory, List<Item>>(kv.Key, kv.Value.Where(filter.Matches).ToList()))
+        .Where(kv => kv.Value.Count > 0)
+        .ToList();
 
-      if (!string.IsNullOrEmpty(searchString))
-      {
-        this.filtered = categories
-          .Select(kv => new KeyValuePair<ItemSearchCategory, List<Item>>(
-            kv.Key,
-            kv.Value
-              .Where(i =>
-                i.Name.ExtractText().ToUpperInvariant().Contains(searchString.ToUpperInvariant(), StringComparison.InvariantCulture))
-              .Where(i => i.LevelEquip >= minLevel && i.LevelEquip <= maxLevel)
-              .Where(i => i.ClassJobCategory.Value.HasClass(classJob))
-              .ToList()))
-          .Where(kv => kv.Value.Count > 0)
-          .ToList();
-      }
-      else
-      {
-        this.filtered = categories
-          .Select(kv => new KeyValuePair<ItemSearchCategory, List<Item>>(
-            kv.Key,
-            kv.Value
-              .Where(i => i.LevelEquip >= minLevel && i.LevelEquip <= maxLevel)
-              .Where(i => i.ClassJobCategory.Value.HasClass(classJob))
-              .ToList()))
-          .Where(kv => kv.Value.Count > 0)
-          .ToList();
-      }
-
-      this.lastSearchString = searchString;
-      this.lastItemCategory = itemCategory;
-      this.lastClassJob = classJob;
-      this.lastMinLevel = minLevel;
-      this.lastMaxLevel = maxLevel;
+      this.lastFilter = filter;
     }
 
     /// <summary>
@@ -150,7 +113,7 @@ namespace MarketTerror.Services
     /// <returns>True when the item is marketable and present in the catalogue.</returns>
     public bool Contains(uint itemId)
     {
-      return this.sortedCategoriesAndItems.Any(i => i.Value != null && i.Value.Any(k => k.RowId == itemId));
+      return this.sortedCategoriesAndItems.Any(c => c.Value.Any(i => i.RowId == itemId));
     }
 
     /// <summary>
@@ -190,31 +153,29 @@ namespace MarketTerror.Services
       return itemName;
     }
 
-    private Dictionary<ItemSearchCategory, List<Item>> SortCategoriesAndItems(IDataManager dataManager, IPluginLog log)
+    private List<KeyValuePair<ItemSearchCategory, List<Item>>> SortCategoriesAndItems(IDataManager dataManager, IPluginLog log)
     {
       var itemSearchCategories = dataManager.GetExcelSheet<ItemSearchCategory>();
 
       if (itemSearchCategories == null)
       {
         log.Warning("Failed to load item search categories.");
-        return new Dictionary<ItemSearchCategory, List<Item>>();
+        return new List<KeyValuePair<ItemSearchCategory, List<Item>>>();
       }
 
-      var sortedCategories = itemSearchCategories.Where(c => c.Category > 0).OrderBy(c => c.Category).ThenBy(c => c.Order);
+      var itemsByCategory = this.items
+        .Where(i => i.ItemSearchCategory.RowId > 0)
+        .GroupBy(i => i.ItemSearchCategory.RowId)
+        .ToDictionary(g => g.Key, g => g.OrderBy(i => ConvertItemNameToSortableFormat(i.Name.ExtractText())).ToList());
 
-      var sortedCategoriesDict = new Dictionary<ItemSearchCategory, List<Item>>();
-
-      foreach (var c in sortedCategories)
-      {
-        if (sortedCategoriesDict.ContainsKey(c))
-        {
-          continue;
-        }
-
-        sortedCategoriesDict.Add(c, this.items.Where(i => i.ItemSearchCategory.RowId == c.RowId).OrderBy(i => ConvertItemNameToSortableFormat(i.Name.ExtractText())).ToList());
-      }
-
-      return sortedCategoriesDict;
+      return itemSearchCategories
+        .Where(c => c.Category > 0)
+        .OrderBy(c => c.Category)
+        .ThenBy(c => c.Order)
+        .Select(c => new KeyValuePair<ItemSearchCategory, List<Item>>(
+          c,
+          itemsByCategory.TryGetValue(c.RowId, out var categoryItems) ? categoryItems : new List<Item>()))
+        .ToList();
     }
   }
 }
