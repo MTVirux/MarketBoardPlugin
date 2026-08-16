@@ -211,6 +211,8 @@ namespace MarketTerror.GUI
 
       this.RefreshMarketData();
 
+      var configChanged = false;
+
       if (!noHistory)
       {
         this.Config.History.RemoveAll(i => i == itemId);
@@ -220,6 +222,19 @@ namespace MarketTerror.GUI
           this.Config.History.RemoveRange(100, this.Config.History.Count - 100);
         }
 
+        configChanged = true;
+      }
+
+#if DEBUG
+      if (this.Config.LastOpenedItem != itemId)
+      {
+        this.Config.LastOpenedItem = itemId;
+        configChanged = true;
+      }
+#endif
+
+      if (configChanged)
+      {
         this.Plugin.PluginInterface.SavePluginConfig(this.Config);
       }
     }

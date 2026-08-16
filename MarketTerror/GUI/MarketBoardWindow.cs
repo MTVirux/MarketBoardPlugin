@@ -62,6 +62,10 @@ namespace MarketTerror.GUI
 
     private bool isDisposed;
 
+#if DEBUG
+    private uint pendingItemId;
+#endif
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardWindow"/> class.
     /// </summary>
@@ -150,6 +154,13 @@ namespace MarketTerror.GUI
           ImGui.EndTooltip();
         },
       });
+
+#if DEBUG
+      if (this.plugin.Config.RememberLastItem)
+      {
+        this.pendingItemId = this.plugin.Config.LastOpenedItem;
+      }
+#endif
     }
 
     /// <summary>
@@ -200,6 +211,10 @@ namespace MarketTerror.GUI
     /// </summary>
     public override void Draw()
     {
+#if DEBUG
+      this.RestoreLastOpenedItem();
+#endif
+
       var scale = ImGui.GetIO().FontGlobalScale;
 
       using var fontDispose = this.defaultFontHandle.Push();
@@ -309,6 +324,23 @@ namespace MarketTerror.GUI
 
       this.isDisposed = true;
     }
+
+#if DEBUG
+    /// <summary>
+    /// Reselects the item that was open last, once a world is available to query it against.
+    /// </summary>
+    private void RestoreLastOpenedItem()
+    {
+      if (this.pendingItemId == 0 || !this.worldSelection.HasSelection)
+      {
+        return;
+      }
+
+      var itemId = this.pendingItemId;
+      this.pendingItemId = 0;
+      this.context.SelectItem(itemId, true);
+    }
+#endif
 
     /// <summary>
     /// Draws the listings and history sections, split by a bar the user can drag to resize them.
