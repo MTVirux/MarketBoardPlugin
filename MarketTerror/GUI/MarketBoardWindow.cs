@@ -211,7 +211,7 @@ namespace MarketTerror.GUI
 
       ImGui.EndChild();
       ImGui.SameLine();
-      ImGui.BeginChild("tabColumn", new Vector2(0, 0), false, ImGuiWindowFlags.NoScrollbar);
+      ImGui.BeginChild("tabColumn", new Vector2(0, 0), true, ImGuiWindowFlags.NoScrollbar);
 
       if (this.context.SelectedItem?.RowId > 0)
       {
