@@ -191,6 +191,11 @@ namespace MarketTerror
     public bool AutoOpenSearchResult { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the shopping list may buy items from the Market Board.
+    /// </summary>
+    public bool ShoppingListBuyEnabled { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the main window should open on plugin start in debug builds.
     /// </summary>
     public bool OpenOnStart { get; set; } = true;

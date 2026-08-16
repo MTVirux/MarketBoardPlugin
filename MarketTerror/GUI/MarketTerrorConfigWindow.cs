@@ -103,6 +103,8 @@ namespace MarketTerror.GUI
 
       this.Checkbox("Open the matching result", "Once the auto-search returns, select the searched item in the results so its listings open.", this.Plugin.Config.AutoOpenSearchResult, (v) => this.Plugin.Config.AutoOpenSearchResult = v);
 
+      this.Checkbox("Buy from the shopping list", "Let the shopping list buy an item when the Market Board still has the listing it was priced from, at or below that price.", this.Plugin.Config.ShoppingListBuyEnabled, (v) => this.Plugin.Config.ShoppingListBuyEnabled = v);
+
       if (!this.Plugin.Config.AutoSearchOnMarketBoard)
       {
         ImGui.EndDisabled();
