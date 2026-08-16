@@ -155,6 +155,19 @@ namespace MarketTerror.GUI
         },
       });
 
+      this.TitleBarButtons.Add(new TitleBarButton
+      {
+        Icon = FontAwesomeIcon.Cog,
+        IconOffset = new Vector2(2, 1),
+        Click = _ => this.plugin.OpenConfigUi(),
+        ShowTooltip = () =>
+        {
+          ImGui.BeginTooltip();
+          ImGui.Text("Settings");
+          ImGui.EndTooltip();
+        },
+      });
+
 #if DEBUG
       if (this.plugin.Config.RememberLastItem)
       {

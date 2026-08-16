@@ -65,14 +65,6 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.PopStyleColor();
-
-      ImGui.SameLine(ImGui.GetWindowContentRegionMax().X - buttonSize.X);
-      ImGui.SetCursorPosY(previousYCursor);
-      if (ImGui.Button($"{(char)FontAwesomeIcon.Cog}", buttonSize))
-      {
-        this.context.Plugin.OpenConfigUi();
-      }
-
       ImGui.PopFont();
 
       if (this.context.AdvancedSearchOpen)
