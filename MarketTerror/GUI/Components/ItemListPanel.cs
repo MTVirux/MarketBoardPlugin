@@ -36,7 +36,10 @@ namespace MarketTerror.GUI.Components
     {
       this.DrawTabs();
 
-      ImGui.BeginChild("itemTree", new Vector2(0, -ImGui.GetFrameHeightWithSpacing()), false, ImGuiWindowFlags.HorizontalScrollbar);
+      // The hover progress bar sits below the list, so only leave room for it when it is drawn.
+      var reservedHeight = this.context.Config.WatchForHovered ? -ImGui.GetFrameHeightWithSpacing() : 0;
+
+      ImGui.BeginChild("itemTree", new Vector2(0, reservedHeight), false, ImGuiWindowFlags.HorizontalScrollbar);
       var itemTextSize = ImGui.CalcTextSize(string.Empty);
 
       if (this.context.ItemListTab == ItemListTab.Favorites)
