@@ -370,12 +370,6 @@ namespace MarketTerror.GUI
       var available = ImGui.GetContentRegionAvail().Y;
       var config = this.plugin.Config;
 
-      if (config.RecentHistoryDisabled)
-      {
-        this.listingsTable.Draw(available - spacing);
-        return;
-      }
-
       // With one of the tables hidden there is nothing left to drag the splitter between.
       if (config.CurrentListingsCollapsed || config.SalesHistoryCollapsed)
       {

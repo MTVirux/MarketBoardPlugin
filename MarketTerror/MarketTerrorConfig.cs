@@ -90,11 +90,6 @@ namespace MarketTerror
     public int ItemRefreshTimeout { get; set; } = DefaultItemRefreshTimeout;
 
     /// <summary>
-    ///  Gets or sets a value indicating whether the recent history menu is disabled or not.
-    /// </summary>
-    public bool RecentHistoryDisabled { get; set; }
-
-    /// <summary>
     ///  Gets or sets the share of the Market Data tab given to the current listings, the rest going to recent history.
     /// </summary>
     public float MarketDataSplitRatio { get; set; } = 0.5f;

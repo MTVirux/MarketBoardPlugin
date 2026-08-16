@@ -72,11 +72,6 @@ namespace MarketTerror.GUI
 
       ImGui.NewLine();
 
-      this.SectionHeading("History");
-      this.Checkbox("Disable Recent History", "Toggles whether the recent history is disabled", this.Plugin.Config.RecentHistoryDisabled, (v) => this.Plugin.Config.RecentHistoryDisabled = v);
-
-      ImGui.NewLine();
-
       this.SectionHeading("Teleport / Integration");
 
       // Auto-teleport to world setting (only enabled if Lifestream is installed and switched on)
