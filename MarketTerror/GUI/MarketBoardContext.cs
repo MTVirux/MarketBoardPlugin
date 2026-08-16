@@ -55,6 +55,7 @@ namespace MarketTerror.GUI
       this.MarketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
       this.Worlds = worlds ?? throw new ArgumentNullException(nameof(worlds));
       this.TitleFont = titleFont ?? throw new ArgumentNullException(nameof(titleFont));
+      this.Integrations = new IntegrationStatus(this.Plugin, this.MarketData);
     }
 
     /// <summary>
@@ -86,6 +87,11 @@ namespace MarketTerror.GUI
     /// Gets the world selection.
     /// </summary>
     public WorldSelection Worlds { get; }
+
+    /// <summary>
+    /// Gets the state of the optional plugins and services, and their dismissed warnings.
+    /// </summary>
+    public IntegrationStatus Integrations { get; }
 
     /// <summary>
     /// Gets the 1.5x font used for headings.
