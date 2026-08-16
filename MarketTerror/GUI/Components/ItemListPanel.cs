@@ -136,8 +136,6 @@ namespace MarketTerror.GUI.Components
 
     private void DrawHistory()
     {
-      this.DrawHeading("History");
-      ImGui.Separator();
       var sheet = this.context.Plugin.DataManager.Excel.GetSheet<Item>();
       foreach (var id in this.context.Config.History.ToArray())
       {
