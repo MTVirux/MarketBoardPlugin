@@ -419,7 +419,7 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// The height a section needs for its heading, separator and a few rows of its table.
+    /// The height a section needs for its heading, its separators and a few rows of its table.
     /// </summary>
     /// <param name="spacing">The vertical item spacing.</param>
     /// <returns>The minimum section height in pixels.</returns>
@@ -429,7 +429,7 @@ namespace MarketTerror.GUI
       var height = ImGui.GetTextLineHeightWithSpacing();
       this.titleFontHandle.Pop();
 
-      return height + 1.0f + spacing + (ImGui.GetTextLineHeightWithSpacing() * 3.0f);
+      return height + ((1.0f + spacing) * 2.0f) + (ImGui.GetTextLineHeightWithSpacing() * 3.0f);
     }
 
     /// <summary>

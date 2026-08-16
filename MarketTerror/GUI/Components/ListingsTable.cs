@@ -47,11 +47,15 @@ namespace MarketTerror.GUI.Components
       ImGui.Text(heading);
       this.context.TitleFont.Pop();
 
+      var beforeSeparator = ImGui.GetCursorPosY();
       ImGui.Separator();
+      var separatorHeight = ImGui.GetCursorPosY() - beforeSeparator;
 
       var flags = ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable
         | ImGuiTableFlags.ScrollY | ImGuiTableFlags.SizingStretchProp;
-      var tableHeight = sectionHeight - (ImGui.GetCursorPosY() - top);
+
+      // Leave room for the matching separator closing the table off.
+      var tableHeight = sectionHeight - (ImGui.GetCursorPosY() - top) - separatorHeight;
 
       // Straddle the panel's padding so the table alone runs to its edges.
       var padding = ImGui.GetStyle().WindowPadding.X;
@@ -85,6 +89,8 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndTable();
+
+      ImGui.Separator();
     }
 
     /// <summary>
