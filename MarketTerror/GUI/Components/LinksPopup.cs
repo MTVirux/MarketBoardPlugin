@@ -61,7 +61,7 @@ namespace MarketTerror.GUI.Components
 
       if (this.context.MarketData.IsUniversalisUp != false)
       {
-        if (Button("Data provided by Universalis", 0x002ba040u, buttonSize))
+        if (ImGui.Button("Data provided by Universalis", buttonSize))
         {
           var universalisUrl = "https://universalis.app";
           var selectedItem = this.context.SelectedItem;
@@ -76,31 +76,18 @@ namespace MarketTerror.GUI.Components
       }
       else
       {
-        if (Button("Universalis API seems down", 0x005345e6u, buttonSize))
+        if (ImGui.Button("Universalis API seems down", buttonSize))
         {
           Utilities.OpenBrowser("https://status.universalis.app");
         }
       }
 
-      if (Button("SeaOfTerror Repo", 0x005E5BFFu, buttonSize))
+      if (ImGui.Button("SeaOfTerror Repo", buttonSize))
       {
         Utilities.OpenBrowser("https://github.com/MTVirux/SeaOfTerror");
       }
 
       ImGui.EndPopup();
-    }
-
-    private static bool Button(string label, uint color, Vector2 size)
-    {
-      ImGui.PushStyleColor(ImGuiCol.Button, 0xFF000000 | color);
-      ImGui.PushStyleColor(ImGuiCol.ButtonActive, 0xDD000000 | color);
-      ImGui.PushStyleColor(ImGuiCol.ButtonHovered, 0xAA000000 | color);
-
-      var clicked = ImGui.Button(label, size);
-
-      ImGui.PopStyleColor(3);
-
-      return clicked;
     }
   }
 }
