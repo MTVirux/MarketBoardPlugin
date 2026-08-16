@@ -67,7 +67,7 @@ namespace MarketTerror.GUI
     /// </summary>
     /// <param name="plugin">The <see cref="MarketTerrorPlugin"/>.</param>
     public MarketBoardWindow(MarketTerrorPlugin plugin)
-      : base("Market Board")
+      : base("Market Terror")
     {
       this.plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
       this.Flags = ImGuiWindowFlags.NoScrollbar;
