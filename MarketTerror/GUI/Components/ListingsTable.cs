@@ -38,7 +38,7 @@ namespace MarketTerror.GUI.Components
     public void Draw(float tableHeight)
     {
       this.context.TitleFont.Push();
-      ImGui.Text("Current listings (Includes 5%% GST)");
+      ImGui.Text("Current listings (Includes 5% GST)");
       this.context.TitleFont.Pop();
 
       ImGui.Separator();
