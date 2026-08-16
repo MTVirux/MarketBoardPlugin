@@ -63,6 +63,13 @@ namespace MarketTerror.GUI
         this.Plugin.ResetMarketData();
       });
 
+      this.Checkbox("World overrides", "Show the world pickers, so the market board and the buy list can price around a world other than your own. Turn it off to always follow your current world.", this.Plugin.Config.WorldOverridesEnabled, (v) =>
+      {
+        this.Plugin.Config.WorldOverridesEnabled = v;
+        this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
+        this.Plugin.ResetMarketData();
+      });
+
       ImGui.NewLine();
 
       this.SectionHeading("History");

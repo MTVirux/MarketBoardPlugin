@@ -31,6 +31,12 @@ namespace MarketTerror
     public int Version { get; set; } = CurrentVersion;
 
     /// <summary>
+    /// Gets or sets a value indicating whether the windows may be anchored on a world other than the current one.
+    /// </summary>
+    /// <remarks>When off the world pickers are hidden and both windows follow the character's world.</remarks>
+    public bool WorldOverridesEnabled { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets the world the market board window prices around, empty until one is resolved.
     /// </summary>
     public string MarketBoardScopeWorld { get; set; } = string.Empty;

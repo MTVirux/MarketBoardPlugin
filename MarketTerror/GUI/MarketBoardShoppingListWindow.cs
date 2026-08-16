@@ -295,7 +295,8 @@ namespace MarketTerror.GUI
     {
       var scope = this.Plugin.ShoppingListScope;
       var scale = ImGui.GetIO().FontGlobalScale;
-      var spacing = ImGui.GetStyle().ItemSpacing.X;
+      var showWorld = this.Plugin.Config.WorldOverridesEnabled;
+      var spacing = showWorld ? ImGui.GetStyle().ItemSpacing.X : 0.0f;
 
       if (sameLine)
       {
@@ -309,13 +310,22 @@ namespace MarketTerror.GUI
         140 * scale,
         ImGui.CalcTextSize(scope.SelectedDisplayName).X + ImGui.GetFrameHeight() + (ImGui.GetStyle().FramePadding.X * 2));
 
-      var worldWidth = sameLine ? 150 * scale : available - scopeWidth - spacing;
+      var worldWidth = 0.0f;
+
+      if (showWorld)
+      {
+        worldWidth = sameLine ? 150 * scale : available - scopeWidth - spacing;
+      }
+      else if (!sameLine)
+      {
+        scopeWidth = available;
+      }
 
       if (scopeWidth + worldWidth + spacing > available)
       {
         // Share what is left rather than spilling out of the window.
         var share = Math.Max(available - spacing, 80 * scale);
-        scopeWidth = share * 0.5f;
+        scopeWidth = showWorld ? share * 0.5f : share;
         worldWidth = share - scopeWidth;
       }
 
@@ -327,10 +337,13 @@ namespace MarketTerror.GUI
 
       ImGui.BeginDisabled(this.Plugin.ShoppingListBulkAdd.IsRunning);
 
-      ImGui.SetNextItemWidth(worldWidth);
-      this.worldPicker.Draw(scope, this.theme);
+      if (showWorld)
+      {
+        ImGui.SetNextItemWidth(worldWidth);
+        this.worldPicker.Draw(scope, this.theme);
 
-      ImGui.SameLine();
+        ImGui.SameLine();
+      }
 
       ImGui.SetNextItemWidth(scopeWidth);
       ScopePicker.Draw("##shoppingListScope", scope);

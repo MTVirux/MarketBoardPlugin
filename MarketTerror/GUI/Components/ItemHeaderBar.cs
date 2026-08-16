@@ -89,8 +89,11 @@ namespace MarketTerror.GUI.Components
       ImGui.SetNextItemWidth(comboWidth);
       ScopePicker.Draw("##marketBoardScope", worlds, this.context.ResetMarketData);
 
-      ImGui.SetNextItemWidth(comboWidth);
-      this.worldPicker.Draw(worlds, this.context.Theme, this.context.ResetMarketData);
+      if (this.context.Config.WorldOverridesEnabled)
+      {
+        ImGui.SetNextItemWidth(comboWidth);
+        this.worldPicker.Draw(worlds, this.context.Theme, this.context.ResetMarketData);
+      }
 
       var marketData = this.context.MarketData.MarketData;
 

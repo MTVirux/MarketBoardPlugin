@@ -178,8 +178,33 @@ namespace MarketTerror.Services
     /// <summary>
     /// Gets the anchor world, falling back to <see cref="DefaultWorld"/> the first time it is known.
     /// </summary>
-    protected WorldEntry? SelectedEntry =>
-      this.Plugin.WorldCatalogue.Find(this.StoredWorld) ?? this.ApplyDefaultWorld();
+    /// <remarks>
+    /// With world overrides turned off the anchor is pulled back to the character's own data centre, so
+    /// the scope picker still reaches every world around them but never anywhere further out.
+    /// </remarks>
+    protected WorldEntry? SelectedEntry
+    {
+      get
+      {
+        var stored = this.Plugin.WorldCatalogue.Find(this.StoredWorld);
+
+        if (this.Plugin.Config.WorldOverridesEnabled)
+        {
+          return stored ?? this.ApplyDefaultWorld();
+        }
+
+        var current = this.Plugin.WorldCatalogue.Find(this.DefaultWorld);
+
+        if (current == null)
+        {
+          return stored;
+        }
+
+        return stored != null && string.Equals(stored.DataCentre, current.DataCentre, StringComparison.Ordinal)
+          ? stored
+          : this.ApplyDefaultWorld();
+      }
+    }
 
     /// <summary>
     /// Gets the plugin instance.
