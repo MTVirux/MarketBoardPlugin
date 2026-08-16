@@ -56,6 +56,8 @@ namespace MarketTerror.GUI
 
     private readonly LinksPopup linksPopup;
 
+    private readonly TitleBarButton integrationsButton;
+
     private IDisposable? themeScope;
 
     private bool isDisposed;
@@ -133,6 +135,9 @@ namespace MarketTerror.GUI
       this.statsPanel = new StatsPanel(this.context);
       this.linksPopup = new LinksPopup(this.context);
 
+      this.integrationsButton = IntegrationsButton.Build(this.plugin);
+      this.TitleBarButtons.Add(this.integrationsButton);
+
       this.TitleBarButtons.Add(new TitleBarButton
       {
         Icon = FontAwesomeIcon.Heart,
@@ -174,6 +179,7 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void PreDraw()
     {
+      IntegrationsButton.Refresh(this.integrationsButton, this.plugin);
       this.themeScope = this.theme.Push();
     }
 
