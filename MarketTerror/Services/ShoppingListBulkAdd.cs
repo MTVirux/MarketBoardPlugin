@@ -30,13 +30,20 @@ namespace MarketTerror.Services
     /// </summary>
     private const int ChunkDelayMilliseconds = 3000;
 
+    /// <summary>
+    /// A rough guess at how long one chunk request takes, only used to pace the progress bar.
+    /// </summary>
+    private const int RequestGuessMilliseconds = 1000;
+
     private readonly MarketTerrorPlugin plugin;
 
-    private DateTime cooldownStartedUtc;
+    private DateTime pendingStartedUtc;
 
-    private int cooldownBaseline;
+    private int pendingBaseline;
 
-    private int cooldownChunkSize;
+    private int pendingChunkSize;
+
+    private int pendingDurationMilliseconds;
 
     private CancellationTokenSource? cancellation;
 
@@ -79,8 +86,8 @@ namespace MarketTerror.Services
     /// Gets how full the progress bar should be, from 0 to 1.
     /// </summary>
     /// <remarks>
-    /// The chunk waiting on the cooldown is counted in gradually as the cooldown runs down, so the
-    /// bar creeps forward instead of standing still and then jumping a whole chunk at a time.
+    /// The chunk being worked on is counted in gradually over its cooldown and request, so the bar
+    /// creeps forward instead of standing still and then jumping a whole chunk at a time.
     /// </remarks>
     public float Progress
     {
@@ -93,13 +100,13 @@ namespace MarketTerror.Services
 
         var done = (float)this.Processed;
 
-        if (this.cooldownChunkSize > 0)
+        if (this.pendingChunkSize > 0)
         {
-          var elapsed = (DateTime.UtcNow - this.cooldownStartedUtc).TotalMilliseconds;
-          var ramp = Math.Clamp(elapsed / ChunkDelayMilliseconds, 0d, 1d);
+          var elapsed = (DateTime.UtcNow - this.pendingStartedUtc).TotalMilliseconds;
+          var ramp = Math.Clamp(elapsed / this.pendingDurationMilliseconds, 0d, 1d);
 
           // Never below Processed, so the bar cannot fall back once the chunk lands.
-          done = Math.Max(done, this.cooldownBaseline + (float)(this.cooldownChunkSize * ramp));
+          done = Math.Max(done, this.pendingBaseline + (float)(this.pendingChunkSize * ramp));
         }
 
         return Math.Clamp(done / this.Total, 0f, 1f);
@@ -168,7 +175,7 @@ namespace MarketTerror.Services
       this.Processed = 0;
       this.Total = queued.Length;
       this.refreshing = refresh;
-      this.cooldownChunkSize = 0;
+      this.pendingChunkSize = 0;
 
       this.job = Task.Run(() => this.Run(queued, queryTarget, token), token);
     }
@@ -183,12 +190,13 @@ namespace MarketTerror.Services
         {
           token.ThrowIfCancellationRequested();
 
+          this.pendingBaseline = this.Processed;
+          this.pendingChunkSize = chunk.Length;
+          this.pendingStartedUtc = DateTime.UtcNow;
+          this.pendingDurationMilliseconds = RequestGuessMilliseconds + (firstChunk ? 0 : ChunkDelayMilliseconds);
+
           if (!firstChunk)
           {
-            this.cooldownBaseline = this.Processed;
-            this.cooldownChunkSize = chunk.Length;
-            this.cooldownStartedUtc = DateTime.UtcNow;
-
             await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
           }
 
