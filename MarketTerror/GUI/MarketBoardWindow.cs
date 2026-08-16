@@ -176,13 +176,6 @@ namespace MarketTerror.GUI
     /// </summary>
     public override void Draw()
     {
-      this.catalog.ApplyFilter(
-        this.context.SearchString,
-        this.context.ItemCategory,
-        this.context.MinLevel,
-        this.context.MaxLevel,
-        this.context.SelectedClassJob);
-
       var scale = ImGui.GetIO().FontGlobalScale;
 
       using var fontDispose = this.defaultFontHandle.Push();

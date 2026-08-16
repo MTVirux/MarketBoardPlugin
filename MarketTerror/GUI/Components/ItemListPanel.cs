@@ -8,14 +8,17 @@ namespace MarketTerror.GUI.Components
   using System.Linq;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
+  using Dalamud.Interface;
   using Lumina.Excel.Sheets;
 
   /// <summary>
-  /// The scrollable item list: the search history, the favourites or the category tree.
+  /// The scrollable item list: the whole catalogue, the search results or the favourites.
   /// </summary>
   public sealed class ItemListPanel
   {
     private readonly MarketBoardContext context;
+
+    private bool wasSearchEmpty = true;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemListPanel"/> class.
@@ -31,23 +34,88 @@ namespace MarketTerror.GUI.Components
     /// </summary>
     public void Draw()
     {
+      this.DrawTabs();
+
       ImGui.BeginChild("itemTree", new Vector2(0, -ImGui.GetFrameHeightWithSpacing()), false, ImGuiWindowFlags.HorizontalScrollbar);
       var itemTextSize = ImGui.CalcTextSize(string.Empty);
 
-      if (this.context.SearchHistoryOpen)
-      {
-        this.DrawHistory();
-      }
-      else if (this.context.FavoritesOpen)
+      if (this.context.ItemListTab == ItemListTab.Favorites)
       {
         this.DrawFavorites();
       }
       else
       {
-        this.DrawCategoryTree(itemTextSize);
+        var searching = this.context.ItemListTab == ItemListTab.Search;
+
+        this.context.Catalog.ApplyFilter(
+          searching ? this.context.SearchString : string.Empty,
+          this.context.ItemCategory,
+          this.context.MinLevel,
+          this.context.MaxLevel,
+          this.context.SelectedClassJob);
+
+        this.DrawCategoryTree(itemTextSize, searching);
       }
 
       ImGui.EndChild();
+    }
+
+    private static bool DrawTab(FontAwesomeIcon icon, string id, string tooltip, ImGuiTabItemFlags flags)
+    {
+      ImGui.PushFont(UiBuilder.IconFont);
+      var open = ImGui.BeginTabItem($"{(char)icon}##{id}", flags);
+      ImGui.PopFont();
+
+      var hovered = ImGui.IsItemHovered();
+
+      if (open)
+      {
+        ImGui.EndTabItem();
+      }
+
+      if (hovered)
+      {
+        ImGui.SetTooltip(tooltip);
+      }
+
+      return open;
+    }
+
+    private void DrawTabs()
+    {
+      var searching = !string.IsNullOrEmpty(this.context.SearchString);
+
+      if (!searching && this.context.ItemListTab == ItemListTab.Search)
+      {
+        this.context.ItemListTab = ItemListTab.All;
+      }
+
+      if (ImGui.BeginTabBar("itemListTabs"))
+      {
+        if (DrawTab(FontAwesomeIcon.List, "allTab", "All items", ImGuiTabItemFlags.None))
+        {
+          this.context.ItemListTab = ItemListTab.All;
+        }
+
+        // Selecting the tab as it appears saves a click when the user starts typing.
+        if (searching && DrawTab(
+          FontAwesomeIcon.Search,
+          "searchTab",
+          "Search results",
+          this.wasSearchEmpty ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
+        {
+          this.context.ItemListTab = ItemListTab.Search;
+        }
+
+        if (DrawTab(FontAwesomeIcon.Star, "favoritesTab", "Favorites", ImGuiTabItemFlags.None))
+        {
+          this.context.ItemListTab = ItemListTab.Favorites;
+        }
+
+        ImGui.EndTabBar();
+      }
+
+      this.wasSearchEmpty = !searching;
     }
 
     private void DrawHeading(string label)
@@ -55,55 +123,6 @@ namespace MarketTerror.GUI.Components
       ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.TextDim);
       ImGui.Text(label);
       ImGui.PopStyleColor();
-    }
-
-    private void DrawHistory()
-    {
-      this.DrawHeading("History");
-      ImGui.Separator();
-      var sheet = this.context.Plugin.DataManager.Excel.GetSheet<Item>();
-      foreach (var id in this.context.Config.History.ToArray())
-      {
-        var item = sheet.GetRowOrDefault(id);
-        if (!item.HasValue)
-        {
-          continue;
-        }
-
-        var itemName = item.Value.Name.ExtractText();
-
-        if (ImGui.Selectable($"{itemName}", this.context.SelectedItem?.RowId == id))
-        {
-          this.context.SelectItem(id, true);
-        }
-
-        if (ImGui.BeginPopupContextItem($"historyItemContextMenu{id}"))
-        {
-          if (this.context.SelectedItem?.RowId != item.Value.RowId)
-          {
-            this.context.SelectItem(item.Value.RowId);
-          }
-
-          if (ImGui.Selectable("Add to the shopping list"))
-          {
-            this.context.TryAddCheapestToShoppingList(item.Value, false);
-          }
-
-          if (ImGui.Selectable("Add to the favorites"))
-          {
-            this.context.Config.Favorites.Add(item.Value.RowId);
-          }
-
-          if (ImGui.Selectable("Remove from history"))
-          {
-            this.context.Config.History.Remove(item.Value.RowId);
-          }
-
-          ImGui.EndPopup();
-        }
-
-        ImGui.OpenPopupOnItemClick($"historyItemContextMenu{id}", ImGuiPopupFlags.MouseButtonRight);
-      }
     }
 
     private void DrawFavorites()
@@ -140,10 +159,15 @@ namespace MarketTerror.GUI.Components
       }
     }
 
-    private void DrawCategoryTree(Vector2 itemTextSize)
+    private void DrawCategoryTree(Vector2 itemTextSize, bool searching)
     {
       foreach (var category in this.context.Catalog.FilteredCategories)
       {
+        if (searching)
+        {
+          ImGui.SetNextItemOpen(true, ImGuiCond.Always);
+        }
+
         if (ImGui.TreeNode(category.Key.Name.ExtractText() + "##cat" + category.Key.RowId))
         {
           ImGui.Unindent(ImGui.GetTreeNodeToLabelSpacing());

@@ -137,14 +137,9 @@ namespace MarketTerror.GUI
     public int OpenStatsSection { get; set; } = -1;
 
     /// <summary>
-    /// Gets or sets a value indicating whether the search history list is shown.
+    /// Gets or sets the list shown by the item panel.
     /// </summary>
-    public bool SearchHistoryOpen { get; set; }
-
-    /// <summary>
-    /// Gets or sets a value indicating whether the favourites list is shown.
-    /// </summary>
-    public bool FavoritesOpen { get; set; }
+    public ItemListTab ItemListTab { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the advanced search options are shown.

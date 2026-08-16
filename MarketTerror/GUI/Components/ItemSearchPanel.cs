@@ -33,43 +33,12 @@ namespace MarketTerror.GUI.Components
     /// </summary>
     public void Draw()
     {
-      var defaultButtonColor = ImGui.GetColorU32(ImGuiCol.Button);
-      var defaultButtonHoveredColor = ImGui.GetColorU32(ImGuiCol.ButtonHovered);
-
       var scale = ImGui.GetIO().FontGlobalScale;
 
-      ImGui.SetNextItemWidth((-64 * ImGui.GetIO().FontGlobalScale) - (ImGui.GetStyle().ItemSpacing.X * 2));
+      ImGui.SetNextItemWidth(-1);
       var searchString = this.context.SearchString;
       ImGui.InputTextWithHint("##searchString", "Search for item", ref searchString, 256);
       this.context.SearchString = searchString;
-
-      ImGui.PushFont(UiBuilder.IconFont);
-      ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2(0.5f, 0.5f));
-
-      ImGui.SameLine();
-      ImGui.PushStyleColor(ImGuiCol.Button, this.context.SearchHistoryOpen ? this.context.Theme.Accent : defaultButtonColor);
-      ImGui.PushStyleColor(ImGuiCol.ButtonHovered, this.context.SearchHistoryOpen ? this.context.Theme.AccentDim : defaultButtonHoveredColor);
-      if (ImGui.Button($"{(char)FontAwesomeIcon.History}", new Vector2(32 * ImGui.GetIO().FontGlobalScale, ImGui.GetItemRectSize().Y)))
-      {
-        this.context.SearchHistoryOpen = !this.context.SearchHistoryOpen;
-      }
-
-      ImGui.PopStyleColor();
-      ImGui.PopStyleColor();
-
-      ImGui.SameLine();
-      ImGui.PushStyleColor(ImGuiCol.Button, this.context.FavoritesOpen ? this.context.Theme.Accent : defaultButtonColor);
-      ImGui.PushStyleColor(ImGuiCol.ButtonHovered, this.context.FavoritesOpen ? this.context.Theme.AccentDim : defaultButtonHoveredColor);
-      if (ImGui.Button($"{(char)FontAwesomeIcon.Star}", new Vector2(32 * ImGui.GetIO().FontGlobalScale, ImGui.GetItemRectSize().Y)))
-      {
-        this.context.FavoritesOpen = !this.context.FavoritesOpen;
-      }
-
-      ImGui.PopStyleColor();
-      ImGui.PopStyleColor();
-
-      ImGui.PopStyleVar();
-      ImGui.PopFont();
 
       var previousYCursor = ImGui.GetCursorPosY();
       ImGui.SetCursorPosY(previousYCursor - (ImGui.GetFontSize() / 2.0f) + (13 * scale));
