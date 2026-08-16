@@ -59,5 +59,14 @@ namespace MarketTerror.GUI.Theme
 
     /// <summary>The active tab.</summary>
     TabActive,
+
+    /// <summary>The name of a row bought at its saved price.</summary>
+    BuySuccess,
+
+    /// <summary>The name of a row bought below its saved price.</summary>
+    BuyBargain,
+
+    /// <summary>The name of a row nothing could be bought for.</summary>
+    BuyFailed,
   }
 }
