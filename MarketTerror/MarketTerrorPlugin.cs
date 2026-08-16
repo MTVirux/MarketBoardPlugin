@@ -57,6 +57,8 @@ namespace MarketTerror
 
     private readonly MarketBoardShoppingListWindow marketBoardShoppingListWindow;
 
+    private readonly ThemeEditorWindow themeEditorWindow;
+
     /// <summary>
     /// Gets the window system.
     /// </summary>
@@ -129,10 +131,12 @@ namespace MarketTerror
       this.marketBoardWindow = new MarketBoardWindow(this);
       this.marketBoardConfigWindow = new MarketTerrorConfigWindow(this);
       this.marketBoardShoppingListWindow = new MarketBoardShoppingListWindow(this);
+      this.themeEditorWindow = new ThemeEditorWindow(this);
 
       this.windowSystem.AddWindow(this.marketBoardWindow);
       this.windowSystem.AddWindow(this.marketBoardConfigWindow);
       this.windowSystem.AddWindow(this.marketBoardShoppingListWindow);
+      this.windowSystem.AddWindow(this.themeEditorWindow);
 
       // Set up command handlers
       foreach (var command in OpenCommands)
@@ -299,6 +303,14 @@ namespace MarketTerror
     public void OpenConfigUi()
     {
       this.marketBoardConfigWindow.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Opens the theme editor.
+    /// </summary>
+    public void OpenThemeEditor()
+    {
+      this.themeEditorWindow.IsOpen = true;
     }
 
     /// <summary>
