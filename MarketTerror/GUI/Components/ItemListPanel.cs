@@ -218,7 +218,11 @@ namespace MarketTerror.GUI.Components
           ImGui.SetNextItemOpen(true, ImGuiCond.Always);
         }
 
-        if (ImGui.TreeNode(category.Key.Name.ExtractText() + "##cat" + category.Key.RowId))
+        // The search tab forces every category open, so it keeps its own node ids to
+        // avoid leaving the all items tab expanded once the search is cleared.
+        var nodeId = (searching ? "##searchcat" : "##cat") + category.Key.RowId;
+
+        if (ImGui.TreeNode(category.Key.Name.ExtractText() + nodeId))
         {
           ImGui.Unindent(ImGui.GetTreeNodeToLabelSpacing());
 
