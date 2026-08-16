@@ -75,6 +75,11 @@ namespace MarketTerror
     public float MarketDataSplitRatio { get; set; } = 0.5f;
 
     /// <summary>
+    ///  Gets or sets the unscaled width of the search and item list column.
+    /// </summary>
+    public float ItemListColumnWidth { get; set; } = 267.0f;
+
+    /// <summary>
     /// Gets the favorite items.
     /// </summary>
     public ICollection<uint> Favorites { get; } = new List<uint>();

@@ -187,7 +187,12 @@ namespace MarketTerror.GUI
 
       using var fontDispose = this.defaultFontHandle.Push();
 
-      ImGui.BeginChild("itemListColumn", new Vector2(267, 0) * scale, true);
+      var splitterWidth = ImGui.GetTextLineHeight() * 0.5f;
+      var minColumnWidth = 150.0f * scale;
+      var maxColumnWidth = Math.Max(minColumnWidth, ImGui.GetContentRegionAvail().X - splitterWidth - (200.0f * scale));
+      var columnWidth = Math.Clamp(this.plugin.Config.ItemListColumnWidth * scale, minColumnWidth, maxColumnWidth);
+
+      ImGui.BeginChild("itemListColumn", new Vector2(columnWidth, 0), true);
 
       this.searchPanel.Draw();
 
@@ -210,7 +215,26 @@ namespace MarketTerror.GUI
       ImGui.ProgressBar(this.hoveredItemWatcher.Progress, new Vector2(-1, 0), string.Empty);
 
       ImGui.EndChild();
-      ImGui.SameLine();
+      ImGui.SameLine(0.0f, 0.0f);
+
+      var columnDrag = this.DrawSplitter(
+        "itemListSplitter",
+        new Vector2(splitterWidth, ImGui.GetContentRegionAvail().Y),
+        true,
+        scale);
+
+      if (columnDrag != 0.0f)
+      {
+        this.plugin.Config.ItemListColumnWidth =
+          Math.Clamp(columnWidth + columnDrag, minColumnWidth, maxColumnWidth) / scale;
+      }
+
+      if (ImGui.IsItemDeactivated())
+      {
+        this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+      }
+
+      ImGui.SameLine(0.0f, 0.0f);
       ImGui.BeginChild("tabColumn", new Vector2(0, 0), true, ImGuiWindowFlags.NoScrollbar);
 
       if (this.context.SelectedItem?.RowId > 0)
@@ -309,7 +333,11 @@ namespace MarketTerror.GUI
 
       this.listingsTable.Draw(listingsHeight);
 
-      var drag = this.DrawSplitter(splitterHeight, scale);
+      var drag = this.DrawSplitter(
+        "marketDataSplitter",
+        new Vector2(ImGui.GetContentRegionAvail().X, splitterHeight),
+        false,
+        scale);
 
       if (drag != 0.0f)
       {
@@ -325,34 +353,46 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Draws the bar between the two tables.
+    /// Draws a bar the user can drag to resize the panels on either side of it.
     /// </summary>
-    /// <param name="height">The height of the grab area.</param>
+    /// <param name="id">The ImGui id of the bar.</param>
+    /// <param name="size">The size of the grab area.</param>
+    /// <param name="vertical">True for a bar between two columns, false for one between two rows.</param>
     /// <param name="scale">The current UI scale.</param>
     /// <returns>The distance the bar was dragged this frame, in pixels.</returns>
-    private float DrawSplitter(float height, float scale)
+    private float DrawSplitter(string id, Vector2 size, bool vertical, float scale)
     {
-      ImGui.InvisibleButton("marketDataSplitter", new Vector2(ImGui.GetContentRegionAvail().X, height));
+      ImGui.InvisibleButton(id, size);
 
       var active = ImGui.IsItemActive();
       var hovered = active || ImGui.IsItemHovered();
 
       if (hovered)
       {
-        ImGui.SetMouseCursor(ImGuiMouseCursor.ResizeNs);
+        ImGui.SetMouseCursor(vertical ? ImGuiMouseCursor.ResizeEw : ImGuiMouseCursor.ResizeNs);
       }
 
       var min = ImGui.GetItemRectMin();
       var max = ImGui.GetItemRectMax();
-      var middle = (min.Y + max.Y) * 0.5f;
+      var from = vertical
+        ? new Vector2((min.X + max.X) * 0.5f, min.Y)
+        : new Vector2(min.X, (min.Y + max.Y) * 0.5f);
+      var to = vertical
+        ? new Vector2((min.X + max.X) * 0.5f, max.Y)
+        : new Vector2(max.X, (min.Y + max.Y) * 0.5f);
 
       ImGui.GetWindowDrawList().AddLine(
-        new Vector2(min.X, middle),
-        new Vector2(max.X, middle),
+        from,
+        to,
         hovered ? this.theme.AccentHover : this.theme.Border,
         (hovered ? 2.0f : 1.0f) * scale);
 
-      return active ? ImGui.GetIO().MouseDelta.Y : 0.0f;
+      if (!active)
+      {
+        return 0.0f;
+      }
+
+      return vertical ? ImGui.GetIO().MouseDelta.X : ImGui.GetIO().MouseDelta.Y;
     }
   }
 }
