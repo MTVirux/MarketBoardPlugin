@@ -191,6 +191,11 @@ namespace MarketTerror
     public bool ShoppingListBuyEnabled { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether buying skips items this character has already unlocked.
+    /// </summary>
+    public bool SkipUnlockedWhenBuying { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the main window should open on plugin start in debug builds.
     /// </summary>
     public bool OpenOnStart { get; set; } = true;

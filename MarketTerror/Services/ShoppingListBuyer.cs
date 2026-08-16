@@ -101,6 +101,12 @@ namespace MarketTerror.Services
         return false;
       }
 
+      if (this.plugin.Config.SkipUnlockedWhenBuying && ItemUnlock.IsUnlocked(this.plugin.PlayerState, row.SourceItem) == true)
+      {
+        reason = "This character has already unlocked this item.";
+        return false;
+      }
+
       reason = string.Empty;
       return true;
     }
