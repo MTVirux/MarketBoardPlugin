@@ -192,15 +192,15 @@ namespace MarketTerror.GUI
       string tooltip;
       if (available)
       {
-        tooltip = "Lifestream is installed and enabled, so listing clicks can travel.";
+        tooltip = "Lifestream is installed and enabled.";
       }
       else if (this.Plugin.IsLifestreamDisabled)
       {
-        tooltip = "Lifestream is installed but switched off, so this setting does nothing.";
+        tooltip = "Lifestream is installed but switched off.";
       }
       else
       {
-        tooltip = "Lifestream is not installed, so this setting does nothing.";
+        tooltip = "Lifestream is not installed.";
       }
 
       Utilities.HoverTooltip(tooltip);
