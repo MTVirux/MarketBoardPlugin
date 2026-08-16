@@ -218,6 +218,10 @@ namespace MarketTerror.GUI.Components
 
     private void DrawHeader(Item item, float scale)
     {
+      var top = ImGui.GetCursorPosY();
+      var id = string.Create(CultureInfo.CurrentCulture, $"#{item.RowId}");
+      var idWidth = ImGui.CalcTextSize(id).X;
+
       using var icon = this.context.Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup
       {
         IconId = item.Icon,
@@ -231,7 +235,10 @@ namespace MarketTerror.GUI.Components
 
       ImGui.BeginGroup();
 
+      // Wrap the name short of the id so a long one cannot run underneath it.
+      ImGui.PushTextWrapPos(RightEdge() - idWidth - ImGui.GetStyle().ItemSpacing.X);
       Text(item.Name.ExtractText(), this.RarityColor(item.Rarity));
+      ImGui.PopTextWrapPos();
 
       var category = item.ItemUICategory.ValueNullable?.Name.ExtractText() ?? string.Empty;
 
@@ -241,6 +248,16 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndGroup();
+
+      // Place the id against the top right corner, then carry on below the header.
+      var resume = ImGui.GetCursorPos();
+
+      ImGui.SetCursorPos(new Vector2(RightEdge() - idWidth, top));
+      ImGui.PushTextWrapPos(-1.0f);
+      this.Label(id);
+      ImGui.PopTextWrapPos();
+
+      ImGui.SetCursorPos(resume);
     }
 
     private void DrawFlags(Item item)
