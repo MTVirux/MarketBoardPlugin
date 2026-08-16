@@ -56,6 +56,11 @@ namespace MarketTerror
     /// </summary>
     private static readonly string[] OpenCommands = { "/pmb", "/mt", "/marketterror" };
 
+    /// <summary>
+    /// The arguments that toggle the buy list window instead of searching.
+    /// </summary>
+    private static readonly string[] BuyListCommands = { "buylist", "shoppinglist" };
+
     private readonly MarketBoardWindow marketBoardWindow;
 
     private readonly MarketTerrorConfigWindow marketBoardConfigWindow;
@@ -152,7 +157,7 @@ namespace MarketTerror
       {
         this.CommandManager.AddHandler(command, new CommandInfo(this.OnOpenMarketBoardCommand)
         {
-          HelpMessage = "Open the Market Terror window.",
+          HelpMessage = "Open the Market Terror window. Add \"buylist\" to toggle the buy list window.",
         });
       }
 
@@ -506,7 +511,11 @@ namespace MarketTerror
     {
       if (!string.IsNullOrEmpty(arguments))
       {
-        if (uint.TryParse(arguments, out var itemId))
+        if (BuyListCommands.Contains(arguments.Trim(), StringComparer.OrdinalIgnoreCase))
+        {
+          this.marketBoardShoppingListWindow.ToggleForceShown();
+        }
+        else if (uint.TryParse(arguments, out var itemId))
         {
           this.marketBoardWindow.ChangeSelectedItem(itemId);
           this.marketBoardWindow.IsOpen = true;

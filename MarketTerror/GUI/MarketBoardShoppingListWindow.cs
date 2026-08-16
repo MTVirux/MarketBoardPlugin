@@ -26,6 +26,8 @@ namespace MarketTerror.GUI
 
     private IDisposable? themeScope;
 
+    private bool forceShown;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardShoppingListWindow"/> class.
     /// </summary>
@@ -52,6 +54,14 @@ namespace MarketTerror.GUI
 
     private MarketTerrorPlugin Plugin { get; init; }
 
+    /// <summary>
+    /// Toggles whether the window is shown while the buy list is empty.
+    /// </summary>
+    public void ToggleForceShown()
+    {
+      this.forceShown = !this.forceShown;
+    }
+
     /// <inheritdoc/>
     public override void PreDraw()
     {
@@ -66,11 +76,19 @@ namespace MarketTerror.GUI
     }
 
     /// <inheritdoc/>
-    public override bool DrawConditions() => this.Plugin.ShoppingList.Count > 0;
+    public override bool DrawConditions() => this.Plugin.ShoppingList.Count > 0 || this.forceShown;
 
     /// <inheritdoc/>
     public override void Draw()
     {
+      if (this.Plugin.ShoppingList.Count == 0)
+      {
+        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+        ImGui.TextWrapped("Your buy list is empty. Add items from the item list right click menu.");
+        ImGui.PopStyleColor();
+        return;
+      }
+
       if (!ImGui.BeginTable("shoppingList", 4, TableFlags))
       {
         return;
