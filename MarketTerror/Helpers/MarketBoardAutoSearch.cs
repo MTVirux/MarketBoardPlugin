@@ -538,7 +538,6 @@ namespace MarketTerror.Helpers
           results->SelectItem(i, true);
           results->DispatchItemEvent(i, AtkEventType.ListItemClick);
           this.log.Debug($"Opened \"{this.itemName}\" at result index {i} on the Market Board");
-          this.log.Information($"[MBDIAG] dispatched index={i} of {rowCount} for id {this.itemId}");
           return true;
         }
 

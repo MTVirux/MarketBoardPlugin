@@ -536,54 +536,58 @@ namespace MarketTerror.GUI
       var scope = this.Plugin.ShoppingListScope;
       var busy = this.Plugin.ShoppingListBulkAdd.IsRunning || this.Plugin.ShoppingListBuyer.IsRunning;
 
-      ImGui.BeginDisabled(busy || bought == 0);
+      ImGui.BeginDisabled(busy);
 
-      if (ImGui.Button("Clear successful"))
+      if (bought > 0)
       {
-        list.RemoveAll(WasBought);
+        if (ImGui.Button("Clear successful"))
+        {
+          list.RemoveAll(WasBought);
+        }
+
+        Utilities.HoverTooltip("Remove every row that was bought from the list.");
+
+        ImGui.SameLine();
+
+        if (ImGui.Button("Reset successful"))
+        {
+          list.ClearOutcomes(list.Where(WasBought).Select(i => i.SourceItem.RowId).ToArray());
+        }
+
+        Utilities.HoverTooltip("Take the colour off the rows that were bought, leaving them on the list.");
+      }
+
+      if (failed > 0)
+      {
+        if (bought > 0)
+        {
+          ImGui.SameLine();
+        }
+
+        ImGui.BeginDisabled(!scope.HasSelection);
+
+        if (ImGui.Button("Refresh failed"))
+        {
+          this.Plugin.ShoppingListBulkAdd.StartRefresh(
+            list.Where(BuyFailed).Select(i => i.SourceItem).ToArray(),
+            scope.QueryTargets,
+            "the rows that did not buy");
+        }
+
+        ImGui.EndDisabled();
+        Utilities.HoverTooltip("Price every row that did not buy again.");
+
+        ImGui.SameLine();
+
+        if (ImGui.Button("Reset failed"))
+        {
+          list.ClearOutcomes(list.Where(BuyFailed).Select(i => i.SourceItem.RowId).ToArray());
+        }
+
+        Utilities.HoverTooltip("Take the colour off the rows that did not buy.");
       }
 
       ImGui.EndDisabled();
-      Utilities.HoverTooltip("Remove every row that was bought from the list.");
-
-      ImGui.SameLine();
-
-      ImGui.BeginDisabled(busy || failed == 0 || !scope.HasSelection);
-
-      if (ImGui.Button("Refresh failed"))
-      {
-        this.Plugin.ShoppingListBulkAdd.StartRefresh(
-          list.Where(BuyFailed).Select(i => i.SourceItem).ToArray(),
-          scope.QueryTargets,
-          "the rows that did not buy");
-      }
-
-      ImGui.EndDisabled();
-      Utilities.HoverTooltip("Price every row that did not buy again.");
-
-      ImGui.SameLine();
-
-      ImGui.BeginDisabled(busy || bought == 0);
-
-      if (ImGui.Button("Reset successful"))
-      {
-        list.ClearOutcomes(list.Where(WasBought).Select(i => i.SourceItem.RowId).ToArray());
-      }
-
-      ImGui.EndDisabled();
-      Utilities.HoverTooltip("Take the colour off the rows that were bought, leaving them on the list.");
-
-      ImGui.SameLine();
-
-      ImGui.BeginDisabled(busy || failed == 0);
-
-      if (ImGui.Button("Reset failed"))
-      {
-        list.ClearOutcomes(list.Where(BuyFailed).Select(i => i.SourceItem.RowId).ToArray());
-      }
-
-      ImGui.EndDisabled();
-      Utilities.HoverTooltip("Take the colour off the rows that did not buy.");
     }
 
     private string PriceText(SavedItem item)
