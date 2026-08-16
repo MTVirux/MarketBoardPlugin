@@ -27,7 +27,7 @@ namespace MarketTerror.GUI.Theme
     /// <summary>Panel and table borders.</summary>
     Border,
 
-    /// <summary>Selection, the active tab underline and the high quality marker.</summary>
+    /// <summary>Selection and the active tab underline.</summary>
     Accent,
 
     /// <summary>The background of a selected row.</summary>
@@ -48,7 +48,7 @@ namespace MarketTerror.GUI.Theme
     /// <summary>Column labels and secondary text.</summary>
     TextDim,
 
-    /// <summary>The selected item's name.</summary>
+    /// <summary>The selected item's name and the high quality marker.</summary>
     TextBright,
 
     /// <summary>Gil figures.</summary>

@@ -248,7 +248,7 @@ namespace MarketTerror.GUI
 
       if (hq)
       {
-        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.Get(ThemeColor.Accent));
+        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.Get(ThemeColor.TextBright));
         ImGui.Text(SeIconChar.HighQuality.AsString());
         ImGui.PopStyleColor();
       }

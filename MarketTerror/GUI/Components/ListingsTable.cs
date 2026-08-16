@@ -152,7 +152,7 @@ namespace MarketTerror.GUI.Components
       if (listing.Hq)
       {
         ImGui.SetCursorPos(new Vector2(cursor.X + hqOffset, cursor.Y));
-        ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.Accent);
+        ImGui.PushStyleColor(ImGuiCol.Text, this.context.Theme.TextBright);
         ImGui.Text(SeIconChar.HighQuality.AsString());
         ImGui.PopStyleColor();
       }

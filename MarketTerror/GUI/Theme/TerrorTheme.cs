@@ -65,7 +65,7 @@ namespace MarketTerror.GUI.Theme
     public bool Enabled => this.config.TerrorSkinEnabled;
 
     /// <summary>
-    /// Gets the accent colour, used for selection, the active tab and the high quality marker.
+    /// Gets the accent colour, used for selection and the active tab.
     /// </summary>
     public uint Accent => this.Resolve(ThemeColor.Accent, ImGuiCol.CheckMark);
 
@@ -95,7 +95,7 @@ namespace MarketTerror.GUI.Theme
     public uint TextDim => this.Resolve(ThemeColor.TextDim, ImGuiCol.TextDisabled);
 
     /// <summary>
-    /// Gets the emphasised text colour, used for the selected item's name.
+    /// Gets the emphasised text colour, used for the selected item's name and the high quality marker.
     /// </summary>
     public uint TextBright => this.Resolve(ThemeColor.TextBright, ImGuiCol.Text);
 
