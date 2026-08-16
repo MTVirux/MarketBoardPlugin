@@ -189,24 +189,6 @@ namespace MarketTerror.Models.Universalis
     public long FetchTimestamp { get; set; }
 
     /// <summary>
-    /// Gets the stack size histogram.
-    /// </summary>
-    [JsonPropertyName("stackSizeHistogram")]
-    public Dictionary<string, long> StackSizeHistogram { get; } = new Dictionary<string, long>();
-
-    /// <summary>
-    /// Gets the stack size histogram of the NQ items.
-    /// </summary>
-    [JsonPropertyName("stackSizeHistogramNQ")]
-    public Dictionary<string, long> StackSizeHistogramNq { get; } = new Dictionary<string, long>();
-
-    /// <summary>
-    /// Gets the stack size histogram of the HQ items.
-    /// </summary>
-    [JsonPropertyName("stackSizeHistogramHQ")]
-    public Dictionary<string, long> StackSizeHistogramHq { get; } = new Dictionary<string, long>();
-
-    /// <summary>
     /// Gets a map of world IDs to their last upload time when querying region or datacenter scopes.
     /// </summary>
     [JsonPropertyName("worldUploadTimes")]

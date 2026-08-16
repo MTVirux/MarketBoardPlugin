@@ -85,18 +85,7 @@ namespace MarketTerror.GUI.Components
         this.context.OpenStatsSection = -1;
       }
 
-      ImGui.SetNextItemOpen(this.context.OpenStatsSection == 3, ImGuiCond.Always);
-      if (ImGui.CollapsingHeader("Stack size histogram##statsStackHeader"))
-      {
-        this.context.OpenStatsSection = 3;
-        DrawStackHistogram(marketData);
-      }
-      else if (this.context.OpenStatsSection == 3)
-      {
-        this.context.OpenStatsSection = -1;
-      }
-
-      // Section 4 is unused; gilflux has always been section 5.
+      // Sections 3 and 4 are unused; gilflux has always been section 5.
       ImGui.SetNextItemOpen(this.context.OpenStatsSection == 5, ImGuiCond.Always);
       if (ImGui.CollapsingHeader($"Gilflux ({queryTarget})##statsGilfluxHeader"))
       {
@@ -168,26 +157,6 @@ namespace MarketTerror.GUI.Components
       else
       {
         ImGui.Text("No recent history available to draw volumes.");
-      }
-
-      ImGui.EndChild();
-    }
-
-    private static void DrawStackHistogram(MarketDataResponse marketData)
-    {
-      var stackChildHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
-      ImGui.BeginChild("stackChild", new Vector2(-1, stackChildHeight), false);
-
-      if (marketData.StackSizeHistogram != null && marketData.StackSizeHistogram.Count > 0)
-      {
-        foreach (var kv in marketData.StackSizeHistogram)
-        {
-          ImGui.Text($"{kv.Key}: {kv.Value}");
-        }
-      }
-      else
-      {
-        ImGui.Text("No stack size histogram available.");
       }
 
       ImGui.EndChild();
