@@ -97,31 +97,28 @@ namespace MarketTerror.GUI.Components
         : new Integration("Lifestream", State.Idle, "not detected", detail);
     }
 
-    private static Integration Universalis(bool up)
+    private static Integration Universalis(bool? up)
     {
-      var detail = up
-        ? "Listings and sale history come from Universalis as you browse."
-        : "Listings and sale history cannot be fetched right now.\nCheck status.universalis.app.";
+      if (up == null)
+      {
+        return new Integration("Universalis", State.Idle, "checking", "Listings and sale history come from Universalis as you browse.");
+      }
 
-      return up
-        ? new Integration("Universalis", State.Ok, "reachable", detail)
-        : new Integration("Universalis", State.Down, "not answering", detail);
+      return up.Value
+        ? new Integration("Universalis", State.Ok, "reachable", "Listings and sale history come from Universalis as you browse.")
+        : new Integration("Universalis", State.Down, "not answering", "Listings and sale history cannot be fetched right now.\nCheck status.universalis.app.");
     }
 
     private static Integration Ffxivmt(bool? up)
     {
       if (up == null)
       {
-        return new Integration(
-          "FFXIVMT",
-          State.Idle,
-          "not contacted yet",
-          "Gilflux rankings in the Stats tab are fetched once you select an item.");
+        return new Integration("FFXIVMT", State.Idle, "checking", "Gilflux rankings in the Stats tab come from the FFXIVMT API.");
       }
 
       return up.Value
         ? new Integration("FFXIVMT", State.Ok, "reachable", "Gilflux rankings in the Stats tab come from the FFXIVMT API.")
-        : new Integration("FFXIVMT", State.Down, "not answering", "The last gilflux request failed, so the Stats tab has no rankings to show.");
+        : new Integration("FFXIVMT", State.Down, "not answering", "The FFXIVMT API is not answering, so the Stats tab has no rankings to show.");
     }
 
     /// <summary>

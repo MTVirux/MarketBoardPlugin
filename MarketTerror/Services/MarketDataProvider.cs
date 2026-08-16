@@ -38,7 +38,7 @@ namespace MarketTerror.Services
     {
       this.plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
 
-      this.StartUniversalisStatusCheckTask(this.statusCheckCancellationTokenSource.Token);
+      this.StartStatusCheckTask(this.statusCheckCancellationTokenSource.Token);
     }
 
     /// <summary>
@@ -57,13 +57,14 @@ namespace MarketTerror.Services
     public bool IsLoadingGilflux { get; private set; }
 
     /// <summary>
-    /// Gets a value indicating whether the Universalis API responded to the last status check.
+    /// Gets a value indicating whether the Universalis API responded to the last status check,
+    /// or null while the first check is still running.
     /// </summary>
-    public bool IsUniversalisUp { get; private set; }
+    public bool? IsUniversalisUp { get; private set; }
 
     /// <summary>
-    /// Gets a value indicating whether the last gilflux fetch reached the FFXIVMT API, or null when
-    /// no item has been looked up yet. There is no status endpoint, so the fetches are the probe.
+    /// Gets a value indicating whether the FFXIVMT API responded to the last status check,
+    /// or null while the first check is still running.
     /// </summary>
     public bool? IsFFXIVMTUp { get; private set; }
 
@@ -191,8 +192,6 @@ namespace MarketTerror.Services
                 queryTarget,
                 cancellationTokenSource.Token)
               .ConfigureAwait(false);
-
-            this.IsFFXIVMTUp = true;
           }
           catch (OperationCanceledException)
           {
@@ -202,7 +201,6 @@ namespace MarketTerror.Services
           {
             this.plugin.Log.Warning(ex, "Failed to fetch FFXIVMT gilflux data.");
             this.Gilflux = null;
-            this.IsFFXIVMTUp = false;
           }
           finally
           {
@@ -227,7 +225,7 @@ namespace MarketTerror.Services
       this.isDisposed = true;
     }
 
-    private void StartUniversalisStatusCheckTask(CancellationToken cancellationToken)
+    private void StartStatusCheckTask(CancellationToken cancellationToken)
     {
       Task.Run(
         async () =>
@@ -235,6 +233,7 @@ namespace MarketTerror.Services
           while (!cancellationToken.IsCancellationRequested)
           {
             this.IsUniversalisUp = await this.plugin.UniversalisClient.CheckStatus(cancellationToken).ConfigureAwait(false);
+            this.IsFFXIVMTUp = await this.plugin.FFXIVMTClient.CheckStatus(cancellationToken).ConfigureAwait(false);
             await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken).ConfigureAwait(false);
           }
         },

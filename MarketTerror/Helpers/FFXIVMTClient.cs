@@ -55,6 +55,35 @@ namespace MarketTerror.Helpers
     }
 
     /// <summary>
+    /// Checks whether the FFXIVMT API is answering, using the world list as a cheap probe.
+    /// </summary>
+    /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+    /// <returns>True when the API responded successfully.</returns>
+    public async Task<bool> CheckStatus(CancellationToken cancellationToken)
+    {
+      try
+      {
+        using var response = await this.client
+          .GetAsync(new Uri("worlds", UriKind.Relative), HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+          .ConfigureAwait(false);
+
+        if (!response.IsSuccessStatusCode)
+        {
+          this.plugin.Log.Warning($"FFXIVMT seems down, it answered {(int)response.StatusCode}.");
+          return false;
+        }
+      }
+      catch (HttpRequestException ex)
+      {
+        this.plugin.Log.Warning(ex, "FFXIVMT seems down.");
+        return false;
+      }
+
+      this.plugin.Log.Verbose("FFXIVMT seems up.");
+      return true;
+    }
+
+    /// <summary>
     /// Retrieves gilflux ranking data for a specific item on the given scope.
     /// </summary>
     /// <param name="itemId">The ID of the item to retrieve gilflux data for.</param>

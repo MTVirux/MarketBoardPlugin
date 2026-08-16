@@ -59,7 +59,7 @@ namespace MarketTerror.GUI.Components
       var scale = ImGui.GetIO().FontGlobalScale;
       var buttonSize = new Vector2(200 * scale, 0);
 
-      if (this.context.MarketData.IsUniversalisUp)
+      if (this.context.MarketData.IsUniversalisUp != false)
       {
         if (Button("Data provided by Universalis", 0x002ba040u, buttonSize))
         {
