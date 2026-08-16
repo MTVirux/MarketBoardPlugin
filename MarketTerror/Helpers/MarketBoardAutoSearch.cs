@@ -160,6 +160,32 @@ namespace MarketTerror.Helpers
       GC.SuppressFinalize(this);
     }
 
+    /// <summary>
+    /// Describes a results row for the verbose log.
+    /// </summary>
+    /// <param name="label">The raw label of the row.</param>
+    /// <returns>The row's item ID and name.</returns>
+    private static string DescribeRow(CStringPointer label)
+    {
+      if (!label.HasValue)
+      {
+        return "<empty>";
+      }
+
+      var parsed = SeString.Parse(label.AsSpan());
+      var text = parsed.TextValue.Trim();
+
+      foreach (var payload in parsed.Payloads)
+      {
+        if (payload is ItemPayload item)
+        {
+          return $"id {item.ItemId} \"{text}\"";
+        }
+      }
+
+      return $"id none \"{text}\"";
+    }
+
     private bool Arm(string name, uint id, State initialState, long timeoutMs)
     {
       if (string.IsNullOrWhiteSpace(name))
@@ -393,6 +419,11 @@ namespace MarketTerror.Helpers
         {
           this.resultsLogged = true;
           this.log.Debug($"Market Board returned {rowCount} results, none of them id {this.itemId}");
+
+          for (var i = 0; i < rowCount; i++)
+          {
+            this.log.Verbose($"Market Board result {i}: {DescribeRow(results->GetItemLabel(i))}");
+          }
         }
 
         return false;
