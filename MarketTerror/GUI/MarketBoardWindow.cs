@@ -313,19 +313,22 @@ namespace MarketTerror.GUI
     private void DrawMarketData(float scale)
     {
       this.titleFontHandle.Push();
-      var headingHeight = ImGui.GetTextLineHeightWithSpacing() * 2;
+      var headingHeight = ImGui.GetTextLineHeightWithSpacing();
       this.titleFontHandle.Pop();
 
+      var spacing = ImGui.GetStyle().ItemSpacing.Y;
       var available = ImGui.GetContentRegionAvail().Y;
 
       if (this.plugin.Config.RecentHistoryDisabled)
       {
-        this.listingsTable.Draw(available - headingHeight);
+        this.listingsTable.Draw(available - headingHeight - spacing);
         return;
       }
 
       var splitterHeight = ImGui.GetTextLineHeight() * 0.5f;
-      var usable = available - (headingHeight * 2) - splitterHeight;
+
+      // The two tables and the splitter each add an item spacing below themselves.
+      var usable = available - (headingHeight * 2) - splitterHeight - (spacing * 3);
 
       if (usable <= 0.0f)
       {
