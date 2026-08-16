@@ -282,7 +282,7 @@ namespace MarketTerror.GUI
       var queries = stats.Queries == 1 ? "1 query" : $"{stats.Queries.ToString("N0", CultureInfo.CurrentCulture)} queries";
       var milliseconds = stats.Milliseconds.ToString("N0", CultureInfo.CurrentCulture);
 
-      return $"{items} over {queries} scoped to {stats.Scope} in {milliseconds} ms";
+      return $"{items} over {queries} @ {stats.Scope} in {milliseconds} ms";
     }
 
     /// <summary>
