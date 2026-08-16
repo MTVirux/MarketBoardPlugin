@@ -168,8 +168,16 @@ namespace MarketTerror.GUI
 
       this.DrawActionBar();
 
+      var bought = this.Plugin.ShoppingList.Count(WasBought);
+      var failed = this.Plugin.ShoppingList.Count(BuyFailed);
+
       // The footer keeps its own row pinned under the table, so it stays put while the list scrolls.
       var footerHeight = ImGui.GetFrameHeightWithSpacing() + ImGui.GetStyle().ItemSpacing.Y;
+
+      if (bought + failed > 0)
+      {
+        footerHeight += ImGui.GetFrameHeightWithSpacing();
+      }
 
       if (!ImGui.BeginTable("shoppingList", 6, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
       {
@@ -324,6 +332,12 @@ namespace MarketTerror.GUI
       ImGui.EndTable();
 
       ImGui.Separator();
+
+      if (bought + failed > 0)
+      {
+        this.DrawOutcomeBar(bought, failed);
+      }
+
       this.DrawFooter();
 
       foreach (var item in todel)
@@ -349,6 +363,26 @@ namespace MarketTerror.GUI
       var milliseconds = stats.Milliseconds.ToString("N0", CultureInfo.CurrentCulture);
 
       return $"{items} over {queries} @ {stats.Scope} in {milliseconds} ms";
+    }
+
+    /// <summary>
+    /// Checks whether a row was bought by the last buy run.
+    /// </summary>
+    /// <param name="item">The row to check.</param>
+    /// <returns>True when the row was bought.</returns>
+    private static bool WasBought(SavedItem item)
+    {
+      return item.Outcome is BuyOutcome.Bought or BuyOutcome.BoughtCheaper;
+    }
+
+    /// <summary>
+    /// Checks whether a row was tried by the last buy run and came back empty handed.
+    /// </summary>
+    /// <param name="item">The row to check.</param>
+    /// <returns>True when the row was not bought.</returns>
+    private static bool BuyFailed(SavedItem item)
+    {
+      return item.Outcome == BuyOutcome.Failed;
     }
 
     /// <summary>
@@ -489,6 +523,67 @@ namespace MarketTerror.GUI
       this.DrawScopePickers(true);
 
       ImGui.Separator();
+    }
+
+    /// <summary>
+    /// Draws what to do with the rows a buy run bought or could not buy, pinned above the total.
+    /// </summary>
+    /// <param name="bought">How many rows were bought.</param>
+    /// <param name="failed">How many rows were not.</param>
+    private void DrawOutcomeBar(int bought, int failed)
+    {
+      var list = this.Plugin.ShoppingList;
+      var scope = this.Plugin.ShoppingListScope;
+      var busy = this.Plugin.ShoppingListBulkAdd.IsRunning || this.Plugin.ShoppingListBuyer.IsRunning;
+
+      ImGui.BeginDisabled(busy || bought == 0);
+
+      if (ImGui.Button("Clear successful"))
+      {
+        list.RemoveAll(WasBought);
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Remove every row that was bought from the list.");
+
+      ImGui.SameLine();
+
+      ImGui.BeginDisabled(busy || failed == 0 || !scope.HasSelection);
+
+      if (ImGui.Button("Refresh failed"))
+      {
+        this.Plugin.ShoppingListBulkAdd.StartRefresh(
+          list.Where(BuyFailed).Select(i => i.SourceItem).ToArray(),
+          scope.QueryTargets,
+          "the rows that did not buy");
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Price every row that did not buy again.");
+
+      ImGui.SameLine();
+
+      ImGui.BeginDisabled(busy || bought == 0);
+
+      if (ImGui.Button("Reset successful"))
+      {
+        list.ClearOutcomes(list.Where(WasBought).Select(i => i.SourceItem.RowId).ToArray());
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Take the colour off the rows that were bought, leaving them on the list.");
+
+      ImGui.SameLine();
+
+      ImGui.BeginDisabled(busy || failed == 0);
+
+      if (ImGui.Button("Reset failed"))
+      {
+        list.ClearOutcomes(list.Where(BuyFailed).Select(i => i.SourceItem.RowId).ToArray());
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Take the colour off the rows that did not buy.");
     }
 
     private string PriceText(SavedItem item)
