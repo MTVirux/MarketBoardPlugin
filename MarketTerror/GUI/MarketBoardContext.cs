@@ -138,16 +138,6 @@ namespace MarketTerror.GUI
     public int MaxItemLevel { get; set; } = DefaultMaxItemLevel;
 
     /// <summary>
-    /// Gets or sets a value indicating whether only high quality listings are shown.
-    /// </summary>
-    public bool HqOnly { get; set; }
-
-    /// <summary>
-    /// Gets or sets the minimum listing quantity shown.
-    /// </summary>
-    public int MinQuantity { get; set; }
-
-    /// <summary>
     /// Gets or sets the index of the highlighted listing.
     /// </summary>
     public int SelectedListing { get; set; } = -1;
@@ -202,8 +192,6 @@ namespace MarketTerror.GUI
       this.MaxLevel = DefaultMaxLevel;
       this.MinItemLevel = 0;
       this.MaxItemLevel = DefaultMaxItemLevel;
-      this.HqOnly = false;
-      this.MinQuantity = 0;
     }
 
     /// <summary>

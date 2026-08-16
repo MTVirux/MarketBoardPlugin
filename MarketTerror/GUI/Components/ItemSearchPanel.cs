@@ -163,17 +163,6 @@ namespace MarketTerror.GUI.Components
       Row("Class");
       this.DrawClassPicker();
 
-      Row("HQ only");
-      var hqOnly = this.context.HqOnly;
-      ImGui.Checkbox("##hqOnly", ref hqOnly);
-      this.context.HqOnly = hqOnly;
-
-      Row("Min qty");
-      ImGui.SetNextItemWidth(-1);
-      var minQuantity = this.context.MinQuantity;
-      ImGui.InputInt("##minQuantity", ref minQuantity);
-      this.context.MinQuantity = Math.Max(0, minQuantity);
-
       ImGui.EndTable();
 
       if (ImGui.Button("Reset filters"))

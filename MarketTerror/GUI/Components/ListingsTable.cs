@@ -60,8 +60,7 @@ namespace MarketTerror.GUI.Components
       ImGui.PopStyleColor();
 
       var listingsSnapshot = this.context.MarketData.MarketData?.Listings.ToArray();
-      var marketDataListings = listingsSnapshot?.Where(i => !this.context.HqOnly || i.Hq)
-        .Where(l => l.Quantity >= this.context.MinQuantity).OrderBy(l => l.PricePerUnit).ToList();
+      var marketDataListings = listingsSnapshot?.OrderBy(l => l.PricePerUnit).ToList();
 
       if (marketDataListings != null)
       {
