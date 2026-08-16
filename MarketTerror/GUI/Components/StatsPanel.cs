@@ -23,7 +23,7 @@ namespace MarketTerror.GUI.Components
     /// <summary>How far the mouse may sit from a sale point and still pick it, in pixels.</summary>
     private const float SalePickRadius = 12f;
 
-    /// <summary>How much slack is left around the data when the price trend is refitted.</summary>
+    /// <summary>How much slack is left around the data when a sale plot is refitted.</summary>
     private const double ZoomOutMargin = 0.08;
 
     private static readonly char[] SpinnerFrames = ['|', '/', '-', '\\'];
@@ -31,6 +31,8 @@ namespace MarketTerror.GUI.Components
     private readonly MarketBoardContext context;
 
     private bool refitPriceTrend = true;
+
+    private bool refitVolume = true;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StatsPanel"/> class.
@@ -71,31 +73,21 @@ namespace MarketTerror.GUI.Components
         this.context.OpenStatsSection = -1;
       }
 
-      var priceTrendWasOpen = this.context.OpenStatsSection == 1;
-      ImGui.SetNextItemOpen(priceTrendWasOpen, ImGuiCond.Always);
-      if (ImGui.CollapsingHeader("Price trend##statsPriceHeader"))
+      var trendsWereOpen = this.context.OpenStatsSection == 1;
+      ImGui.SetNextItemOpen(trendsWereOpen, ImGuiCond.Always);
+      if (ImGui.CollapsingHeader("Trends##statsTrendsHeader"))
       {
         this.context.OpenStatsSection = 1;
-        this.refitPriceTrend |= !priceTrendWasOpen;
-        this.DrawPriceTrend(marketData);
+        this.refitPriceTrend |= !trendsWereOpen;
+        this.refitVolume |= !trendsWereOpen;
+        this.DrawTrends(marketData);
       }
-      else if (priceTrendWasOpen)
+      else if (trendsWereOpen)
       {
         this.context.OpenStatsSection = -1;
       }
 
-      ImGui.SetNextItemOpen(this.context.OpenStatsSection == 2, ImGuiCond.Always);
-      if (ImGui.CollapsingHeader("Volume##statsVolumeHeader"))
-      {
-        this.context.OpenStatsSection = 2;
-        DrawVolume(marketData);
-      }
-      else if (this.context.OpenStatsSection == 2)
-      {
-        this.context.OpenStatsSection = -1;
-      }
-
-      // Sections 3 and 4 are unused; gilflux has always been section 5.
+      // Sections 2, 3 and 4 are unused; gilflux has always been section 5.
       ImGui.SetNextItemOpen(this.context.OpenStatsSection == 5, ImGuiCond.Always);
       if (ImGui.CollapsingHeader($"Gilflux ({queryTarget})##statsGilfluxHeader"))
       {
@@ -128,38 +120,6 @@ namespace MarketTerror.GUI.Components
       var yPad = Math.Max((yMax - yMin) * ZoomOutMargin, Math.Max(yMax * 0.1, 1));
 
       ImPlot.SetupAxesLimits(xMin - xPad, xMax + xPad, Math.Max(0, yMin - yPad), yMax + yPad, ImPlotCond.Always);
-    }
-
-    private static void DrawVolume(MarketDataResponse marketData)
-    {
-      var volChildHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
-      ImGui.BeginChild("volumeChild", new Vector2(-1, volChildHeight), false);
-
-      var xq = new List<float>();
-      var q = new List<float>();
-      foreach (var historyEntry in marketData.RecentHistory ?? new List<MarketDataRecentHistory>())
-      {
-        xq.Add(historyEntry.Timestamp);
-        q.Add(historyEntry.Quantity);
-      }
-
-      if (xq.Count > 0)
-      {
-        var xa = xq.ToArray();
-        var qa = q.ToArray();
-        if (ImPlot.BeginPlot("##statsQtyPlot", new Vector2(-1, volChildHeight - 30)))
-        {
-          ImPlot.SetupAxisScale(ImAxis.X1, ImPlotScale.Time);
-          ImPlot.PlotBars("Quantity", ref xa[0], ref qa[0], xa.Length, 3600);
-          ImPlot.EndPlot();
-        }
-      }
-      else
-      {
-        ImGui.Text("No recent history available to draw volumes.");
-      }
-
-      ImGui.EndChild();
     }
 
     private static void DrawRow(uint color, string first, string second, string third)
@@ -199,10 +159,53 @@ namespace MarketTerror.GUI.Components
       ImGui.Text(text);
     }
 
-    private void DrawPriceTrend(MarketDataResponse marketData)
+    private void DrawTrends(MarketDataResponse marketData)
     {
-      var priceChildHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
-      ImGui.BeginChild("priceChild", new Vector2(-1, priceChildHeight), false);
+      if (!ImGui.BeginTabBar("statsTrendTabs"))
+      {
+        return;
+      }
+
+      if (ImGui.BeginTabItem("Price##statsPriceTab"))
+      {
+        this.DrawSalePlot(
+          marketData,
+          "priceChild",
+          "##statsPricePlot",
+          "Price",
+          "No recent history available to draw price trend.",
+          sale => sale.PricePerUnit,
+          ref this.refitPriceTrend);
+        ImGui.EndTabItem();
+      }
+
+      if (ImGui.BeginTabItem("Volume##statsVolumeTab"))
+      {
+        this.DrawSalePlot(
+          marketData,
+          "volumeChild",
+          "##statsQtyPlot",
+          "Quantity",
+          "No recent history available to draw volumes.",
+          sale => sale.Quantity,
+          ref this.refitVolume);
+        ImGui.EndTabItem();
+      }
+
+      ImGui.EndTabBar();
+    }
+
+    private void DrawSalePlot(
+      MarketDataResponse marketData,
+      string childId,
+      string plotId,
+      string seriesLabel,
+      string emptyText,
+      Func<MarketDataRecentHistory, double> selectValue,
+      ref bool refit)
+    {
+      var childHeight = Math.Max(250, ImGui.GetContentRegionAvail().Y);
+      ImGui.BeginChild(childId, new Vector2(-1, childHeight), false);
 
       var sales = marketData.RecentHistory ?? new List<MarketDataRecentHistory>();
       var x = new List<double>();
@@ -210,32 +213,32 @@ namespace MarketTerror.GUI.Components
       foreach (var historyEntry in sales)
       {
         x.Add(historyEntry.Timestamp);
-        y.Add(historyEntry.PricePerUnit);
+        y.Add(selectValue(historyEntry));
       }
 
       if (x.Count > 0)
       {
         var xa = x.ToArray();
         var ya = y.ToArray();
-        if (ImPlot.BeginPlot("##statsPricePlot", new Vector2(-1, priceChildHeight - 30)))
+        if (ImPlot.BeginPlot(plotId, new Vector2(-1, childHeight - 30)))
         {
           ImPlot.SetupAxisScale(ImAxis.X1, ImPlotScale.Time);
 
-          if (this.refitPriceTrend)
+          if (refit)
           {
             SetupFittedAxes(xa, ya);
-            this.refitPriceTrend = false;
+            refit = false;
           }
 
           ImPlot.SetNextMarkerStyle(ImPlotMarker.Circle, 3f);
-          ImPlot.PlotLine("Price", ref xa[0], ref ya[0], xa.Length);
+          ImPlot.PlotLine(seriesLabel, ref xa[0], ref ya[0], xa.Length);
           this.DrawHoveredSale(sales, xa, ya);
           ImPlot.EndPlot();
         }
       }
       else
       {
-        ImGui.Text("No recent history available to draw price trend.");
+        ImGui.Text(emptyText);
       }
 
       ImGui.EndChild();
