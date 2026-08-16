@@ -42,6 +42,7 @@ namespace MarketTerror.Services
       this.purchase = new MarketBoardPurchase(
         this.plugin.Framework,
         this.plugin.GameGui,
+        this.plugin.MarketBoard,
         this.plugin.Log,
         () => !this.plugin.Config.NoGilSalesTax);
     }

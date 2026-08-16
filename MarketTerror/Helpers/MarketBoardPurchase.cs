@@ -7,6 +7,8 @@ namespace MarketTerror.Helpers
   using System;
   using System.Diagnostics.CodeAnalysis;
   using System.Globalization;
+  using System.Threading;
+  using Dalamud.Game.Network.Structures;
   using Dalamud.Plugin.Services;
   using FFXIVClientStructs.FFXIV.Client.UI;
   using FFXIVClientStructs.FFXIV.Client.UI.Info;
@@ -29,6 +31,7 @@ namespace MarketTerror.Helpers
     private const string ConfirmAddonName = "SelectYesno";
     private const long ListingsTimeoutMs = 15000;
     private const long ListingsSettleMs = 500;
+    private const long EarlyArrivalMs = 3000;
     private const long ConfirmTimeoutMs = 10000;
     private const long ResultTimeoutMs = 15000;
     private const uint HqItemIdOffset = 1000000;
@@ -37,6 +40,7 @@ namespace MarketTerror.Helpers
 
     private readonly IFramework framework;
     private readonly IGameGui gameGui;
+    private readonly IMarketBoard marketBoard;
     private readonly IPluginLog log;
     private readonly Func<bool> includesSalesTax;
 
@@ -44,8 +48,8 @@ namespace MarketTerror.Helpers
     private BuyRequest? request;
     private Action<BuyResult>? onFinished;
     private long deadlineTick;
-    private long listingsSettleTick;
-    private uint lastListingCount;
+    private long startTick;
+    private long lastOfferingsTick;
     private ulong purchasedListingBefore;
     private ulong targetListingId;
     private double targetUnitPrice;
@@ -55,16 +59,19 @@ namespace MarketTerror.Helpers
     /// </summary>
     /// <param name="framework">The framework.</param>
     /// <param name="gameGui">The game GUI.</param>
+    /// <param name="marketBoard">The market board events the game raises as it receives listings.</param>
     /// <param name="log">The plugin log.</param>
     /// <param name="includesSalesTax">Returns whether saved prices have the gil sales tax folded in.</param>
-    public MarketBoardPurchase(IFramework framework, IGameGui gameGui, IPluginLog log, Func<bool> includesSalesTax)
+    public MarketBoardPurchase(IFramework framework, IGameGui gameGui, IMarketBoard marketBoard, IPluginLog log, Func<bool> includesSalesTax)
     {
       this.framework = framework ?? throw new ArgumentNullException(nameof(framework));
       this.gameGui = gameGui ?? throw new ArgumentNullException(nameof(gameGui));
+      this.marketBoard = marketBoard ?? throw new ArgumentNullException(nameof(marketBoard));
       this.log = log ?? throw new ArgumentNullException(nameof(log));
       this.includesSalesTax = includesSalesTax ?? throw new ArgumentNullException(nameof(includesSalesTax));
 
       this.framework.Update += this.OnFrameworkUpdate;
+      this.marketBoard.OfferingsReceived += this.OnOfferingsReceived;
     }
 
     private enum State
@@ -99,9 +106,8 @@ namespace MarketTerror.Helpers
       this.request = buyRequest;
       this.onFinished = finished;
       this.state = State.WaitingListings;
-      this.deadlineTick = Environment.TickCount64 + ListingsTimeoutMs;
-      this.listingsSettleTick = 0;
-      this.lastListingCount = 0;
+      this.startTick = Environment.TickCount64;
+      this.deadlineTick = this.startTick + ListingsTimeoutMs;
       this.targetListingId = 0;
       this.targetUnitPrice = 0;
     }
@@ -130,6 +136,7 @@ namespace MarketTerror.Helpers
     public void Dispose()
     {
       this.framework.Update -= this.OnFrameworkUpdate;
+      this.marketBoard.OfferingsReceived -= this.OnOfferingsReceived;
       GC.SuppressFinalize(this);
     }
 
@@ -201,7 +208,9 @@ namespace MarketTerror.Helpers
 
           this.Finish(BuyResult.Failed(this.state switch
           {
-            State.WaitingListings => "the listings never arrived",
+            State.WaitingListings => Interlocked.Read(ref this.lastOfferingsTick) < this.startTick - EarlyArrivalMs
+              ? "the board never sent its listings"
+              : "the listings never settled",
             State.WaitingConfirm => "the confirmation never appeared",
             _ => "the purchase was never confirmed by the server",
           }));
@@ -239,10 +248,24 @@ namespace MarketTerror.Helpers
       var proxy = InfoProxyItemSearch.Instance();
       var windowOpen = this.gameGui.GetAddonByName(ResultAddonName) != nint.Zero;
       var name = this.request!.ItemName;
+      var sinceArrival = Interlocked.Read(ref this.lastOfferingsTick) - this.startTick;
 
       this.log.Warning(proxy == null
-        ? $"Gave up waiting for the listings of \"{name}\": no item search proxy, listings window open {windowOpen}"
-        : $"Gave up waiting for the listings of \"{name}\": still waiting {proxy->WaitingForListings}, count {proxy->ListingCount}, search item {proxy->SearchItemId}, listings window open {windowOpen}");
+        ? $"Gave up waiting for the listings of \"{name}\": no item search proxy, last page {sinceArrival}ms into the buy, listings window open {windowOpen}"
+        : $"Gave up waiting for the listings of \"{name}\": last page {sinceArrival}ms into the buy, count {proxy->ListingCount}, search item {proxy->SearchItemId}, listings window open {windowOpen}");
+    }
+
+    /// <summary>
+    /// Stamps the clock every time the board sends a page of listings.
+    /// </summary>
+    /// <param name="offerings">The listings the server sent.</param>
+    /// <remarks>Raised off the framework thread, and before a buy starts as often as during one.</remarks>
+    private void OnOfferingsReceived(IMarketBoardCurrentOfferings offerings)
+    {
+      if (offerings != null && offerings.ItemListings.Count > 0)
+      {
+        Interlocked.Exchange(ref this.lastOfferingsTick, Environment.TickCount64);
+      }
     }
 
     /// <summary>
@@ -252,26 +275,19 @@ namespace MarketTerror.Helpers
     /// <param name="buy">What is being bought.</param>
     /// <returns>True when the listings can be matched against.</returns>
     /// <remarks>
-    /// The board keeps the previous item's listings until the first page of the new ones lands, and the
-    /// rest of the pages follow over the frames after that. Matching any earlier is what makes a listing
-    /// that is plainly on the board look like it is not there.
+    /// The board keeps the previous item's listings until the new ones land, and they land a page at a
+    /// time. Waiting for the server to send them and then go quiet is what keeps a listing that is
+    /// plainly on the board from looking like it is not there. The pages can land while the results
+    /// window is still opening, so an arrival from just before the buy started counts as this one's.
     /// </remarks>
     private unsafe bool AreListingsReady(InfoProxyItemSearch* proxy, BuyRequest buy)
     {
-      if (proxy->WaitingForListings || proxy->ListingCount == 0 || proxy->SearchItemId % HqItemIdOffset != buy.ItemId)
-      {
-        this.listingsSettleTick = 0;
-        return false;
-      }
+      var arrived = Interlocked.Read(ref this.lastOfferingsTick);
 
-      if (this.listingsSettleTick == 0 || proxy->ListingCount != this.lastListingCount)
-      {
-        this.lastListingCount = proxy->ListingCount;
-        this.listingsSettleTick = Environment.TickCount64 + ListingsSettleMs;
-        return false;
-      }
-
-      return Environment.TickCount64 >= this.listingsSettleTick;
+      return arrived >= this.startTick - EarlyArrivalMs
+        && Environment.TickCount64 - arrived >= ListingsSettleMs
+        && proxy->ListingCount > 0
+        && proxy->SearchItemId % HqItemIdOffset == buy.ItemId;
     }
 
     private unsafe void TrySelectListing()
@@ -295,7 +311,7 @@ namespace MarketTerror.Helpers
       }
 
       var buy = this.request!;
-      if (!this.AreListingsReady(proxy, buy) || addon->Results->GetItemCount() == 0)
+      if (!this.AreListingsReady(proxy, buy))
       {
         return;
       }

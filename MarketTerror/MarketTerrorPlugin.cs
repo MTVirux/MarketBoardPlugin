@@ -102,6 +102,7 @@ namespace MarketTerror
     /// <param name="playerState">The player state.</param>
     /// <param name="addonLifecycle">The addon lifecycle.</param>
     /// <param name="objectTable">The object table.</param>
+    /// <param name="marketBoard">The market board events.</param>
     public MarketTerrorPlugin(
       IDalamudPluginInterface pluginInterface,
       IDataManager dataManager,
@@ -115,7 +116,8 @@ namespace MarketTerror
       IContextMenu contextMenu,
       IPlayerState playerState,
       IAddonLifecycle addonLifecycle,
-      IObjectTable objectTable)
+      IObjectTable objectTable,
+      IMarketBoard marketBoard)
     {
       this.PluginInterface = pluginInterface;
       this.DataManager = dataManager;
@@ -130,6 +132,7 @@ namespace MarketTerror
       this.PlayerState = playerState;
       this.AddonLifecycle = addonLifecycle;
       this.ObjectTable = objectTable;
+      this.MarketBoard = marketBoard;
 
       this.UniversalisClient = new UniversalisClient(this);
       this.FFXIVMTClient = new FFXIVMTClient(this);
@@ -317,6 +320,11 @@ namespace MarketTerror
     /// Gets the object table.
     /// </summary>
     public IObjectTable ObjectTable { get; init; }
+
+    /// <summary>
+    /// Gets the market board events the game raises as it receives listings.
+    /// </summary>
+    public IMarketBoard MarketBoard { get; init; }
 
     /// <summary>
     /// Gets the Universalis client used for accessing market board data.
