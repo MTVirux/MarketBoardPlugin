@@ -8,6 +8,7 @@ namespace MarketTerror.GUI
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.Windowing;
+  using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
 
   /// <summary>
@@ -15,6 +16,10 @@ namespace MarketTerror.GUI
   /// </summary>
   public class MarketTerrorConfigWindow : Window
   {
+    private readonly TerrorTheme theme;
+
+    private IDisposable? themeScope;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketTerrorConfigWindow"/> class.
     /// </summary>
@@ -26,20 +31,31 @@ namespace MarketTerror.GUI
       this.Size = new Vector2(0, 0);
 
       this.Plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
+      this.theme = new TerrorTheme(this.Plugin.Config);
     }
 
     private MarketTerrorPlugin Plugin { get; init; }
 
     /// <inheritdoc/>
+    public override void PreDraw()
+    {
+      this.themeScope = this.theme.Push();
+    }
+
+    /// <inheritdoc/>
+    public override void PostDraw()
+    {
+      this.themeScope?.Dispose();
+      this.themeScope = null;
+    }
+
+    /// <inheritdoc/>
     public override void Draw()
     {
-      // General
-      ImGui.Text("General");
-      ImGui.Separator();
+      this.SectionHeading("General");
       this.Checkbox("Context menu integration", "Toggles whether context menu integration is enabled", this.Plugin.Config.ContextMenuIntegration, (v) => this.Plugin.Config.ContextMenuIntegration = v);
       this.Checkbox("Gil Icon Shown", "Toggles whether the Gil icon is shown", this.Plugin.Config.PriceIconShown, (v) => this.Plugin.Config.PriceIconShown = v);
 
-      // Pricing / behavior
       this.Checkbox("No Gil Sales Tax", "Toggles whether the Gil Sales Tax is included", this.Plugin.Config.NoGilSalesTax, (v) =>
       {
         this.Plugin.Config.NoGilSalesTax = v;
@@ -49,17 +65,13 @@ namespace MarketTerror.GUI
 
       ImGui.NewLine();
 
-      // History
-      ImGui.Text("History");
-      ImGui.Separator();
+      this.SectionHeading("History");
       this.Checkbox("Disable Recent History", "Toggles whether the recent history is disabled", this.Plugin.Config.RecentHistoryDisabled, (v) => this.Plugin.Config.RecentHistoryDisabled = v);
       this.Checkbox("Watch for hovered item", "Automatically select the item hovered in any of the in-game inventory window after 1 second.", this.Plugin.Config.WatchForHovered, (v) => this.Plugin.Config.WatchForHovered = v);
 
       ImGui.NewLine();
 
-      // Teleport / integration
-      ImGui.Text("Teleport / Integration");
-      ImGui.Separator();
+      this.SectionHeading("Teleport / Integration");
 
       // Auto-teleport to world setting (only enabled if Lifestream is installed)
       var lifestreamInstalled = this.Plugin.IsLifestreamInstalled;
@@ -94,17 +106,13 @@ namespace MarketTerror.GUI
 
       ImGui.NewLine();
 
-      // Clipboard
-      ImGui.Text("Clipboard");
-      ImGui.Separator();
+      this.SectionHeading("Clipboard");
       this.Checkbox("Clipboard notifications", "Show a chat message when something is copied to the clipboard", this.Plugin.Config.ClipboardNotificationsEnabled, (v) => this.Plugin.Config.ClipboardNotificationsEnabled = v);
       this.Checkbox("Copy item name on listing click", "Copy the selected item's name to the clipboard when clicking a current listing", this.Plugin.Config.CopyItemNameOnListingClick, (v) => this.Plugin.Config.CopyItemNameOnListingClick = v);
 
       ImGui.NewLine();
 
-      // Appearance
-      ImGui.Text("Others");
-      ImGui.Separator();
+      this.SectionHeading("Others");
       this.Checkbox("Hide SeaOfTerror Repo button", "Toggles whether the SeaOfTerror Repo button should be hidden", this.Plugin.Config.KofiHidden, (v) => this.Plugin.Config.KofiHidden = v);
 
       this.Checkbox("Include Oceania DC", "Toggles whether the Oceania DC should be included in the Cross-DC filter", this.Plugin.Config.IncludeOceaniaDC, (v) =>
@@ -114,14 +122,18 @@ namespace MarketTerror.GUI
         this.Plugin.ResetMarketData();
       });
 
+      this.Checkbox("Terror skin", "Apply the Market Terror colour scheme to this plugin's windows. Turn it off to use your Dalamud theme.", this.Plugin.Config.TerrorSkinEnabled, (v) => this.Plugin.Config.TerrorSkinEnabled = v);
+
 #if DEBUG
       ImGui.NewLine();
 
-      // Debug
-      ImGui.Text("Debug");
-      ImGui.Separator();
+      this.SectionHeading("Debug");
       this.Checkbox("Open window on start", "Toggles whether the main window opens automatically on plugin start in debug builds", this.Plugin.Config.OpenOnStart, (v) => this.Plugin.Config.OpenOnStart = v);
 #endif
+
+      ImGui.NewLine();
+
+      this.SectionHeading("Data");
 
       var itemRefreshTimeout = this.Plugin.Config.ItemRefreshTimeout;
       ImGui.Text("Item buffer Timeout (ms) :");
@@ -149,6 +161,14 @@ namespace MarketTerror.GUI
         this.Plugin.Config.HistoryCount = historyCount;
         this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
       }
+    }
+
+    private void SectionHeading(string label)
+    {
+      ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+      ImGui.Text(label);
+      ImGui.PopStyleColor();
+      ImGui.Separator();
     }
 
     private void Checkbox(string label, string description, bool oldValue, Action<bool> setter)
