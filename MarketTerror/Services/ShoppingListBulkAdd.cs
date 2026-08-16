@@ -6,6 +6,7 @@ namespace MarketTerror.Services
 {
   using System;
   using System.Collections.Generic;
+  using System.Diagnostics;
   using System.Linq;
   using System.Net.Http;
   using System.Text.Json;
@@ -160,9 +161,11 @@ namespace MarketTerror.Services
       this.job = Task.Run(() => this.Run(queued, targets, token), token);
     }
 
-    private async Task Run(IReadOnlyList<Item> items, string[] targets, CancellationToken token)
+    private async Task Run(Item[] items, string[] targets, CancellationToken token)
     {
       var firstRequest = true;
+      var queries = 0;
+      var elapsed = Stopwatch.StartNew();
 
       try
       {
@@ -184,6 +187,7 @@ namespace MarketTerror.Services
             }
 
             firstRequest = false;
+            queries++;
 
             answers.Add((target, await this.Fetch(ids, target, token).ConfigureAwait(false)));
           }
@@ -224,11 +228,30 @@ namespace MarketTerror.Services
             .RunOnFrameworkThread(() => this.Apply(entries, chunk, (targets.Length * ChunkDelayMilliseconds) + requestGuess))
             .ConfigureAwait(false);
         }
+
+        elapsed.Stop();
+
+        // A cancelled job keeps the previous stats, since it only priced part of what it was given.
+        var stats = new QueryStats
+        {
+          Items = items.Length,
+          Queries = queries,
+          Scope = string.Join(" and ", targets),
+          Milliseconds = elapsed.ElapsedMilliseconds,
+        };
+
+        await this.plugin.Framework.RunOnFrameworkThread(() => this.RecordStats(stats)).ConfigureAwait(false);
       }
       catch (OperationCanceledException)
       {
         this.plugin.Log.Debug($"Cancelled adding {this.CategoryName} to the buy list.");
       }
+    }
+
+    private void RecordStats(QueryStats stats)
+    {
+      this.plugin.Config.ShoppingListLastQuery = stats;
+      this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
     }
 
     private async Task<IReadOnlyDictionary<uint, MarketDataResponse>> Fetch(uint[] ids, string target, CancellationToken token)

@@ -124,6 +124,11 @@ namespace MarketTerror
     public MarketScope ShoppingListScopeLevel { get; set; } = MarketScope.DataCentre;
 
     /// <summary>
+    /// Gets or sets what the last finished pricing job did, or null while none has run.
+    /// </summary>
+    public QueryStats? ShoppingListLastQuery { get; set; }
+
+    /// <summary>
     /// Gets the saved shopping list, so it survives a plugin reload.
     /// </summary>
     [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale whenever the shopping list changes")]
