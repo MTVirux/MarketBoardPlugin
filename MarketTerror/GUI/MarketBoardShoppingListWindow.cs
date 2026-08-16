@@ -424,7 +424,7 @@ namespace MarketTerror.GUI
       var barWidth = ImGui.GetContentRegionAvail().X - cancelWidth - ImGui.GetStyle().ItemSpacing.X;
 
       ImGui.ProgressBar(
-        total > 0 ? processed / (float)total : 0f,
+        bulkAdd.Progress,
         new Vector2(barWidth, 0),
         $"{processed} / {total}");
 

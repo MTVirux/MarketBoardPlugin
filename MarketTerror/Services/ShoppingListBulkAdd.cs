@@ -28,9 +28,15 @@ namespace MarketTerror.Services
     /// <summary>
     /// The pause between two chunk requests. Universalis documents no rate limit, so this is a courtesy margin.
     /// </summary>
-    private const int ChunkDelayMilliseconds = 1000;
+    private const int ChunkDelayMilliseconds = 3000;
 
     private readonly MarketTerrorPlugin plugin;
+
+    private DateTime cooldownStartedUtc;
+
+    private int cooldownBaseline;
+
+    private int cooldownChunkSize;
 
     private CancellationTokenSource? cancellation;
 
@@ -68,6 +74,37 @@ namespace MarketTerror.Services
     /// Gets a value indicating whether a job is still running.
     /// </summary>
     public bool IsRunning => this.job is { IsCompleted: false };
+
+    /// <summary>
+    /// Gets how full the progress bar should be, from 0 to 1.
+    /// </summary>
+    /// <remarks>
+    /// The chunk waiting on the cooldown is counted in gradually as the cooldown runs down, so the
+    /// bar creeps forward instead of standing still and then jumping a whole chunk at a time.
+    /// </remarks>
+    public float Progress
+    {
+      get
+      {
+        if (this.Total <= 0)
+        {
+          return 0f;
+        }
+
+        var done = (float)this.Processed;
+
+        if (this.cooldownChunkSize > 0)
+        {
+          var elapsed = (DateTime.UtcNow - this.cooldownStartedUtc).TotalMilliseconds;
+          var ramp = Math.Clamp(elapsed / ChunkDelayMilliseconds, 0d, 1d);
+
+          // Never below Processed, so the bar cannot fall back once the chunk lands.
+          done = Math.Max(done, this.cooldownBaseline + (float)(this.cooldownChunkSize * ramp));
+        }
+
+        return Math.Clamp(done / this.Total, 0f, 1f);
+      }
+    }
 
     /// <summary>
     /// Starts adding a category to the buy list, unless a job is already running.
@@ -131,6 +168,7 @@ namespace MarketTerror.Services
       this.Processed = 0;
       this.Total = queued.Length;
       this.refreshing = refresh;
+      this.cooldownChunkSize = 0;
 
       this.job = Task.Run(() => this.Run(queued, queryTarget, token), token);
     }
@@ -147,6 +185,10 @@ namespace MarketTerror.Services
 
           if (!firstChunk)
           {
+            this.cooldownBaseline = this.Processed;
+            this.cooldownChunkSize = chunk.Length;
+            this.cooldownStartedUtc = DateTime.UtcNow;
+
             await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
           }
 
