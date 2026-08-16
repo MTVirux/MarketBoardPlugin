@@ -426,7 +426,7 @@ namespace MarketTerror.GUI
       var scope = this.Plugin.ShoppingListScope;
       var busy = this.Plugin.ShoppingListBulkAdd.IsRunning;
 
-      ImGui.BeginDisabled(busy || !scope.HasSelection);
+      ImGui.BeginDisabled(busy || this.Plugin.ShoppingListBuyer.IsRunning || !scope.HasSelection);
 
       if (ImGui.Button("Refresh all"))
       {
