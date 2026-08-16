@@ -12,6 +12,7 @@ namespace MarketTerror.GUI
   using System.Text;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
+  using Dalamud.Interface.Textures;
   using Dalamud.Interface.Windowing;
   using MarketTerror.GUI.Components;
   using MarketTerror.GUI.Theme;
@@ -209,6 +210,8 @@ namespace MarketTerror.GUI
         ImGui.TableNextRow();
 
         ImGui.TableSetColumnIndex(0);
+
+        this.DrawItemIcon(item);
 
         var nameColor = item.Outcome switch
         {
@@ -588,6 +591,33 @@ namespace MarketTerror.GUI
       }
 
       ImGui.EndDisabled();
+    }
+
+    /// <summary>
+    /// Draws the item's game icon at text height and leaves the cursor on the same line as the name.
+    /// </summary>
+    /// <param name="item">The row to draw the icon of.</param>
+    private void DrawItemIcon(SavedItem item)
+    {
+      var size = new Vector2(ImGui.GetTextLineHeight());
+
+      using var icon = this.Plugin.TextureProvider.GetFromGameIcon(new GameIconLookup
+      {
+        IconId = item.SourceItem.Icon,
+        ItemHq = item.Hq,
+      }).GetWrapOrDefault();
+
+      if (icon == null)
+      {
+        // The name still lines up with the rows that did get an icon.
+        ImGui.Dummy(size);
+      }
+      else
+      {
+        ImGui.Image(icon.Handle, size);
+      }
+
+      ImGui.SameLine();
     }
 
     private string PriceText(SavedItem item)
