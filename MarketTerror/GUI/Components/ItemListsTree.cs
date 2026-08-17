@@ -100,9 +100,10 @@ namespace MarketTerror.GUI.Components
 
       var open = ImGui.TreeNode($"{list.Name} ({list.ItemIds.Count})##list{list.Id}");
 
-      // Bound while the node is still the last item, so a closed list has its menu too.
-      this.DrawListMenu(list);
+      // Both bind to the node while it is still the last item, so a closed list keeps them.
+      // The drag goes first: an open menu draws its own items, which would take the binding.
       this.DrawListDragDrop(list, index);
+      this.DrawListMenu(list);
 
       if (!open)
       {
