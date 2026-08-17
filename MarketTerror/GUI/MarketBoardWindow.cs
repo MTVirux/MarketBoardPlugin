@@ -12,7 +12,6 @@ namespace MarketTerror.GUI
   using Dalamud.Interface.ManagedFontAtlas;
   using Dalamud.Interface.Windowing;
   using MarketTerror.GUI.Components;
-  using MarketTerror.GUI.Theme;
   using MarketTerror.Services;
 
   /// <summary>
@@ -30,17 +29,7 @@ namespace MarketTerror.GUI
 
     private readonly IFontHandle titleFontHandle;
 
-    private readonly TerrorTheme theme;
-
-    private readonly ItemCatalog catalog;
-
-    private readonly ApiStatus apiStatus;
-
-    private readonly MarketDataCache marketDataCache;
-
-    private readonly MarketDataView marketDataView;
-
-    private readonly WorldSelection worldSelection;
+    private readonly BoardServices services;
 
     private readonly HoveredItemWatcher hoveredItemWatcher;
 
@@ -122,23 +111,10 @@ namespace MarketTerror.GUI
       imPlotStylePtr.UseISO8601 = DateTimeFormatInfo.CurrentInfo.ShortDatePattern != "M/d/yyyy";
       imPlotStylePtr.UseLocalTime = true;
 
-      this.theme = new TerrorTheme(this.plugin.Config);
-      this.catalog = new ItemCatalog(this.plugin.DataManager, this.plugin.Log);
-      this.apiStatus = new ApiStatus(this.plugin);
-      this.marketDataCache = new MarketDataCache(this.plugin);
-      this.marketDataView = new MarketDataView(this.plugin, this.marketDataCache, this.apiStatus);
-      this.worldSelection = new WorldSelection(this.plugin);
+      this.services = new BoardServices(this.plugin, this.defaultFontHandle, this.titleFontHandle);
+      this.context = new MarketBoardContext(this.services, WorldSelection.ForMainWindow(this.plugin));
 
-      this.context = new MarketBoardContext(
-        this.plugin,
-        this.theme,
-        this.catalog,
-        this.marketDataView,
-        this.apiStatus,
-        this.worldSelection,
-        this.titleFontHandle);
-
-      this.hoveredItemWatcher = new HoveredItemWatcher(this.plugin, this.catalog, id => this.context.SelectItem(id));
+      this.hoveredItemWatcher = new HoveredItemWatcher(this.plugin, this.services.Catalog, id => this.context.SelectItem(id));
 
       this.searchPanel = new ItemSearchPanel(this.context);
       this.itemListPanel = new ItemListPanel(this.context);
@@ -222,7 +198,7 @@ namespace MarketTerror.GUI
     {
       IntegrationsButton.Refresh(this.integrationsButton, this.context);
       ShoppingListButton.Refresh(this.shoppingListButton, this.context);
-      this.themeScope = this.theme.Push();
+      this.themeScope = this.context.Theme.Push();
     }
 
     /// <inheritdoc/>
@@ -342,8 +318,8 @@ namespace MarketTerror.GUI
         this.themeScope?.Dispose();
         this.themeScope = null;
         this.hoveredItemWatcher.Dispose();
-        this.marketDataView.Dispose();
-        this.apiStatus.Dispose();
+        this.context.Dispose();
+        this.services.Dispose();
         this.defaultFontHandle?.Dispose();
         this.titleFontHandle?.Dispose();
       }
@@ -357,7 +333,7 @@ namespace MarketTerror.GUI
     /// </summary>
     private void RestoreLastOpenedItem()
     {
-      if (this.pendingItemId == 0 || !this.worldSelection.HasSelection)
+      if (this.pendingItemId == 0 || !this.context.Worlds.HasSelection)
       {
         return;
       }
@@ -490,7 +466,7 @@ namespace MarketTerror.GUI
         ImGui.GetWindowDrawList().AddLine(
           from,
           to,
-          hovered ? this.theme.AccentHover : this.theme.Border,
+          hovered ? this.context.Theme.AccentHover : this.context.Theme.Border,
           (hovered ? 2.0f : 1.0f) * scale);
       }
 

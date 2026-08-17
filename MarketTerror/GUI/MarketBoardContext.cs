@@ -21,7 +21,7 @@ namespace MarketTerror.GUI
   /// <remarks>
   /// Components talk to each other only through this object; none of them holds a reference to another.
   /// </remarks>
-  public sealed class MarketBoardContext
+  public sealed class MarketBoardContext : IDisposable
   {
     /// <summary>
     /// The equip level the maximum equip level filter starts at and resets to.
@@ -36,36 +36,27 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardContext"/> class.
     /// </summary>
-    /// <param name="plugin">The plugin instance.</param>
-    /// <param name="theme">The Terror skin.</param>
-    /// <param name="catalog">The item catalogue.</param>
-    /// <param name="marketData">This board's market data view.</param>
-    /// <param name="apiStatus">The shared API status poller.</param>
-    /// <param name="worlds">The world selection.</param>
-    /// <param name="titleFont">The 1.5x font used for headings.</param>
-    public MarketBoardContext(
-      MarketTerrorPlugin plugin,
-      TerrorTheme theme,
-      ItemCatalog catalog,
-      MarketDataView marketData,
-      ApiStatus apiStatus,
-      WorldSelection worlds,
-      IFontHandle titleFont)
+    /// <param name="services">The services shared by every board.</param>
+    /// <param name="worlds">This board's world selection.</param>
+    public MarketBoardContext(BoardServices services, WorldSelection worlds)
     {
-      this.Plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
-      this.Theme = theme ?? throw new ArgumentNullException(nameof(theme));
-      this.Catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-      this.MarketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
+      this.Services = services ?? throw new ArgumentNullException(nameof(services));
       this.Worlds = worlds ?? throw new ArgumentNullException(nameof(worlds));
-      this.TitleFont = titleFont ?? throw new ArgumentNullException(nameof(titleFont));
-      this.Integrations = new IntegrationStatus(this.Plugin, apiStatus);
-      this.CatalogView = new CatalogView(this.Catalog, this.Plugin.Log);
+
+      this.MarketData = new MarketDataView(services.Plugin, services.MarketDataCache, services.ApiStatus);
+      this.CatalogView = new CatalogView(services.Catalog, services.Plugin.Log);
+      this.Integrations = new IntegrationStatus(services.Plugin, services.ApiStatus);
     }
+
+    /// <summary>
+    /// Gets the services shared by every board.
+    /// </summary>
+    public BoardServices Services { get; }
 
     /// <summary>
     /// Gets the plugin instance.
     /// </summary>
-    public MarketTerrorPlugin Plugin { get; }
+    public MarketTerrorPlugin Plugin => this.Services.Plugin;
 
     /// <summary>
     /// Gets the plugin configuration.
@@ -75,12 +66,12 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Gets the Terror skin.
     /// </summary>
-    public TerrorTheme Theme { get; }
+    public TerrorTheme Theme => this.Services.Theme;
 
     /// <summary>
     /// Gets the item catalogue.
     /// </summary>
-    public ItemCatalog Catalog { get; }
+    public ItemCatalog Catalog => this.Services.Catalog;
 
     /// <summary>
     /// Gets this board's filtered view of the catalogue.
@@ -105,7 +96,7 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Gets the 1.5x font used for headings.
     /// </summary>
-    public IFontHandle TitleFont { get; }
+    public IFontHandle TitleFont => this.Services.TitleFont;
 
     /// <summary>
     /// Gets or sets the current search string.
@@ -199,6 +190,14 @@ namespace MarketTerror.GUI
       || this.MaxLevel != DefaultMaxLevel
       || this.MinItemLevel != 0
       || this.MaxItemLevel != DefaultMaxItemLevel;
+
+    /// <summary>
+    /// Stops this board's in-flight market data fetch.
+    /// </summary>
+    public void Dispose()
+    {
+      this.MarketData.Dispose();
+    }
 
     /// <summary>
     /// Builds the item filter matching the current advanced search settings.
