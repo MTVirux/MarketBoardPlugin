@@ -223,9 +223,7 @@ namespace MarketTerror.Services
     /// <returns>0 for the current world, 1 for its data centre, 2 for its region, 3 for anywhere else.</returns>
     private int TravelTier(string world)
     {
-      var current = this.plugin.PlayerState.IsLoaded
-        ? this.plugin.PlayerState.CurrentWorld.Value.Name.ExtractText()
-        : string.Empty;
+      var current = PlayerWorld.CurrentName(this.plugin.PlayerState);
 
       if (string.Equals(world, current, StringComparison.OrdinalIgnoreCase))
       {

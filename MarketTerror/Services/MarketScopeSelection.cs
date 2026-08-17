@@ -139,14 +139,11 @@ namespace MarketTerror.Services
     {
       get
       {
-        if (this.Plugin.PlayerState.IsLoaded)
-        {
-          var world = this.Plugin.PlayerState.CurrentWorld.Value.Name.ExtractText();
+        var world = PlayerWorld.CurrentName(this.Plugin.PlayerState);
 
-          if (world.Length > 0)
-          {
-            this.currentWorld = world;
-          }
+        if (world.Length > 0)
+        {
+          this.currentWorld = world;
         }
 
         if (this.currentWorld.Length > 0)

@@ -375,8 +375,9 @@ namespace MarketTerror.GUI
       var plugin = this.Plugin;
 
       var travelEnabled = allowTravel && !string.IsNullOrEmpty(worldName);
-      var sameWorld = plugin.PlayerState.IsLoaded
-        && string.Equals(worldName, plugin.PlayerState.CurrentWorld.Value.Name.ExtractText(), StringComparison.OrdinalIgnoreCase);
+      var currentWorld = PlayerWorld.CurrentName(plugin.PlayerState);
+      var sameWorld = currentWorld.Length > 0
+        && string.Equals(worldName, currentWorld, StringComparison.OrdinalIgnoreCase);
 
       // Skip travel when we're already at a Market Board in that world.
       var alreadyAtMarketBoard = sameWorld && plugin.GameGui.GetAddonByName("ItemSearch") != nint.Zero;
