@@ -57,6 +57,7 @@ namespace MarketTerror.GUI
       this.Worlds = worlds ?? throw new ArgumentNullException(nameof(worlds));
       this.TitleFont = titleFont ?? throw new ArgumentNullException(nameof(titleFont));
       this.Integrations = new IntegrationStatus(this.Plugin, this.MarketData);
+      this.CatalogView = new CatalogView(this.Catalog, this.Plugin.Log);
     }
 
     /// <summary>
@@ -78,6 +79,11 @@ namespace MarketTerror.GUI
     /// Gets the item catalogue.
     /// </summary>
     public ItemCatalog Catalog { get; }
+
+    /// <summary>
+    /// Gets this board's filtered view of the catalogue.
+    /// </summary>
+    public CatalogView CatalogView { get; }
 
     /// <summary>
     /// Gets the market data provider.

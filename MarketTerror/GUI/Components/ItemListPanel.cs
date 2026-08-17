@@ -63,7 +63,7 @@ namespace MarketTerror.GUI.Components
         var searching = this.context.ItemListTab == ItemListTab.Search;
 
         // The advanced search only ever narrows the search tab; the all items tab stays the whole catalogue.
-        var rebuilt = this.context.Catalog.ApplyFilter(
+        var rebuilt = this.context.CatalogView.ApplyFilter(
           searching ? this.context.BuildFilter(this.context.SearchString) : ItemFilter.None);
 
         this.DrawCategoryTree(itemTextSize, searching, rebuilt);
@@ -220,7 +220,7 @@ namespace MarketTerror.GUI.Components
 
     private void DrawCategoryTree(Vector2 itemTextSize, bool searching, bool resultsChanged)
     {
-      foreach (var category in this.context.Catalog.FilteredCategories)
+      foreach (var category in this.context.CatalogView.FilteredCategories)
       {
         if (searching)
         {
