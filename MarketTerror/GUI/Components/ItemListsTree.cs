@@ -22,7 +22,24 @@ namespace MarketTerror.GUI.Components
     /// </summary>
     private const string DeletePopupId = "Delete list##deleteItemList";
 
+    /// <summary>
+    /// The drag payload marking a list being moved among the other lists.
+    /// </summary>
+    private const string ListPayload = "MTLIST";
+
+    /// <summary>
+    /// The drag payload marking an item being moved within its list.
+    /// </summary>
+    private const string ItemPayload = "MTLISTITEM";
+
     private readonly MarketBoardContext context;
+
+    // Where the drag started. The payload itself carries nothing; it only says which kind of drag this is.
+    private int draggedList = -1;
+
+    private Guid draggedItemList = Guid.Empty;
+
+    private int draggedItem = -1;
 
     // The list being renamed in place, or empty when none is.
     private Guid renaming = Guid.Empty;
@@ -85,6 +102,7 @@ namespace MarketTerror.GUI.Components
 
       // Bound while the node is still the last item, so a closed list has its menu too.
       this.DrawListMenu(list);
+      this.DrawListDragDrop(list, index);
 
       if (!open)
       {
@@ -120,6 +138,8 @@ namespace MarketTerror.GUI.Components
           this.context.SelectItem(id, true);
         }
 
+        this.DrawItemDragDrop(list, i, itemName);
+
         if (ImGui.BeginPopupContextItem($"listItemMenu{list.Id}item{id}"))
         {
           if (ImGui.Selectable("Remove from this list"))
@@ -140,6 +160,75 @@ namespace MarketTerror.GUI.Components
 
       ImGui.Indent(ImGui.GetTreeNodeToLabelSpacing());
       ImGui.TreePop();
+    }
+
+    /// <summary>
+    /// Lets a list be dragged to a different place among the others.
+    /// </summary>
+    /// <param name="list">The list the node belongs to.</param>
+    /// <param name="index">Where the list sits now.</param>
+    private void DrawListDragDrop(ItemList list, int index)
+    {
+      if (ImGui.BeginDragDropSource())
+      {
+        this.draggedList = index;
+        ImGui.SetDragDropPayload(ListPayload, ReadOnlySpan<byte>.Empty);
+        ImGui.Text(list.Name);
+        ImGui.EndDragDropSource();
+      }
+
+      if (!ImGui.BeginDragDropTarget())
+      {
+        return;
+      }
+
+      if (!ImGui.AcceptDragDropPayload(ListPayload).IsNull && this.draggedList >= 0)
+      {
+        this.context.Plugin.ItemLists.MoveList(this.draggedList, index);
+        this.draggedList = -1;
+      }
+
+      ImGui.EndDragDropTarget();
+    }
+
+    /// <summary>
+    /// Lets an item be dragged to a different place within its own list.
+    /// </summary>
+    /// <param name="list">The list the item is on.</param>
+    /// <param name="index">Where the item sits now.</param>
+    /// <param name="itemName">The item's name, shown under the cursor while it is dragged.</param>
+    private void DrawItemDragDrop(ItemList list, int index, string itemName)
+    {
+      // A search hides rows, so the drop would land against a position the user cannot see.
+      if (!string.IsNullOrEmpty(this.context.SearchString))
+      {
+        return;
+      }
+
+      if (ImGui.BeginDragDropSource())
+      {
+        this.draggedItemList = list.Id;
+        this.draggedItem = index;
+        ImGui.SetDragDropPayload(ItemPayload, ReadOnlySpan<byte>.Empty);
+        ImGui.Text(itemName);
+        ImGui.EndDragDropSource();
+      }
+
+      if (!ImGui.BeginDragDropTarget())
+      {
+        return;
+      }
+
+      // Within the same list only, so a stray drop cannot quietly move an item out of one.
+      if (!ImGui.AcceptDragDropPayload(ItemPayload).IsNull
+        && this.draggedItemList == list.Id
+        && this.draggedItem >= 0)
+      {
+        this.context.Plugin.ItemLists.MoveItem(list, this.draggedItem, index);
+        this.draggedItem = -1;
+      }
+
+      ImGui.EndDragDropTarget();
     }
 
     /// <summary>
