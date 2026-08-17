@@ -741,6 +741,27 @@ namespace MarketTerror
         this.Log.Warning($"Failed to print clipboard notification to chat: {ex.Message}");
       }
     }
+
+    /// <summary>
+    /// Notify the chat about a clipboard action that is not a copy, so it is not worded as one.
+    /// </summary>
+    /// <param name="text">The message to print.</param>
+    public void NotifyClipboard(string text)
+    {
+      if (string.IsNullOrEmpty(text))
+      {
+        return;
+      }
+
+      try
+      {
+        this.ChatGui.Print(text);
+      }
+      catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+      {
+        this.Log.Warning($"Failed to print clipboard notification to chat: {ex.Message}");
+      }
+    }
     #pragma warning restore SA1202
   }
 }

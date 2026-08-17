@@ -6,6 +6,8 @@ namespace MarketTerror.GUI.Components
 {
   using System;
   using System.Collections.Generic;
+  using System.Globalization;
+  using System.Text;
   using Dalamud.Bindings.ImGui;
   using Lumina.Excel.Sheets;
   using MarketTerror.Models.ItemLists;
@@ -193,6 +195,19 @@ namespace MarketTerror.GUI.Components
 
       this.DrawListShoppingEntries(list);
 
+      ImGui.Separator();
+
+      // Ids rather than names, so a list survives being moved to a client in another language.
+      if (ImGui.Selectable("Copy item IDs"))
+      {
+        this.CopyIds(list);
+      }
+
+      if (ImGui.Selectable("Paste item IDs"))
+      {
+        this.PasteIds(list);
+      }
+
       ImGui.EndPopup();
     }
 
@@ -240,6 +255,79 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndPopup();
+    }
+
+    /// <summary>
+    /// Puts a list's item ids on the clipboard, one to a line.
+    /// </summary>
+    /// <param name="list">The list to copy.</param>
+    private void CopyIds(ItemList list)
+    {
+      if (list.ItemIds.Count == 0)
+      {
+        return;
+      }
+
+      var builder = new StringBuilder();
+
+      foreach (var id in list.ItemIds)
+      {
+        builder.AppendLine(id.ToString(CultureInfo.InvariantCulture));
+      }
+
+      ImGui.SetClipboardText(builder.ToString().TrimEnd());
+
+      if (this.context.Config.ClipboardNotificationsEnabled)
+      {
+        this.context.Plugin.NotifyClipboardCopied($"{list.ItemIds.Count} item IDs from {list.Name}");
+      }
+    }
+
+    /// <summary>
+    /// Adds the item ids on the clipboard to a list, dropping the ones the game does not know.
+    /// </summary>
+    /// <param name="list">The list to paste into.</param>
+    private void PasteIds(ItemList list)
+    {
+      var text = ImGui.GetClipboardText();
+
+      if (string.IsNullOrWhiteSpace(text))
+      {
+        return;
+      }
+
+      var sheet = this.context.Plugin.DataManager.Excel.GetSheet<Item>();
+      var valid = new List<uint>();
+      var skipped = 0;
+
+      foreach (var line in text.Split('\n'))
+      {
+        var trimmed = line.Trim();
+
+        if (trimmed.Length == 0)
+        {
+          continue;
+        }
+
+        if (!uint.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id)
+          || !sheet.GetRowOrDefault(id).HasValue)
+        {
+          skipped++;
+          continue;
+        }
+
+        valid.Add(id);
+      }
+
+      var added = this.context.Plugin.ItemLists.AddRange(list, valid);
+
+      // The ones that parsed but were already on the list were not added either.
+      skipped += valid.Count - added;
+
+      if (this.context.Config.ClipboardNotificationsEnabled)
+      {
+        this.context.Plugin.NotifyClipboard($"Pasted {added} items into {list.Name}, skipped {skipped}.");
+      }
     }
 
     /// <summary>
