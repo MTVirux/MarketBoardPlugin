@@ -398,6 +398,11 @@ namespace MarketTerror
     public void ResetMarketData()
     {
       this.boardManager.MainWindow.ResetMarketData();
+
+      foreach (var window in this.boardManager.Detached)
+      {
+        window.Board.Context.ResetMarketData();
+      }
     }
 
     /// <summary>

@@ -6,7 +6,6 @@ namespace MarketTerror.GUI
 {
   using System;
   using System.Collections.Generic;
-  using System.Linq;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.ManagedFontAtlas;
   using Lumina.Excel.Sheets;
@@ -372,6 +371,10 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Drops the cached market data and refetches the selected item.
     /// </summary>
+    /// <remarks>
+    /// The cache is shared, so this empties it for every board. It is meant for the settings that
+    /// change what a response is made of; moving a board to another place only needs a refetch.
+    /// </remarks>
     public void ResetMarketData()
     {
       this.MarketData.ClearCache();
