@@ -4,12 +4,9 @@
 namespace MarketTerror.GUI
 {
   using System;
-  using System.Globalization;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
-  using Dalamud.Bindings.ImPlot;
   using Dalamud.Interface;
-  using Dalamud.Interface.ManagedFontAtlas;
   using Dalamud.Interface.Windowing;
   using MarketTerror.GUI.Components;
   using MarketTerror.Services;
@@ -18,16 +15,13 @@ namespace MarketTerror.GUI
   /// The market board window.
   /// </summary>
   /// <remarks>
-  /// This type owns the services and hosts a <see cref="MarketBoard"/>; the drawing itself lives in
+  /// This type hosts the main <see cref="MarketBoard"/>; the drawing itself lives in
   /// <see cref="MarketBoard"/> and the components under <see cref="MarketTerror.GUI.Components"/>.
+  /// The services it draws with belong to the <see cref="BoardManager"/>.
   /// </remarks>
   public class MarketBoardWindow : Window, IDisposable
   {
     private readonly MarketTerrorPlugin plugin;
-
-    private readonly IFontHandle defaultFontHandle;
-
-    private readonly IFontHandle titleFontHandle;
 
     private readonly BoardServices services;
 
@@ -50,11 +44,14 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardWindow"/> class.
     /// </summary>
-    /// <param name="plugin">The <see cref="MarketTerrorPlugin"/>.</param>
-    public MarketBoardWindow(MarketTerrorPlugin plugin)
+    /// <param name="manager">The manager that owns this window and the torn-off ones.</param>
+    public MarketBoardWindow(BoardManager manager)
       : base("Market Terror")
     {
-      this.plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
+      ArgumentNullException.ThrowIfNull(manager);
+
+      this.services = manager.Services;
+      this.plugin = this.services.Plugin;
       this.Flags = ImGuiWindowFlags.NoScrollbar;
       this.Size = new Vector2(800, 600);
       this.SizeCondition = ImGuiCond.FirstUseEver;
@@ -64,40 +61,6 @@ namespace MarketTerror.GUI
         MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
       };
 
-      this.defaultFontHandle = this.plugin.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(e =>
-        e.OnPreBuild(toolkit =>
-        {
-          var fontStream = this.GetType().Assembly.GetManifestResourceStream("MarketTerror.Resources.NotoSans-Medium-NNBSP.otf");
-
-          if (fontStream == null)
-          {
-            this.plugin.Log.Warning("Failed to load embedded font MarketTerror.Resources.NotoSans-Medium-NNBSP.otf");
-            return;
-          }
-
-          toolkit.AddFontFromStream(
-            fontStream,
-            new SafeFontConfig()
-            {
-              SizePx = UiBuilder.DefaultFontSizePx,
-              GlyphRanges = FontAtlasBuildToolkitUtilities.ToGlyphRange(char.ConvertFromUtf32(0x202F)),
-              MergeFont = toolkit.AddDalamudDefaultFont(-1),
-            },
-            false,
-            "NNBSP");
-        }));
-
-      this.titleFontHandle = this.plugin.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(e =>
-        e.OnPreBuild(toolkit =>
-          toolkit.AddDalamudDefaultFont(this.plugin.PluginInterface.UiBuilder.DefaultFontSpec.SizePx * 1.5f)));
-
-      var imPlotStylePtr = ImPlot.GetStyle();
-
-      imPlotStylePtr.Use24HourClock = DateTimeFormatInfo.CurrentInfo.ShortTimePattern.Contains('H', StringComparison.InvariantCulture);
-      imPlotStylePtr.UseISO8601 = DateTimeFormatInfo.CurrentInfo.ShortDatePattern != "M/d/yyyy";
-      imPlotStylePtr.UseLocalTime = true;
-
-      this.services = new BoardServices(this.plugin, this.defaultFontHandle, this.titleFontHandle);
       var context = new MarketBoardContext(this.services, WorldSelection.ForMainWindow(this.plugin));
 
       this.hoveredItemWatcher = new HoveredItemWatcher(this.plugin, this.services.Catalog, id => context.SelectItem(id));
@@ -158,6 +121,11 @@ namespace MarketTerror.GUI
       }
 #endif
     }
+
+    /// <summary>
+    /// Gets the board this window hosts.
+    /// </summary>
+    public MarketBoard Board => this.board;
 
     /// <summary>
     /// Gets the state and services shared by every component of this window.
@@ -244,9 +212,6 @@ namespace MarketTerror.GUI
         this.themeScope = null;
         this.hoveredItemWatcher.Dispose();
         this.board.Dispose();
-        this.services.Dispose();
-        this.defaultFontHandle?.Dispose();
-        this.titleFontHandle?.Dispose();
       }
 
       this.isDisposed = true;

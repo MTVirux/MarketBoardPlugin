@@ -86,6 +86,11 @@ namespace MarketTerror.GUI
     public bool IsMainBoard { get; }
 
     /// <summary>
+    /// Gets or sets the manager the tear-off requests are handed to, or null when there is none.
+    /// </summary>
+    public BoardManager? Manager { get; set; }
+
+    /// <summary>
     /// Gets or sets what to draw under the item list, or null for nothing.
     /// </summary>
     /// <remarks>The main window uses this for the hovered item progress bar; detached boards leave it null.</remarks>
@@ -162,6 +167,12 @@ namespace MarketTerror.GUI
       ImGui.EndChild();
 
       this.linksPopup.Draw();
+
+      if (this.TearOffRequest is { } tornOff)
+      {
+        this.TearOffRequest = null;
+        this.Manager?.Detach(tornOff);
+      }
     }
 
     /// <inheritdoc/>
