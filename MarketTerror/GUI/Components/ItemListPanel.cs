@@ -25,13 +25,15 @@ namespace MarketTerror.GUI.Components
     {
       (ItemListTab.All, FontAwesomeIcon.List, "allTab", "All items"),
       (ItemListTab.Search, FontAwesomeIcon.Search, "searchTab", "Search results"),
-      (ItemListTab.Favorites, FontAwesomeIcon.Star, "favoritesTab", "Favorites"),
+      (ItemListTab.Lists, FontAwesomeIcon.Bookmark, "listsTab", "Lists"),
       (ItemListTab.History, FontAwesomeIcon.History, "historyTab", "Recently viewed"),
     };
 
     private readonly MarketBoardContext context;
 
     private readonly MarketBoard board;
+
+    private readonly ItemListsTree listsTree;
 
     private bool wasSearchTabHidden = true;
 
@@ -44,6 +46,7 @@ namespace MarketTerror.GUI.Components
     {
       this.context = context ?? throw new ArgumentNullException(nameof(context));
       this.board = board ?? throw new ArgumentNullException(nameof(board));
+      this.listsTree = new ItemListsTree(this.context);
     }
 
     /// <summary>
@@ -93,9 +96,9 @@ namespace MarketTerror.GUI.Components
         ImGuiWindowFlags.HorizontalScrollbar);
       var itemTextSize = ImGui.CalcTextSize(string.Empty);
 
-      if (this.context.ItemListTab == ItemListTab.Favorites)
+      if (this.context.ItemListTab == ItemListTab.Lists)
       {
-        this.DrawFavorites();
+        this.listsTree.Draw();
       }
       else if (this.context.ItemListTab == ItemListTab.History)
       {
@@ -222,7 +225,7 @@ namespace MarketTerror.GUI.Components
       return tab switch
       {
         ItemListTab.Search => searching,
-        ItemListTab.Favorites => this.context.Config.Favorites.Count > 0,
+        ItemListTab.Lists => this.context.Plugin.ItemLists.Count > 0,
         ItemListTab.History => this.context.Config.History.Count > 0,
         _ => true,
       };
@@ -307,11 +310,6 @@ namespace MarketTerror.GUI.Components
             this.context.TryAddCheapestToShoppingList(item.Value, false);
           }
 
-          if (ImGui.Selectable("Add to the favorites"))
-          {
-            this.context.Config.Favorites.Add(item.Value.RowId);
-          }
-
           if (ImGui.Selectable("Remove from history"))
           {
             this.context.Config.History.Remove(item.Value.RowId);
@@ -321,43 +319,6 @@ namespace MarketTerror.GUI.Components
         }
 
         ImGui.OpenPopupOnItemClick($"historyItemContextMenu{id}", ImGuiPopupFlags.MouseButtonRight);
-      }
-    }
-
-    private void DrawFavorites()
-    {
-      var sheet = this.context.Plugin.DataManager.Excel.GetSheet<Item>();
-      foreach (var id in this.context.Config.Favorites.ToArray())
-      {
-        var item = sheet.GetRowOrDefault(id);
-        if (!item.HasValue)
-        {
-          continue;
-        }
-
-        var itemName = item.Value.Name.ExtractText();
-
-        if (!this.MatchesSearch(itemName))
-        {
-          continue;
-        }
-
-        if (ImGui.Selectable($"{itemName}", this.context.SelectedItem?.RowId == id))
-        {
-          this.context.SelectItem(id, true);
-        }
-
-        if (ImGui.BeginPopupContextItem($"itemContextMenu{itemName}"))
-        {
-          if (ImGui.Selectable("Remove from the favorites"))
-          {
-            this.context.Config.Favorites.Remove(item.Value.RowId);
-          }
-
-          ImGui.EndPopup();
-        }
-
-        ImGui.OpenPopupOnItemClick($"itemContextMenu{itemName}", ImGuiPopupFlags.MouseButtonRight);
       }
     }
 
@@ -441,11 +402,6 @@ namespace MarketTerror.GUI.Components
                 this.context.TryAddCheapestToShoppingList(item, true);
               }
 
-              if (ImGui.Selectable("Add to the favorites"))
-              {
-                this.context.Config.Favorites.Add(item.RowId);
-              }
-
               ImGui.EndPopup();
             }
 
@@ -465,35 +421,13 @@ namespace MarketTerror.GUI.Components
       if (ImGui.BeginPopupContextItem(popupId))
       {
         // Only the open category pays for these, and a category can hold thousands of items.
-        var favorites = this.context.Config.Favorites.ToHashSet();
         var buyList = this.context.Plugin.ShoppingList;
         var listed = buyList.Select(s => s.SourceItem.RowId).ToHashSet();
 
         // A row added straight from a listing was never priced, so it does not stand in for one.
         var priced = buyList.Where(s => !s.IsDirect).Select(s => s.SourceItem.RowId).ToHashSet();
 
-        var missingFavorites = items.Where(i => !favorites.Contains(i.RowId)).ToArray();
         var missingFromBuyList = items.Where(i => !priced.Contains(i.RowId)).ToArray();
-
-        if (missingFavorites.Length > 0 && ImGui.Selectable("Add all to the favorites"))
-        {
-          foreach (var item in missingFavorites)
-          {
-            this.context.Config.Favorites.Add(item.RowId);
-          }
-
-          this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
-        }
-
-        if (missingFavorites.Length < items.Count && ImGui.Selectable("Remove all from the favorites"))
-        {
-          foreach (var item in items)
-          {
-            this.context.Config.Favorites.Remove(item.RowId);
-          }
-
-          this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
-        }
 
         this.DrawCategoryBuyListEntries(categoryName, items, missingFromBuyList, items.Any(i => listed.Contains(i.RowId)));
 

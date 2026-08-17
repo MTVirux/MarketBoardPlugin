@@ -19,7 +19,7 @@ namespace MarketTerror.GUI
       return tab switch
       {
         ItemListTab.Search => "Search results",
-        ItemListTab.Favorites => "Favorites",
+        ItemListTab.Lists => "Lists",
         ItemListTab.History => "Recently viewed",
         _ => "All items",
       };

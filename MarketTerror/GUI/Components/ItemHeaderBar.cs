@@ -122,7 +122,7 @@ namespace MarketTerror.GUI.Components
 
       ImGui.EndGroup();
 
-      this.DrawContextMenu(item.RowId);
+      DrawContextMenu(item.RowId);
     }
 
     private static unsafe void SearchInGame(uint itemId)
@@ -135,7 +135,7 @@ namespace MarketTerror.GUI.Components
       }
     }
 
-    private void DrawContextMenu(uint itemId)
+    private static void DrawContextMenu(uint itemId)
     {
       if (!ImGui.BeginPopup(ContextMenuId))
       {
@@ -155,18 +155,6 @@ namespace MarketTerror.GUI.Components
       if (ImGui.Selectable("Search in-game"))
       {
         SearchInGame(itemId);
-      }
-
-      if (this.context.Config.Favorites.Contains(itemId))
-      {
-        if (ImGui.Selectable("Remove from the favorites"))
-        {
-          this.context.Config.Favorites.Remove(itemId);
-        }
-      }
-      else if (ImGui.Selectable("Add to the favorites"))
-      {
-        this.context.Config.Favorites.Add(itemId);
       }
 
       ImGui.EndPopup();

@@ -20,9 +20,12 @@ namespace MarketTerror.GUI
     Search,
 
     /// <summary>
-    /// The favourited items.
+    /// The item lists the user has made.
     /// </summary>
-    Favorites,
+    /// <remarks>
+    /// Took the place of the favourites list, whose ordinal it keeps so saved windows still load.
+    /// </remarks>
+    Lists,
 
     /// <summary>
     /// The recently viewed items.
