@@ -8,6 +8,7 @@ namespace MarketTerror
   using System.Diagnostics.CodeAnalysis;
   using Dalamud.Configuration;
   using MarketTerror.Models;
+  using MarketTerror.Models.ItemLists;
   using MarketTerror.Models.ShoppingList;
 
   /// <summary>
@@ -23,7 +24,7 @@ namespace MarketTerror
     /// <summary>
     /// The version this build writes.
     /// </summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
 
     /// <summary>
     /// Gets or sets the version of the config file.
@@ -112,7 +113,14 @@ namespace MarketTerror
     /// <summary>
     /// Gets the favorite items.
     /// </summary>
+    /// <remarks>Replaced by <see cref="ItemLists"/>; only read while migrating an older config.</remarks>
     public ICollection<uint> Favorites { get; } = new List<uint>();
+
+    /// <summary>
+    /// Gets the item lists the user has made, in the order they are shown.
+    /// </summary>
+    [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale whenever a list changes")]
+    public List<ItemList> ItemLists { get; } = new List<ItemList>();
 
     /// <summary>
     /// Gets or sets a value indicating whether copying the shopping list includes the item names.

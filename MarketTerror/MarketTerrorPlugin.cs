@@ -27,6 +27,7 @@ namespace MarketTerror
   using MarketTerror.GUI;
   using MarketTerror.Helpers;
   using MarketTerror.Models;
+  using MarketTerror.Models.ItemLists;
   using MarketTerror.Models.ShoppingList;
   using MarketTerror.Services;
 
@@ -564,6 +565,16 @@ namespace MarketTerror
 
       this.Config.CrossDataCenter = false;
       this.Config.CrossWorld = false;
+
+      // The one favourites collection became the first of any number of lists. The version gate runs
+      // this once, so deleting that list later does not bring it back on the next reload.
+      if (this.Config.Favorites.Count > 0)
+      {
+        var favorites = new ItemList { Name = "Favorites" };
+        favorites.ItemIds.AddRange(this.Config.Favorites);
+        this.Config.ItemLists.Add(favorites);
+        this.Config.Favorites.Clear();
+      }
 
       this.Config.Version = MarketTerrorConfig.CurrentVersion;
       this.PluginInterface.SavePluginConfig(this.Config);
