@@ -45,6 +45,14 @@ namespace MarketTerror.GUI
     /// </summary>
     private const int ActionButtonCount = 5;
 
+    private const string PriceHeader = "Price";
+
+    private const string QtyHeader = "Qty";
+
+    private const string TotalHeader = "Total";
+
+    private const string WorldHeader = "World";
+
     // Not resizable on purpose: that is what keeps every fixed column fitted to its content each frame.
     private const ImGuiTableFlags TableFlags =
       ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.SizingFixedFit |
@@ -220,10 +228,10 @@ namespace MarketTerror.GUI
       }
 
       ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
-      ImGui.TableSetupColumn("Price", ImGuiTableColumnFlags.WidthFixed);
-      ImGui.TableSetupColumn("Qty", ImGuiTableColumnFlags.WidthFixed);
-      ImGui.TableSetupColumn("Total", ImGuiTableColumnFlags.WidthFixed);
-      ImGui.TableSetupColumn("World", ImGuiTableColumnFlags.WidthFixed);
+      ImGui.TableSetupColumn(PriceHeader, ImGuiTableColumnFlags.WidthFixed);
+      ImGui.TableSetupColumn(QtyHeader, ImGuiTableColumnFlags.WidthFixed);
+      ImGui.TableSetupColumn(TotalHeader, ImGuiTableColumnFlags.WidthFixed);
+      ImGui.TableSetupColumn(WorldHeader, ImGuiTableColumnFlags.WidthFixed);
       ImGui.TableSetupColumn(
         "Action",
         ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed,
@@ -236,9 +244,10 @@ namespace MarketTerror.GUI
 
       this.UpdateSort();
 
-      var priceWidth = WidestText(this.sortedItems.Select(this.PriceText));
-      var qtyWidth = WidestText(this.sortedItems.Select(QtyText));
-      var totalWidth = WidestText(this.sortedItems.Select(this.TotalText));
+      var priceWidth = ColumnWidth(PriceHeader, this.sortedItems.Select(this.PriceText));
+      var qtyWidth = ColumnWidth(QtyHeader, this.sortedItems.Select(QtyText));
+      var totalWidth = ColumnWidth(TotalHeader, this.sortedItems.Select(this.TotalText));
+      var worldWidth = ColumnWidth(WorldHeader, this.sortedItems.Select(WorldText));
 
       List<SavedItem> todel = new List<SavedItem>();
       SavedItem? convert = null;
@@ -302,7 +311,7 @@ namespace MarketTerror.GUI
         this.PickTooltip(item);
 
         ImGui.TableSetColumnIndex(4);
-        ImGui.Text(item.Unlisted ? NoValue : item.World);
+        RightAligned(WorldText(item), worldWidth);
         this.PickTooltip(item);
 
         var buttonSize = new Vector2(ActionButtonWidth * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
@@ -532,13 +541,25 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Measures the widest of a column's values.
+    /// Formats which world a row's listing sits on.
     /// </summary>
-    /// <param name="values">The values the column draws.</param>
-    /// <returns>The width of the widest one, in pixels.</returns>
-    private static float WidestText(IEnumerable<string> values)
+    /// <param name="item">The row to format.</param>
+    /// <returns>The world as it reads in the table.</returns>
+    private static string WorldText(SavedItem item)
     {
-      var widest = 0f;
+      return item.Unlisted ? NoValue : item.World;
+    }
+
+    /// <summary>
+    /// Measures how wide a column has to be to hold its heading and all of its values.
+    /// </summary>
+    /// <param name="header">The column heading.</param>
+    /// <param name="values">The values the column draws.</param>
+    /// <returns>The width, in pixels.</returns>
+    private static float ColumnWidth(string header, IEnumerable<string> values)
+    {
+      // The heading also keeps room for the sort arrow, which is what the column ends up as wide as.
+      var widest = ImGui.CalcTextSize(header).X + ImGui.GetFontSize() + ImGui.GetStyle().FramePadding.X;
 
       foreach (var value in values)
       {
@@ -549,14 +570,14 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Draws text pushed right, lined up with the widest value in its column.
+    /// Draws text pushed to the right edge of its column.
     /// </summary>
     /// <param name="text">The text to draw.</param>
-    /// <param name="widest">The width of the widest value in the column.</param>
-    private static void RightAligned(string text, float widest)
+    /// <param name="width">The width the column was measured at.</param>
+    private static void RightAligned(string text, float width)
     {
       // Padding out to the full cell would count as content and stop the column from ever fitting its values.
-      var edge = Math.Min(ImGui.GetContentRegionAvail().X, widest);
+      var edge = Math.Min(ImGui.GetContentRegionAvail().X, width);
       var padding = edge - ImGui.CalcTextSize(text).X;
 
       if (padding > 0)
