@@ -11,7 +11,7 @@ namespace MarketTerror.GUI.Components
   using MarketTerror.Helpers;
 
   /// <summary>
-  /// The popup opened by the heart button in the title bar: the Universalis status link, the repository link and the FFXIVMT site.
+  /// The popup opened by the heart button in the title bar: the Universalis status link, the repository link, the FFXIVMT site and the issue tracker.
   /// </summary>
   public sealed class LinksPopup
   {
@@ -100,6 +100,11 @@ namespace MarketTerror.GUI.Components
       if (HeartButton("ffxivmt", "FFXIVMT", buttonSize))
       {
         Utilities.OpenBrowser("https://mtvirux.app");
+      }
+
+      if (HeartButton("issue", "Report an issue", buttonSize))
+      {
+        Utilities.OpenBrowser("https://github.com/MTVirux/SeaOfTerror/issues/new");
       }
 
       ImGui.PopStyleColor(3);
