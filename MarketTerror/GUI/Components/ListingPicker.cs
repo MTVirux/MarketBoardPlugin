@@ -98,15 +98,22 @@ namespace MarketTerror.GUI.Components
     {
       ArgumentNullException.ThrowIfNull(theme);
 
-      if (this.opening)
-      {
-        ImGui.OpenPopup(PopupId);
-        this.opening = false;
-      }
-
       if (this.row == null)
       {
+        this.opening = false;
         return;
+      }
+
+      var item = this.row;
+
+      // The name is what the title bar shows; the id after it is what ImGui matches the popup on,
+      // so the title can change with the row without the popup counting as a different one.
+      var label = $"{item.SourceItem.Name.ExtractText()} Listings##{PopupId}";
+
+      if (this.opening)
+      {
+        ImGui.OpenPopup(label);
+        this.opening = false;
       }
 
       var scale = ImGui.GetIO().FontGlobalScale;
@@ -114,18 +121,12 @@ namespace MarketTerror.GUI.Components
 
       var open = true;
 
-      if (!ImGui.BeginPopupModal(PopupId, ref open, ImGuiWindowFlags.NoSavedSettings))
+      if (!ImGui.BeginPopupModal(label, ref open, ImGuiWindowFlags.NoSavedSettings))
       {
         // The popup is gone, so nothing is being picked any more.
         this.Close();
         return;
       }
-
-      var item = this.row;
-
-      ImGui.PushStyleColor(ImGuiCol.Text, theme.TextBright);
-      ImGui.Text($"Choose listings: {item.SourceItem.Name.ExtractText()}");
-      ImGui.PopStyleColor();
 
       ImGui.PushStyleColor(ImGuiCol.Text, theme.TextDim);
       ImGui.Text(this.plugin.ShoppingListScope.SelectedDisplayName);
@@ -431,6 +432,21 @@ namespace MarketTerror.GUI.Components
         this.Close();
         ImGui.CloseCurrentPopup();
       }
+
+      ImGui.SameLine();
+
+      ImGui.BeginDisabled(ticked.Length == 0);
+
+      if (ImGui.Button("Clear all"))
+      {
+        foreach (var candidate in this.candidates)
+        {
+          candidate.Ticked = false;
+        }
+      }
+
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Untick every listing. Save afterwards to take them off the row.", ImGuiHoveredFlags.AllowWhenDisabled);
 
       if (this.loading && this.candidates.Count > 0)
       {
