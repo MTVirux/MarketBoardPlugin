@@ -153,6 +153,7 @@ namespace MarketTerror
       this.MigrateConfig();
 
       this.ShoppingList = new ShoppingListStore(this);
+      this.ItemLists = new ItemListStore(this);
       this.WorldCatalogue = new WorldCatalogue(this);
       this.ShoppingListScope = new ShoppingListScope(this);
 
@@ -270,6 +271,11 @@ namespace MarketTerror
     /// Gets the shopping list.
     /// </summary>
     public ShoppingListStore ShoppingList { get; init; }
+
+    /// <summary>
+    /// Gets the item lists the user has made.
+    /// </summary>
+    public ItemListStore ItemLists { get; init; }
 
     /// <summary>
     /// Gets the service that adds a whole category to the shopping list.
