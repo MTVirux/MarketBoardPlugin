@@ -11,7 +11,7 @@ namespace MarketTerror.GUI.Components
   using MarketTerror.Helpers;
 
   /// <summary>
-  /// The popup opened by the heart button in the title bar: the Universalis status link, the repository link, the FFXIVMT site and the issue tracker.
+  /// The popup opened by the heart button in the title bar: the Universalis status link, the FFXIVMT site, the repository link and the issue tracker.
   /// </summary>
   public sealed class LinksPopup
   {
@@ -66,7 +66,7 @@ namespace MarketTerror.GUI.Components
 
       if (this.context.MarketData.IsUniversalisUp != false)
       {
-        if (HeartButton("universalis", "Universalis", buttonSize))
+        if (LinkButton("universalis", "Universalis", buttonSize))
         {
           var universalisUrl = "https://universalis.app";
           var selectedItem = this.context.SelectedItem;
@@ -81,7 +81,7 @@ namespace MarketTerror.GUI.Components
       }
       else
       {
-        if (HeartButton("universalisStatus", "Universalis", buttonSize))
+        if (LinkButton("universalisStatus", "Universalis", buttonSize))
         {
           Utilities.OpenBrowser("https://status.universalis.app");
         }
@@ -92,17 +92,17 @@ namespace MarketTerror.GUI.Components
         }
       }
 
-      if (HeartButton("repo", "SeaOfTerror", buttonSize))
-      {
-        Utilities.OpenBrowser("https://github.com/MTVirux/SeaOfTerror");
-      }
-
-      if (HeartButton("ffxivmt", "FFXIVMT", buttonSize))
+      if (LinkButton("ffxivmt", "FFXIVMT", buttonSize))
       {
         Utilities.OpenBrowser("https://mtvirux.app");
       }
 
-      if (HeartButton("issue", "Report an issue", buttonSize))
+      if (LinkButton("repo", "SeaOfTerror", buttonSize))
+      {
+        Utilities.OpenBrowser("https://github.com/MTVirux/SeaOfTerror");
+      }
+
+      if (LinkButton("issue", "Report an issue", buttonSize, FontAwesomeIcon.Wrench))
       {
         Utilities.OpenBrowser("https://github.com/MTVirux/SeaOfTerror/issues/new");
       }
@@ -111,7 +111,7 @@ namespace MarketTerror.GUI.Components
       ImGui.EndPopup();
     }
 
-    private static bool HeartButton(string id, string label, Vector2 size)
+    private static bool LinkButton(string id, string label, Vector2 size, FontAwesomeIcon icon = FontAwesomeIcon.Heart)
     {
       var clicked = ImGui.Button($"##{id}", size);
 
@@ -121,14 +121,14 @@ namespace MarketTerror.GUI.Components
       var color = ImGui.GetColorU32(ImGuiCol.Text);
       var drawList = ImGui.GetWindowDrawList();
 
-      var heart = $"{(char)FontAwesomeIcon.Heart}";
+      var glyph = $"{(char)icon}";
       ImGui.PushFont(UiBuilder.IconFont);
-      var heartSize = ImGui.CalcTextSize(heart);
-      drawList.AddText(new Vector2(min.X + padding, min.Y + ((height - heartSize.Y) / 2f)), color, heart);
+      var glyphSize = ImGui.CalcTextSize(glyph);
+      drawList.AddText(new Vector2(min.X + padding, min.Y + ((height - glyphSize.Y) / 2f)), color, glyph);
       ImGui.PopFont();
 
       var labelSize = ImGui.CalcTextSize(label);
-      drawList.AddText(new Vector2(min.X + padding + heartSize.X + padding, min.Y + ((height - labelSize.Y) / 2f)), color, label);
+      drawList.AddText(new Vector2(min.X + padding + glyphSize.X + padding, min.Y + ((height - labelSize.Y) / 2f)), color, label);
 
       return clicked;
     }
