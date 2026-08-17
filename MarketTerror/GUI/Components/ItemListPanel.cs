@@ -195,6 +195,14 @@ namespace MarketTerror.GUI.Components
       };
     }
 
+    private bool MatchesSearch(string itemName)
+    {
+      var search = this.context.SearchString;
+
+      return string.IsNullOrEmpty(search)
+        || itemName.Contains(search, StringComparison.CurrentCultureIgnoreCase);
+    }
+
     private void DrawEmptyBar()
     {
       var height = ImGui.GetFrameHeight();
@@ -244,6 +252,11 @@ namespace MarketTerror.GUI.Components
 
         var itemName = item.Value.Name.ExtractText();
 
+        if (!this.MatchesSearch(itemName))
+        {
+          continue;
+        }
+
         if (ImGui.Selectable($"{itemName}", this.context.SelectedItem?.RowId == id))
         {
           this.context.SelectItem(id, true);
@@ -290,6 +303,11 @@ namespace MarketTerror.GUI.Components
         }
 
         var itemName = item.Value.Name.ExtractText();
+
+        if (!this.MatchesSearch(itemName))
+        {
+          continue;
+        }
 
         if (ImGui.Selectable($"{itemName}", this.context.SelectedItem?.RowId == id))
         {
