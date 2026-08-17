@@ -27,8 +27,6 @@ namespace MarketTerror.Services
 
     private readonly IEnumerable<Item> items;
 
-    private readonly IPluginLog log;
-
     private readonly List<KeyValuePair<ItemSearchCategory, List<Item>>> sortedCategoriesAndItems;
 
     private readonly List<ItemSearchCategory> categories;
@@ -45,7 +43,6 @@ namespace MarketTerror.Services
       ArgumentNullException.ThrowIfNull(dataManager);
       ArgumentNullException.ThrowIfNull(log);
 
-      this.log = log;
       this.items = dataManager.GetExcelSheet<Item>();
 
       this.classJobs = dataManager.GetExcelSheet<ClassJob>()!

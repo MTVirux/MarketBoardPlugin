@@ -159,6 +159,10 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void PreDraw()
     {
+      // Draw is skipped while the window is collapsed, so the tab bar rect is dropped here, where
+      // it always runs, rather than left standing as a drop target over nothing.
+      this.board.TabBarScreenRect = default;
+
       IntegrationsButton.Refresh(this.integrationsButton, this.board.Context);
       ShoppingListButton.Refresh(this.shoppingListButton, this.board.Context);
       this.themeScope = this.board.Context.Theme.Push();

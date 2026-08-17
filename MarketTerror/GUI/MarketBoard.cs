@@ -108,7 +108,7 @@ namespace MarketTerror.GUI
       var splitterWidth = ImGui.GetTextLineHeight() * 0.5f;
       var minColumnWidth = 150.0f * scale;
       var maxColumnWidth = Math.Max(minColumnWidth, ImGui.GetContentRegionAvail().X - splitterWidth - (200.0f * scale));
-      var columnWidth = Math.Clamp(this.services.Plugin.Config.ItemListColumnWidth * scale, minColumnWidth, maxColumnWidth);
+      var columnWidth = Math.Clamp(this.context.Config.ItemListColumnWidth * scale, minColumnWidth, maxColumnWidth);
 
       ImGui.BeginChild("itemListColumn", new Vector2(columnWidth, 0), true);
 
@@ -132,13 +132,13 @@ namespace MarketTerror.GUI
 
       if (columnDrag != 0.0f)
       {
-        this.services.Plugin.Config.ItemListColumnWidth =
+        this.context.Config.ItemListColumnWidth =
           Math.Clamp(columnWidth + columnDrag, minColumnWidth, maxColumnWidth) / scale;
       }
 
       if (ImGui.IsItemDeactivated())
       {
-        this.services.Plugin.PluginInterface.SavePluginConfig(this.services.Plugin.Config);
+        this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
       }
 
       ImGui.SameLine(0.0f, 0.0f);
@@ -205,7 +205,7 @@ namespace MarketTerror.GUI
     {
       var spacing = ImGui.GetStyle().ItemSpacing.Y;
       var available = ImGui.GetContentRegionAvail().Y;
-      var config = this.services.Plugin.Config;
+      var config = this.context.Config;
 
       // With one of the tables hidden there is nothing left to drag the splitter between.
       if (config.CurrentListingsCollapsed || config.SalesHistoryCollapsed)
@@ -229,7 +229,7 @@ namespace MarketTerror.GUI
 
       // Keep enough room in either section for its heading, its column labels and a couple of entries.
       var minRatio = Math.Min(0.4f, this.MinSectionHeight(spacing) / usable);
-      var ratio = Math.Clamp(this.services.Plugin.Config.MarketDataSplitRatio, minRatio, 1.0f - minRatio);
+      var ratio = Math.Clamp(config.MarketDataSplitRatio, minRatio, 1.0f - minRatio);
       var listingsHeight = usable * ratio;
 
       this.listingsTable.Draw(listingsHeight);
@@ -246,12 +246,12 @@ namespace MarketTerror.GUI
 
       if (drag != 0.0f)
       {
-        this.services.Plugin.Config.MarketDataSplitRatio = Math.Clamp(ratio + (drag / usable), minRatio, 1.0f - minRatio);
+        config.MarketDataSplitRatio = Math.Clamp(ratio + (drag / usable), minRatio, 1.0f - minRatio);
       }
 
       if (ImGui.IsItemDeactivated())
       {
-        this.services.Plugin.PluginInterface.SavePluginConfig(this.services.Plugin.Config);
+        this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
       }
 
       ImGui.SetCursorPosY(ImGui.GetCursorPosY() - spacing);

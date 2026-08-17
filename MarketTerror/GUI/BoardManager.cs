@@ -176,7 +176,9 @@ namespace MarketTerror.GUI
 
       if (state == null)
       {
+        // A tab torn off mid-search takes what the board it came from was showing with it.
         state = new DetachedBoardState { Tab = tab };
+        this.MainWindow.Board.Context.SaveTo(state);
         this.plugin.Config.DetachedBoards.Add(state);
       }
 
