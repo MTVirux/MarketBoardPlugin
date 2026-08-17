@@ -81,6 +81,17 @@ namespace MarketTerror.GUI
     /// </summary>
     public Vector2 GrabOffset { get; set; }
 
+    /// <summary>
+    /// Gets a value indicating whether the user is dragging this window by its title bar.
+    /// </summary>
+    public bool IsBeingDragged { get; private set; }
+
+    /// <inheritdoc/>
+    public override void OnOpen()
+    {
+      this.IsBeingDragged = false;
+    }
+
     /// <inheritdoc/>
     public override void PreDraw()
     {
@@ -111,6 +122,11 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void Draw()
     {
+      this.IsBeingDragged = !this.Grabbed
+        && ImGui.IsWindowFocused(ImGuiFocusedFlags.RootWindow)
+        && ImGui.IsMouseDragging(ImGuiMouseButton.Left)
+        && !ImGui.IsAnyItemActive();
+
       using var fontDispose = this.services.DefaultFont.Push();
 
       this.Board.Draw();

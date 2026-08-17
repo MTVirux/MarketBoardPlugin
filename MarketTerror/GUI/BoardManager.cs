@@ -108,6 +108,8 @@ namespace MarketTerror.GUI
     /// </summary>
     public void ApplyPendingChanges()
     {
+      this.CheckDockBack();
+
       if (this.pendingDetach.Count == 0 && this.pendingReattach.Count == 0)
       {
         return;
@@ -212,6 +214,45 @@ namespace MarketTerror.GUI
       {
         this.MainWindow.Board.Tabs.Add(tab);
         this.SortMainTabs();
+      }
+    }
+
+    /// <summary>
+    /// Highlights the main tab bar while a window is dragged over it, and docks the window
+    /// when the drag is released there.
+    /// </summary>
+    /// <remarks>Runs after the window system has drawn, so the rects are this frame's.</remarks>
+    private void CheckDockBack()
+    {
+      var target = this.MainWindow.Board.TabBarScreenRect;
+
+      if (!this.MainWindow.IsOpen || target.Max.X <= target.Min.X)
+      {
+        return;
+      }
+
+      var dragging = this.detached.FirstOrDefault(w => w.IsBeingDragged);
+
+      if (dragging == null)
+      {
+        return;
+      }
+
+      var mouse = ImGui.GetMousePos();
+      var over = mouse.X >= target.Min.X && mouse.X <= target.Max.X
+        && mouse.Y >= target.Min.Y && mouse.Y <= target.Max.Y;
+
+      if (!over)
+      {
+        return;
+      }
+
+      ImGui.GetForegroundDrawList().AddRectFilled(target.Min, target.Max, this.Services.Theme.AccentHover & 0x40FFFFFFu);
+      ImGui.GetForegroundDrawList().AddRect(target.Min, target.Max, this.Services.Theme.AccentHover);
+
+      if (!ImGui.IsMouseDown(ImGuiMouseButton.Left))
+      {
+        this.Reattach(dragging.Tab);
       }
     }
 
