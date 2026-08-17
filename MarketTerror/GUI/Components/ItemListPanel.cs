@@ -111,18 +111,22 @@ namespace MarketTerror.GUI.Components
     private void DrawTabs()
     {
       var searching = !string.IsNullOrEmpty(this.context.SearchString) || this.context.HasActiveFilters;
-      var single = this.board.Tabs.Count == 1;
 
-      if (single)
+      if (!this.board.IsMainBoard)
       {
-        // A board locked to one list always shows it, and the search box narrows it in place.
-        this.context.ItemListTab = this.board.Tabs[0];
+        // A detached board is locked to the one list it was torn off with; the search box narrows it in place.
+        if (this.board.Tabs.Count > 0)
+        {
+          this.context.ItemListTab = this.board.Tabs[0];
+        }
+
         return;
       }
 
       if (this.board.Tabs.Count == 0)
       {
         this.DrawEmptyBar();
+        this.wasSearchTabHidden = !searching;
         return;
       }
 
