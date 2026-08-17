@@ -4,6 +4,9 @@
 
 namespace MarketTerror.Models.ShoppingList
 {
+  using System.Collections.Generic;
+  using System.Diagnostics.CodeAnalysis;
+
   /// <summary>
   /// A shopping list entry as it is written to the plugin configuration.
   /// </summary>
@@ -73,5 +76,13 @@ namespace MarketTerror.Models.ShoppingList
     /// Gets or sets a value indicating whether the entry was added straight from a listing.
     /// </summary>
     public bool IsDirect { get; set; }
+
+    /// <summary>
+    /// Gets or sets the listings the entry has been told to buy.
+    /// </summary>
+    /// <remarks>Empty in a configuration written before picking existed, which is the entry standing for one listing.</remarks>
+    [SuppressMessage("Usage", "CA2227:Collection properties should be read only", Justification = "Setter required for JSON deserialization")]
+    [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale whenever the shopping list changes")]
+    public List<StoredPick> Picks { get; set; } = new List<StoredPick>();
   }
 }
