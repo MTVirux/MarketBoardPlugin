@@ -294,9 +294,11 @@ namespace MarketTerror.GUI
         var buy = ImGui.Button($"{(char)FontAwesomeIcon.ShoppingCart}##shoplistbuy" + k, buttonSize);
         ImGui.PopFont();
         ImGui.EndDisabled();
-        Utilities.HoverTooltip(buyBlockedReason.Length > 0
-          ? buyBlockedReason
-          : $"Buy this listing on {item.World} if it is still there at {this.PriceText(item)} or less.");
+        Utilities.HoverTooltip(
+          buyBlockedReason.Length > 0
+            ? buyBlockedReason
+            : $"Buy this listing on {item.World} if it is still there at {this.PriceText(item)} or less.",
+          ImGuiHoveredFlags.AllowWhenDisabled);
 
         ImGui.SameLine();
 
