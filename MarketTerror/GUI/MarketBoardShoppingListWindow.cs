@@ -49,6 +49,11 @@ namespace MarketTerror.GUI
       ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp |
       ImGuiTableFlags.Sortable | ImGuiTableFlags.SortTristate;
 
+    /// <summary>
+    /// The unscaled size the window will not go below.
+    /// </summary>
+    private static readonly Vector2 MinWindowSize = new Vector2(560, 150);
+
     private readonly TerrorTheme theme;
 
     private readonly WorldPicker worldPicker = new WorldPicker("shoppingListWorld");
@@ -86,13 +91,8 @@ namespace MarketTerror.GUI
       this.IsOpen = true;
       this.RespectCloseHotkey = false;
       this.ShowCloseButton = true;
-      this.Size = new Vector2(560, 150);
+      this.Size = MinWindowSize;
       this.SizeCondition = ImGuiCond.FirstUseEver;
-      this.SizeConstraints = new WindowSizeConstraints
-      {
-        MinimumSize = new Vector2(560, 150),
-        MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
-      };
 
       this.theme = new TerrorTheme(this.Plugin.Config);
       this.picker = new ListingPicker(this.Plugin);
@@ -137,6 +137,15 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void PreDraw()
     {
+      // The action buttons grow with the font scale, so the width the window may not go below grows with it too.
+      var scale = ImGui.GetIO().FontGlobalScale;
+
+      this.SizeConstraints = new WindowSizeConstraints
+      {
+        MinimumSize = MinWindowSize * scale,
+        MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
+      };
+
       this.themeScope = this.theme.Push();
     }
 
@@ -216,8 +225,8 @@ namespace MarketTerror.GUI
       ImGui.TableSetupColumn("World");
       ImGui.TableSetupColumn(
         "Action",
-        ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed,
-        (ActionButtonCount * ActionButtonWidth * ImGui.GetIO().FontGlobalScale) + (ActionButtonCount * ImGui.GetStyle().ItemSpacing.X));
+        ImGuiTableColumnFlags.NoSort | ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoResize,
+        ActionColumnWidth());
       ImGui.TableSetupScrollFreeze(0, 1);
 
       ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
@@ -455,6 +464,19 @@ namespace MarketTerror.GUI
       var milliseconds = stats.Milliseconds.ToString("N0", CultureInfo.CurrentCulture);
 
       return $"{items} over {queries} @ {stats.Scope} in {milliseconds} ms";
+    }
+
+    /// <summary>
+    /// Works out the width the action column needs to hold every button on a row.
+    /// </summary>
+    /// <returns>The width, in pixels.</returns>
+    private static float ActionColumnWidth()
+    {
+      var style = ImGui.GetStyle();
+
+      return (ActionButtonCount * ActionButtonWidth * ImGui.GetIO().FontGlobalScale)
+        + ((ActionButtonCount - 1) * style.ItemSpacing.X)
+        + (2 * style.CellPadding.X);
     }
 
     /// <summary>
