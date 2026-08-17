@@ -16,9 +16,12 @@ namespace MarketTerror.GUI
   /// Owns the main board and every torn-off one, and moves lists between them.
   /// </summary>
   /// <remarks>
-  /// Detach and reattach are queued rather than done on the spot: they run while
-  /// <see cref="WindowSystem.Draw"/> is walking its window list, and adding to or removing from
-  /// that list mid-walk would break it.
+  /// Detach and reattach are queued rather than done on the spot. They are asked for from inside
+  /// <see cref="WindowSystem.Draw"/>: a reattach comes out of the closing window's own
+  /// <see cref="Window.OnClose"/>, which Dalamud raises at the top of that window's draw, so doing it
+  /// there would dispose the board and its market data view while the frame still going on is about to
+  /// use them. The walk is over a snapshot of the window list, so a window removed part-way through can
+  /// still be drawn later in the same frame - which is the same hazard from the other end.
   /// </remarks>
   public sealed class BoardManager : IDisposable
   {
@@ -108,18 +111,23 @@ namespace MarketTerror.GUI
         return;
       }
 
-      foreach (var tab in this.pendingDetach)
+      // Emptied before anything is acted on, so a throw here does not come back every frame.
+      var detaching = this.pendingDetach.ToArray();
+      var reattaching = this.pendingReattach.ToArray();
+
+      this.pendingDetach.Clear();
+      this.pendingReattach.Clear();
+
+      foreach (var tab in detaching)
       {
         this.DetachNow(tab, grabbed: true);
       }
 
-      foreach (var tab in this.pendingReattach)
+      foreach (var tab in reattaching)
       {
         this.ReattachNow(tab);
       }
 
-      this.pendingDetach.Clear();
-      this.pendingReattach.Clear();
       this.SaveLayout();
     }
 
@@ -198,6 +206,15 @@ namespace MarketTerror.GUI
       }
     }
 
+    /// <summary>
+    /// Puts the main board's list of tabs back in enum order.
+    /// </summary>
+    /// <remarks>
+    /// This is the membership list, not the bar: ImGui appends a returning tab at the end of the bar
+    /// wherever this list says it sits, and the user is free to drag it elsewhere from there. Sorting it
+    /// only keeps <c>FallbackTab</c> deterministic, so the board falls back to the whole catalogue rather
+    /// than whichever list happened to come home last.
+    /// </remarks>
     private void SortMainTabs()
     {
       var ordered = this.MainWindow.Board.Tabs.OrderBy(t => (int)t).ToList();

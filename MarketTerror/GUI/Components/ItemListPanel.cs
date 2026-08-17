@@ -51,10 +51,15 @@ namespace MarketTerror.GUI.Components
     /// </summary>
     public void Draw()
     {
-      this.DrawTabs();
+      if (!this.DrawTabs())
+      {
+        return;
+      }
 
       // The hover progress bar sits below the list, so only leave room for it when it is drawn.
-      var reservedHeight = this.context.Config.WatchForHovered ? -ImGui.GetFrameHeightWithSpacing() : 0;
+      var reservedHeight = this.board.DrawUnderList != null && this.context.Config.WatchForHovered
+        ? -ImGui.GetFrameHeightWithSpacing()
+        : 0;
 
       // Each tab gets its own child so the collapsed categories and the scroll position
       // never carry over from one tab to another.
@@ -108,7 +113,11 @@ namespace MarketTerror.GUI.Components
       return open;
     }
 
-    private void DrawTabs()
+    /// <summary>
+    /// Draws the tab bar, or the placeholder standing in for it when every list is in its own window.
+    /// </summary>
+    /// <returns>True when a list belongs under it, false when this board has none left to show.</returns>
+    private bool DrawTabs()
     {
       var searching = !string.IsNullOrEmpty(this.context.SearchString) || this.context.HasActiveFilters;
 
@@ -120,14 +129,14 @@ namespace MarketTerror.GUI.Components
           this.context.ItemListTab = this.board.Tabs[0];
         }
 
-        return;
+        return true;
       }
 
       if (this.board.Tabs.Count == 0)
       {
         this.DrawEmptyBar();
         this.wasSearchTabHidden = !searching;
-        return;
+        return false;
       }
 
       if (!this.board.Tabs.Contains(this.context.ItemListTab)
@@ -169,6 +178,8 @@ namespace MarketTerror.GUI.Components
         barOrigin,
         new Vector2(barOrigin.X + barWidth, barOrigin.Y + ImGui.GetFrameHeight()));
       this.wasSearchTabHidden = !searching;
+
+      return true;
     }
 
     private ItemListTab FallbackTab(bool searching)
