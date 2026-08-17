@@ -5,6 +5,7 @@
 namespace MarketTerror.GUI.Components
 {
   using System;
+  using System.Collections.Generic;
   using Dalamud.Bindings.ImGui;
   using Lumina.Excel.Sheets;
   using MarketTerror.Models.ItemLists;
@@ -14,7 +15,20 @@ namespace MarketTerror.GUI.Components
   /// </summary>
   public sealed class ItemListsTree
   {
+    /// <summary>
+    /// What the box confirming a delete is registered under.
+    /// </summary>
+    private const string DeletePopupId = "Delete list##deleteItemList";
+
     private readonly MarketBoardContext context;
+
+    // The list being renamed in place, or empty when none is.
+    private Guid renaming = Guid.Empty;
+
+    private string renameText = string.Empty;
+
+    // The list waiting on the confirmation box, or empty when none is.
+    private Guid deleting = Guid.Empty;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemListsTree"/> class.
@@ -45,6 +59,8 @@ namespace MarketTerror.GUI.Components
       {
         this.DrawList(store[i], i);
       }
+
+      this.DrawDeleteConfirm();
     }
 
     private bool MatchesSearch(string itemName)
@@ -57,7 +73,16 @@ namespace MarketTerror.GUI.Components
 
     private void DrawList(ItemList list, int index)
     {
+      if (this.renaming == list.Id)
+      {
+        this.DrawRenameBox(list);
+        return;
+      }
+
       var open = ImGui.TreeNode($"{list.Name} ({list.ItemIds.Count})##list{list.Id}");
+
+      // Bound while the node is still the last item, so a closed list has its menu too.
+      this.DrawListMenu(list);
 
       if (!open)
       {
@@ -113,6 +138,179 @@ namespace MarketTerror.GUI.Components
 
       ImGui.Indent(ImGui.GetTreeNodeToLabelSpacing());
       ImGui.TreePop();
+    }
+
+    /// <summary>
+    /// Draws the box that renames a list, in place of its node.
+    /// </summary>
+    /// <param name="list">The list being renamed.</param>
+    private void DrawRenameBox(ItemList list)
+    {
+      ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+
+      if (!ImGui.IsAnyItemActive())
+      {
+        ImGui.SetKeyboardFocusHere();
+      }
+
+      var text = this.renameText;
+      var committed = ImGui.InputText($"##rename{list.Id}", ref text, 64, ImGuiInputTextFlags.EnterReturnsTrue);
+      this.renameText = text;
+
+      if (committed)
+      {
+        this.context.Plugin.ItemLists.Rename(list, this.renameText);
+        this.renaming = Guid.Empty;
+        return;
+      }
+
+      // Clicking away leaves the name as it was.
+      if (ImGui.IsItemDeactivated())
+      {
+        this.renaming = Guid.Empty;
+      }
+    }
+
+    private void DrawListMenu(ItemList list)
+    {
+      if (!ImGui.BeginPopupContextItem($"listMenu{list.Id}"))
+      {
+        return;
+      }
+
+      if (ImGui.Selectable("Rename"))
+      {
+        this.renaming = list.Id;
+        this.renameText = list.Name;
+      }
+
+      if (ImGui.Selectable("Delete"))
+      {
+        this.deleting = list.Id;
+      }
+
+      ImGui.Separator();
+
+      this.DrawListShoppingEntries(list);
+
+      ImGui.EndPopup();
+    }
+
+    private void DrawDeleteConfirm()
+    {
+      if (this.deleting == Guid.Empty)
+      {
+        return;
+      }
+
+      var store = this.context.Plugin.ItemLists;
+      var list = store.Find(this.deleting);
+
+      if (list == null)
+      {
+        this.deleting = Guid.Empty;
+        return;
+      }
+
+      ImGui.OpenPopup(DeletePopupId);
+
+      if (!ImGui.BeginPopupModal(DeletePopupId, ImGuiWindowFlags.AlwaysAutoResize))
+      {
+        return;
+      }
+
+      var count = list.ItemIds.Count == 1 ? "1 item" : $"{list.ItemIds.Count} items";
+      ImGui.Text($"Delete \"{list.Name}\" and its {count}?");
+
+      ImGui.Separator();
+
+      if (ImGui.Button("Delete"))
+      {
+        store.Delete(list);
+        this.deleting = Guid.Empty;
+        ImGui.CloseCurrentPopup();
+      }
+
+      ImGui.SameLine();
+
+      if (ImGui.Button("Cancel"))
+      {
+        this.deleting = Guid.Empty;
+        ImGui.CloseCurrentPopup();
+      }
+
+      ImGui.EndPopup();
+    }
+
+    /// <summary>
+    /// Draws the entries that hand a whole list to the shopping list, or take it back off.
+    /// </summary>
+    /// <param name="list">The list the menu belongs to.</param>
+    private void DrawListShoppingEntries(ItemList list)
+    {
+      var plugin = this.context.Plugin;
+      var bulkAdd = plugin.ShoppingListBulkAdd;
+      var scope = plugin.ShoppingListScope;
+      var sheet = plugin.DataManager.Excel.GetSheet<Item>();
+
+      var listed = new HashSet<uint>();
+      var priced = new HashSet<uint>();
+
+      foreach (var saved in plugin.ShoppingList)
+      {
+        listed.Add(saved.SourceItem.RowId);
+
+        // A row added straight from a listing was never priced, so it does not stand in for one.
+        if (!saved.IsDirect)
+        {
+          priced.Add(saved.SourceItem.RowId);
+        }
+      }
+
+      var missing = new List<Item>();
+      var anyListed = false;
+
+      foreach (var id in list.ItemIds)
+      {
+        var item = sheet.GetRowOrDefault(id);
+
+        if (!item.HasValue)
+        {
+          continue;
+        }
+
+        if (listed.Contains(id))
+        {
+          anyListed = true;
+        }
+
+        if (!priced.Contains(id))
+        {
+          missing.Add(item.Value);
+        }
+      }
+
+      if (missing.Count > 0)
+      {
+        // The prices come from Universalis a chunk at a time, so only one job can run at once.
+        var busy = bulkAdd.IsRunning || !scope.HasSelection;
+
+        ImGui.BeginDisabled(busy);
+
+        if (ImGui.Selectable("Add all to the shopping list"))
+        {
+          bulkAdd.Start(list.Name, missing, scope.QueryTargets);
+        }
+
+        ImGui.EndDisabled();
+      }
+
+      if (anyListed && ImGui.Selectable("Remove all from the shopping list"))
+      {
+        var ids = new HashSet<uint>(list.ItemIds);
+
+        plugin.ShoppingList.RemoveAll(s => ids.Contains(s.SourceItem.RowId));
+      }
     }
   }
 }
