@@ -47,6 +47,29 @@ namespace MarketTerror.GUI.Components
     }
 
     /// <summary>
+    /// Gets a value indicating whether the search box and the advanced filters narrow the catalogue
+    /// this board is showing right now.
+    /// </summary>
+    /// <remarks>
+    /// The main window routes typing to its search tab while it still has one, so its all items list
+    /// stays the whole catalogue there. Every other board narrows the list it is showing in place.
+    /// </remarks>
+    private bool NarrowsCurrentList
+    {
+      get
+      {
+        if (string.IsNullOrEmpty(this.context.SearchString) && !this.context.HasActiveFilters)
+        {
+          return false;
+        }
+
+        return this.context.ItemListTab == ItemListTab.Search
+          || !this.board.IsMainBoard
+          || !this.board.Tabs.Contains(ItemListTab.Search);
+      }
+    }
+
+    /// <summary>
     /// Draws the item list.
     /// </summary>
     public void Draw()
@@ -80,13 +103,12 @@ namespace MarketTerror.GUI.Components
       }
       else
       {
-        var searching = this.context.ItemListTab == ItemListTab.Search;
+        var narrowing = this.NarrowsCurrentList;
 
-        // The advanced search only ever narrows the search tab; the all items tab stays the whole catalogue.
         var rebuilt = this.context.CatalogView.ApplyFilter(
-          searching ? this.context.BuildFilter(this.context.SearchString) : ItemFilter.None);
+          narrowing ? this.context.BuildFilter(this.context.SearchString) : ItemFilter.None);
 
-        this.DrawCategoryTree(itemTextSize, searching, rebuilt);
+        this.DrawCategoryTree(itemTextSize, narrowing, rebuilt);
       }
 
       ImGui.EndChild();
@@ -119,8 +141,6 @@ namespace MarketTerror.GUI.Components
     /// <returns>True when a list belongs under it, false when this board has none left to show.</returns>
     private bool DrawTabs()
     {
-      var searching = !string.IsNullOrEmpty(this.context.SearchString) || this.context.HasActiveFilters;
-
       if (!this.board.IsMainBoard)
       {
         // A detached board is locked to the one list it was torn off with; the search box narrows it in place.
@@ -131,6 +151,8 @@ namespace MarketTerror.GUI.Components
 
         return true;
       }
+
+      var searching = !string.IsNullOrEmpty(this.context.SearchString) || this.context.HasActiveFilters;
 
       if (this.board.Tabs.Count == 0)
       {
