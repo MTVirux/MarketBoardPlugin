@@ -23,7 +23,7 @@ namespace MarketTerror
     /// <summary>
     /// The version this build writes.
     /// </summary>
-    public const int CurrentVersion = 4;
+    public const int CurrentVersion = 3;
 
     /// <summary>
     /// Gets or sets the version of the config file.
