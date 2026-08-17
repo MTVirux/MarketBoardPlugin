@@ -36,9 +36,13 @@ namespace MarketTerror.Helpers
     /// The response fields a shopping list entry is built from. The retainer and listing ids are only in
     /// there because <see cref="MarketDataListing"/> marks them required, so leaving them out fails the parse.
     /// </summary>
+    /// <remarks>
+    /// A field left out of this list is not missing from the parse, it comes back as its default, so
+    /// leaving the quality out quietly calls every listing normal quality and buys the wrong one.
+    /// </remarks>
     private const string CheapestListingFields =
-      "items.listings.pricePerUnit,items.listings.quantity,items.listings.tax,items.listings.worldName," +
-      "items.listings.listingID,items.listings.retainerID,items.listings.retainerName";
+      "items.listings.pricePerUnit,items.listings.quantity,items.listings.hq,items.listings.tax," +
+      "items.listings.worldName,items.listings.listingID,items.listings.retainerID,items.listings.retainerName";
 
     private readonly MarketTerrorPlugin plugin;
 
