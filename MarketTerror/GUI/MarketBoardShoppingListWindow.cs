@@ -11,9 +11,11 @@ namespace MarketTerror.GUI
   using System.Numerics;
   using System.Text;
   using Dalamud.Bindings.ImGui;
+  using Dalamud.Game.Text;
   using Dalamud.Interface;
   using Dalamud.Interface.Textures;
   using Dalamud.Interface.Windowing;
+  using MarketTerror.Extensions;
   using MarketTerror.GUI.Components;
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
@@ -292,6 +294,16 @@ namespace MarketTerror.GUI
           this.Plugin.MarketBoardContext.DrawListsMenu(item.SourceItem.RowId);
 
           ImGui.EndPopup();
+        }
+
+        // Drawn after the menu is bound so the name is what a right click still lands on.
+        if (item.Hq)
+        {
+          ImGui.SameLine();
+          ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextBright);
+          ImGui.Text(SeIconChar.HighQuality.AsString());
+          ImGui.PopStyleColor();
+          Utilities.HoverTooltip("This row only buys high quality.");
         }
 
         ImGui.TableSetColumnIndex(1);
@@ -822,7 +834,10 @@ namespace MarketTerror.GUI
       foreach (var pick in item.Picks.OrderBy(p => p.Price))
       {
         var price = pick.Price.ToString("N0", CultureInfo.CurrentCulture);
-        var line = $"{pick.Quantity} @ {price} on {pick.World} ({pick.RetainerName})";
+
+        // The row only marks itself high quality when every pick is, so each one says for itself.
+        var quality = pick.Hq ? $" {SeIconChar.HighQuality.AsString()}" : string.Empty;
+        var line = $"{pick.Quantity}{quality} @ {price} on {pick.World} ({pick.RetainerName})";
 
         ImGui.PushStyleColor(ImGuiCol.Text, pick.Gone ? this.theme.TextDim : this.theme.Text);
         ImGui.Text(pick.Gone ? $"{line} - gone" : line);
