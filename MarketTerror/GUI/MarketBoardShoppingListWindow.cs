@@ -31,6 +31,11 @@ namespace MarketTerror.GUI
     private const string NoValue = "-";
 
     /// <summary>
+    /// What marks a row that was added straight from a listing.
+    /// </summary>
+    private const string DirectPrefix = "[Direct Listing]";
+
+    /// <summary>
     /// The unscaled width of one of the icon buttons in the action column.
     /// </summary>
     private const float ActionButtonWidth = 32;
@@ -207,6 +212,7 @@ namespace MarketTerror.GUI
       this.UpdateSort();
 
       List<SavedItem> todel = new List<SavedItem>();
+      SavedItem? convert = null;
 
       int k = 0;
       foreach (var item in this.sortedItems)
@@ -228,7 +234,7 @@ namespace MarketTerror.GUI
         var name = item.SourceItem.Name.ExtractText();
 
         ImGui.PushStyleColor(ImGuiCol.Text, nameColor);
-        ImGui.Text(name);
+        ImGui.Text(item.IsDirect ? $"{DirectPrefix} {name}" : name);
         ImGui.PopStyleColor();
 
         if (ImGui.BeginPopupContextItem($"shoplistName{k}"))
@@ -236,6 +242,11 @@ namespace MarketTerror.GUI
           if (ImGui.Selectable("Copy name to clipboard"))
           {
             this.Plugin.MarketBoardContext.CopyToClipboard(name);
+          }
+
+          if (item.IsDirect && ImGui.Selectable("Convert to item listing"))
+          {
+            convert = item;
           }
 
           ImGui.EndPopup();
@@ -265,12 +276,14 @@ namespace MarketTerror.GUI
 
         var idle = !this.Plugin.ShoppingListBuyer.IsRunning && !this.Plugin.ShoppingListBulkAdd.IsRunning;
 
-        ImGui.BeginDisabled(!idle || !this.Plugin.ShoppingListScope.HasSelection);
+        ImGui.BeginDisabled(item.IsDirect || !idle || !this.Plugin.ShoppingListScope.HasSelection);
         ImGui.PushFont(UiBuilder.IconFont);
         var refresh = ImGui.Button($"{(char)FontAwesomeIcon.SyncAlt}##shoplistrefresh" + k, buttonSize);
         ImGui.PopFont();
         ImGui.EndDisabled();
-        Utilities.HoverTooltip("Price this item again.");
+        Utilities.HoverTooltip(
+          item.IsDirect ? "This is a direct listing and can't be refreshed" : "Price this item again.",
+          ImGuiHoveredFlags.AllowWhenDisabled);
 
         ImGui.SameLine();
 
@@ -350,6 +363,15 @@ namespace MarketTerror.GUI
       foreach (var item in todel)
       {
         this.Plugin.ShoppingList.Remove(item);
+      }
+
+      if (convert != null)
+      {
+        this.Plugin.ShoppingList.ConvertToItemListing(convert);
+        this.Plugin.ShoppingListBulkAdd.StartRefresh(
+          new[] { convert.SourceItem },
+          this.Plugin.ShoppingListScope.QueryTargets,
+          convert.SourceItem.Name.ExtractText());
       }
     }
 
@@ -484,7 +506,7 @@ namespace MarketTerror.GUI
       if (ImGui.Button("Refresh all"))
       {
         this.Plugin.ShoppingListBulkAdd.StartRefresh(
-          this.Plugin.ShoppingList.Select(i => i.SourceItem).ToArray(),
+          this.Plugin.ShoppingList.Where(i => !i.IsDirect).Select(i => i.SourceItem).ToArray(),
           scope.QueryTargets);
       }
 
@@ -576,7 +598,7 @@ namespace MarketTerror.GUI
         if (ImGui.Button("Refresh failed"))
         {
           this.Plugin.ShoppingListBulkAdd.StartRefresh(
-            list.Where(BuyFailed).Select(i => i.SourceItem).ToArray(),
+            list.Where(i => BuyFailed(i) && !i.IsDirect).Select(i => i.SourceItem).ToArray(),
             scope.QueryTargets,
             "the rows that did not buy");
         }

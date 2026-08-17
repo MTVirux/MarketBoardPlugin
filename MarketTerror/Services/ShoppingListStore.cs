@@ -39,6 +39,7 @@ namespace MarketTerror.Services
           this.items.Add(new SavedItem(item.Value, stored.Price, stored.World, stored.Quantity, stored.Hq)
           {
             Unlisted = stored.Unlisted,
+            IsDirect = stored.IsDirect,
           });
         }
       }
@@ -110,7 +111,7 @@ namespace MarketTerror.Services
 
       foreach (var entry in entries)
       {
-        var existing = this.items.Find(i => i.SourceItem.RowId == entry.SourceItem.RowId);
+        var existing = this.FindRefreshable(entry.SourceItem.RowId);
 
         if (existing != null)
         {
@@ -143,7 +144,7 @@ namespace MarketTerror.Services
 
       foreach (var id in itemIds)
       {
-        var existing = this.items.Find(i => i.SourceItem.RowId == id);
+        var existing = this.FindRefreshable(id);
 
         if (existing == null || existing.Unlisted)
         {
@@ -175,7 +176,7 @@ namespace MarketTerror.Services
 
       foreach (var id in itemIds)
       {
-        var existing = this.items.Find(i => i.SourceItem.RowId == id);
+        var existing = this.FindRefreshable(id);
 
         if (existing != null)
         {
@@ -205,7 +206,7 @@ namespace MarketTerror.Services
 
       foreach (var id in itemIds)
       {
-        var existing = this.items.Find(i => i.SourceItem.RowId == id);
+        var existing = this.FindRefreshable(id);
 
         if (existing != null)
         {
@@ -215,13 +216,30 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Gets the entry for an item.
+    /// Gets the entry a pricing job is allowed to touch for an item.
     /// </summary>
     /// <param name="itemId">The row id of the item to look for.</param>
-    /// <returns>The entry, or null when the item is not on the list.</returns>
+    /// <returns>The entry, or null when the item has no ordinary row on the list.</returns>
     public SavedItem? Find(uint itemId)
     {
-      return this.items.Find(i => i.SourceItem.RowId == itemId);
+      return this.FindRefreshable(itemId);
+    }
+
+    /// <summary>
+    /// Turns a row added straight from a listing into an ordinary one, so refreshes price it again.
+    /// </summary>
+    /// <param name="item">The row to convert.</param>
+    public void ConvertToItemListing(SavedItem item)
+    {
+      ArgumentNullException.ThrowIfNull(item);
+
+      if (!item.IsDirect)
+      {
+        return;
+      }
+
+      item.IsDirect = false;
+      this.Save();
     }
 
     /// <summary>
@@ -261,6 +279,16 @@ namespace MarketTerror.Services
     /// <inheritdoc/>
     IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
 
+    /// <summary>
+    /// Gets the entry for an item, skipping the rows added straight from a listing.
+    /// </summary>
+    /// <param name="itemId">The row id of the item to look for.</param>
+    /// <returns>The entry, or null when the item has no ordinary row on the list.</returns>
+    private SavedItem? FindRefreshable(uint itemId)
+    {
+      return this.items.Find(i => i.SourceItem.RowId == itemId && !i.IsDirect);
+    }
+
     private void Save()
     {
       this.Revision++;
@@ -270,7 +298,7 @@ namespace MarketTerror.Services
 
       foreach (var item in this.items)
       {
-        stored.Add(new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted, item.Quantity, item.Hq));
+        stored.Add(new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted, item.Quantity, item.Hq, item.IsDirect));
       }
 
       this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);

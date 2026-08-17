@@ -27,7 +27,8 @@ namespace MarketTerror.Models.ShoppingList
     /// <param name="unlisted">True when the last refresh found nothing on sale.</param>
     /// <param name="quantity">The stack size of the listing the price came from.</param>
     /// <param name="hq">True when the listing the price came from is high quality.</param>
-    public StoredItem(uint itemId, double price, string world, bool unlisted, long quantity, bool hq)
+    /// <param name="isDirect">True when the entry was added straight from a listing.</param>
+    public StoredItem(uint itemId, double price, string world, bool unlisted, long quantity, bool hq, bool isDirect)
     {
       this.ItemId = itemId;
       this.Price = price;
@@ -35,6 +36,7 @@ namespace MarketTerror.Models.ShoppingList
       this.Unlisted = unlisted;
       this.Quantity = quantity;
       this.Hq = hq;
+      this.IsDirect = isDirect;
     }
 
     /// <summary>
@@ -66,5 +68,10 @@ namespace MarketTerror.Models.ShoppingList
     /// Gets or sets a value indicating whether the listing the price came from is high quality.
     /// </summary>
     public bool Hq { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the entry was added straight from a listing.
+    /// </summary>
+    public bool IsDirect { get; set; }
   }
 }

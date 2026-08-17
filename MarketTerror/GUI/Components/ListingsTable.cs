@@ -168,6 +168,9 @@ namespace MarketTerror.GUI.Components
         this.context.SelectedListing == index,
         ImGuiSelectableFlags.SpanAllColumns);
 
+      // Bound while the selectable is still the last item, so the whole row answers the right click.
+      this.DrawRowContextMenu(listing, index);
+
       if (listing.Hq)
       {
         ImGui.SetCursorPos(new Vector2(cursor.X + hqOffset, cursor.Y));
@@ -215,6 +218,21 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.Text(retainerSB.ToString());
+    }
+
+    private void DrawRowContextMenu(MarketDataListing listing, int index)
+    {
+      if (!ImGui.BeginPopupContextItem($"listingContextMenu{index}"))
+      {
+        return;
+      }
+
+      if (this.context.SelectedItem.HasValue && ImGui.Selectable("Add to the shopping list"))
+      {
+        this.context.AddListingToShoppingList(this.context.SelectedItem.Value, listing);
+      }
+
+      ImGui.EndPopup();
     }
 
     private void HandleClick(MarketDataListing listing, int index)

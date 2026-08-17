@@ -13,6 +13,7 @@ namespace MarketTerror.GUI
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
   using MarketTerror.Models.ShoppingList;
+  using MarketTerror.Models.Universalis;
   using MarketTerror.Services;
 
   /// <summary>
@@ -312,6 +313,19 @@ namespace MarketTerror.GUI
       {
         this.Plugin.ShoppingList.Add(entry);
       }
+    }
+
+    /// <summary>
+    /// Adds one particular listing to the shopping list, kept as it is instead of being priced again.
+    /// </summary>
+    /// <param name="item">The item the listing belongs to.</param>
+    /// <param name="listing">The listing to add.</param>
+    public void AddListingToShoppingList(Item item, MarketDataListing listing)
+    {
+      // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
+      var fallbackWorld = this.Worlds.IsMultiWorld ? string.Empty : this.Worlds.QueryTarget;
+
+      this.Plugin.ShoppingList.Add(SavedItem.FromListing(item, listing, !this.Config.NoGilSalesTax, fallbackWorld));
     }
 
     /// <summary>

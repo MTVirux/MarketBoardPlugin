@@ -284,7 +284,8 @@ namespace MarketTerror.Services
       }
       else
       {
-        var listed = this.plugin.ShoppingList.Select(s => s.SourceItem.RowId).ToHashSet();
+        // A row added straight from a listing is not a priced row, so it does not stand in for one.
+        var listed = this.plugin.ShoppingList.Where(s => !s.IsDirect).Select(s => s.SourceItem.RowId).ToHashSet();
         var added = entries.Where(e => listed.Add(e.SourceItem.RowId)).ToArray();
 
         foreach (var entry in added)

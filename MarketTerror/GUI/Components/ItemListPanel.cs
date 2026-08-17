@@ -326,8 +326,11 @@ namespace MarketTerror.GUI.Components
         var buyList = this.context.Plugin.ShoppingList;
         var listed = buyList.Select(s => s.SourceItem.RowId).ToHashSet();
 
+        // A row added straight from a listing was never priced, so it does not stand in for one.
+        var priced = buyList.Where(s => !s.IsDirect).Select(s => s.SourceItem.RowId).ToHashSet();
+
         var missingFavorites = items.Where(i => !favorites.Contains(i.RowId)).ToArray();
-        var missingFromBuyList = items.Where(i => !listed.Contains(i.RowId)).ToArray();
+        var missingFromBuyList = items.Where(i => !priced.Contains(i.RowId)).ToArray();
 
         if (missingFavorites.Length > 0 && ImGui.Selectable("Add all to the favorites"))
         {
@@ -349,7 +352,7 @@ namespace MarketTerror.GUI.Components
           this.context.Plugin.PluginInterface.SavePluginConfig(this.context.Config);
         }
 
-        this.DrawCategoryBuyListEntries(categoryName, items, missingFromBuyList);
+        this.DrawCategoryBuyListEntries(categoryName, items, missingFromBuyList, items.Any(i => listed.Contains(i.RowId)));
 
         ImGui.EndPopup();
       }
@@ -357,7 +360,7 @@ namespace MarketTerror.GUI.Components
       ImGui.OpenPopupOnItemClick(popupId, ImGuiPopupFlags.MouseButtonRight);
     }
 
-    private void DrawCategoryBuyListEntries(string categoryName, List<Item> items, Item[] missing)
+    private void DrawCategoryBuyListEntries(string categoryName, List<Item> items, Item[] missing, bool anyListed)
     {
       var bulkAdd = this.context.Plugin.ShoppingListBulkAdd;
       var buyList = this.context.Plugin.ShoppingList;
@@ -386,7 +389,7 @@ namespace MarketTerror.GUI.Components
         }
       }
 
-      if (missing.Length < items.Count && ImGui.Selectable("Remove all from the shopping list"))
+      if (anyListed && ImGui.Selectable("Remove all from the shopping list"))
       {
         var ids = items.Select(i => i.RowId).ToHashSet();
 

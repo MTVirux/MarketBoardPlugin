@@ -4,6 +4,7 @@
 
 namespace MarketTerror.Models.ShoppingList
 {
+  using System;
   using System.Linq;
   using Lumina.Excel.Sheets;
   using MarketTerror.Models.Universalis;
@@ -78,6 +79,12 @@ namespace MarketTerror.Models.ShoppingList
     public bool Unlisted { get; set; }
 
     /// <summary>
+    /// Gets or sets a value indicating whether the entry was added straight from a listing.
+    /// </summary>
+    /// <remarks>Such an entry keeps the listing it was added from, so every refresh leaves it alone.</remarks>
+    public bool IsDirect { get; set; }
+
+    /// <summary>
     /// Builds an entry from the cheapest listing of a market data response.
     /// </summary>
     /// <param name="sourceItem">The item the market data belongs to.</param>
@@ -106,6 +113,33 @@ namespace MarketTerror.Models.ShoppingList
         cheapest.WorldName ?? fallbackWorld,
         cheapest.Quantity,
         cheapest.Hq);
+    }
+
+    /// <summary>
+    /// Builds an entry from one particular listing, kept as it is rather than priced again.
+    /// </summary>
+    /// <param name="sourceItem">The item the listing belongs to.</param>
+    /// <param name="listing">The listing to keep.</param>
+    /// <param name="includeSalesTax">True to fold the gil sales tax into the price.</param>
+    /// <param name="fallbackWorld">The world to record when the listing carries none.</param>
+    /// <returns>The entry.</returns>
+    public static SavedItem FromListing(Item sourceItem, MarketDataListing listing, bool includeSalesTax, string fallbackWorld)
+    {
+      ArgumentNullException.ThrowIfNull(listing);
+
+      var price = includeSalesTax
+        ? listing.PricePerUnit + (listing.Tax / listing.Quantity)
+        : listing.PricePerUnit;
+
+      return new SavedItem(
+        sourceItem,
+        price,
+        listing.WorldName ?? fallbackWorld,
+        listing.Quantity,
+        listing.Hq)
+      {
+        IsDirect = true,
+      };
     }
   }
 }
