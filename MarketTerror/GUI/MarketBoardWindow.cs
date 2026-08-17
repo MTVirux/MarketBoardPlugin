@@ -34,7 +34,11 @@ namespace MarketTerror.GUI
 
     private readonly ItemCatalog catalog;
 
-    private readonly MarketDataProvider marketDataProvider;
+    private readonly ApiStatus apiStatus;
+
+    private readonly MarketDataCache marketDataCache;
+
+    private readonly MarketDataView marketDataView;
 
     private readonly WorldSelection worldSelection;
 
@@ -120,14 +124,17 @@ namespace MarketTerror.GUI
 
       this.theme = new TerrorTheme(this.plugin.Config);
       this.catalog = new ItemCatalog(this.plugin.DataManager, this.plugin.Log);
-      this.marketDataProvider = new MarketDataProvider(this.plugin);
+      this.apiStatus = new ApiStatus(this.plugin);
+      this.marketDataCache = new MarketDataCache(this.plugin);
+      this.marketDataView = new MarketDataView(this.plugin, this.marketDataCache, this.apiStatus);
       this.worldSelection = new WorldSelection(this.plugin);
 
       this.context = new MarketBoardContext(
         this.plugin,
         this.theme,
         this.catalog,
-        this.marketDataProvider,
+        this.marketDataView,
+        this.apiStatus,
         this.worldSelection,
         this.titleFontHandle);
 
@@ -335,7 +342,8 @@ namespace MarketTerror.GUI
         this.themeScope?.Dispose();
         this.themeScope = null;
         this.hoveredItemWatcher.Dispose();
-        this.marketDataProvider.Dispose();
+        this.marketDataView.Dispose();
+        this.apiStatus.Dispose();
         this.defaultFontHandle?.Dispose();
         this.titleFontHandle?.Dispose();
       }

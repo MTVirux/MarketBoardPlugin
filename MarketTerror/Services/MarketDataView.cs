@@ -1,11 +1,10 @@
-// <copyright file="MarketDataProvider.cs" company="MTVirux">
+// <copyright file="MarketDataView.cs" company="MTVirux">
 // Copyright (c) MTVirux. All rights reserved.
 // </copyright>
 
 namespace MarketTerror.Services
 {
   using System;
-  using System.Collections.Generic;
   using System.Linq;
   using System.Threading;
   using System.Threading.Tasks;
@@ -15,15 +14,17 @@ namespace MarketTerror.Services
   using MarketTerror.Models.Universalis;
 
   /// <summary>
-  /// Fetches and caches market data, gilflux rankings and the Universalis service status.
+  /// One board's market data: what it is showing now, and the fetch that is filling it.
   /// </summary>
-  public sealed class MarketDataProvider : IDisposable
+  /// <remarks>Responses come from and go back to the shared cache, so two boards on the same
+  /// item and world pay for one fetch between them.</remarks>
+  public sealed class MarketDataView : IDisposable
   {
     private readonly MarketTerrorPlugin plugin;
 
-    private readonly Dictionary<uint, MarketDataResponse> cache = [];
+    private readonly MarketDataCache cache;
 
-    private readonly CancellationTokenSource statusCheckCancellationTokenSource = new();
+    private readonly ApiStatus status;
 
     private Task? currentRefreshTask;
 
@@ -32,14 +33,16 @@ namespace MarketTerror.Services
     private bool isDisposed;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MarketDataProvider"/> class.
+    /// Initializes a new instance of the <see cref="MarketDataView"/> class.
     /// </summary>
     /// <param name="plugin">The plugin instance.</param>
-    public MarketDataProvider(MarketTerrorPlugin plugin)
+    /// <param name="cache">The market data shared by every board.</param>
+    /// <param name="status">The shared API status poller.</param>
+    public MarketDataView(MarketTerrorPlugin plugin, MarketDataCache cache, ApiStatus status)
     {
       this.plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
-
-      this.StartStatusCheckTask(this.statusCheckCancellationTokenSource.Token);
+      this.cache = cache ?? throw new ArgumentNullException(nameof(cache));
+      this.status = status ?? throw new ArgumentNullException(nameof(status));
     }
 
     /// <summary>
@@ -58,19 +61,19 @@ namespace MarketTerror.Services
     public bool IsLoadingGilflux { get; private set; }
 
     /// <summary>
-    /// Gets a value indicating whether the Universalis API responded to the last status check,
+    /// Gets a value indicating whether the Universalis API answered the last check,
     /// or null while the first check is still running.
     /// </summary>
-    public bool? IsUniversalisUp { get; private set; }
+    public bool? IsUniversalisUp => this.status.IsUniversalisUp;
 
     /// <summary>
-    /// Gets a value indicating whether the FFXIVMT API responded to the last status check,
+    /// Gets a value indicating whether the FFXIVMT API answered the last check,
     /// or null while the first check is still running.
     /// </summary>
-    public bool? IsFFXIVMTUp { get; private set; }
+    public bool? IsFFXIVMTUp => this.status.IsFFXIVMTUp;
 
     /// <summary>
-    /// Empties the market data cache.
+    /// Empties the shared market data cache.
     /// </summary>
     public void ClearCache()
     {
@@ -103,16 +106,13 @@ namespace MarketTerror.Services
       this.currentRefreshTask = Task.Run(
         async () =>
         {
-          var cachedItem = this.cache.GetValueOrDefault(itemId);
-          if (
-            cachedItem != default(MarketDataResponse)
-            && DateTimeOffset.Now.ToUnixTimeMilliseconds() - cachedItem.FetchTimestamp < this.plugin.Config.ItemRefreshTimeout)
+          var cached = this.cache.Get(itemId, queryTarget);
+
+          if (cached != null)
           {
-            this.MarketData = cachedItem;
+            this.MarketData = cached;
             return;
           }
-
-          this.cache.Remove(itemId);
 
           try
           {
@@ -127,43 +127,7 @@ namespace MarketTerror.Services
 
             if (includeOceania)
             {
-              var oceaniaMarketData = await this.plugin.UniversalisClient
-                .GetMarketData(
-                  itemId,
-                  WorldRegions.Oceania,
-                  this.plugin.Config.ListingCount,
-                  this.plugin.Config.HistoryCount,
-                  cancellationTokenSource.Token)
-                .ConfigureAwait(false);
-
-              if (oceaniaMarketData != null)
-              {
-                if (this.MarketData == null)
-                {
-                  this.MarketData = oceaniaMarketData;
-                }
-                else
-                {
-                  foreach (var listing in oceaniaMarketData.Listings)
-                  {
-                    this.MarketData.Listings.Add(listing);
-                  }
-
-                  foreach (var history in oceaniaMarketData.RecentHistory)
-                  {
-                    this.MarketData.RecentHistory.Add(history);
-                  }
-
-                  this.MarketData.Listings = this.MarketData.Listings
-                    .OrderBy(l => l.PricePerUnit)
-                    .Take(this.plugin.Config.ListingCount)
-                    .ToList();
-                  this.MarketData.RecentHistory = this.MarketData.RecentHistory
-                    .OrderByDescending(h => h.Timestamp)
-                    .Take(this.plugin.Config.HistoryCount)
-                    .ToList();
-                }
-              }
+              await this.MergeOceania(itemId, cancellationTokenSource.Token).ConfigureAwait(false);
             }
           }
           catch (AggregateException ae)
@@ -180,7 +144,7 @@ namespace MarketTerror.Services
 
           if (this.MarketData != null)
           {
-            this.cache.Add(itemId, this.MarketData);
+            this.cache.Put(itemId, queryTarget, this.MarketData);
           }
 
           this.IsLoadingGilflux = true;
@@ -188,10 +152,7 @@ namespace MarketTerror.Services
           try
           {
             this.Gilflux = await this.plugin.FFXIVMTClient
-              .GetGilfluxForItem(
-                itemId,
-                queryTarget,
-                cancellationTokenSource.Token)
+              .GetGilfluxForItem(itemId, queryTarget, cancellationTokenSource.Token)
               .ConfigureAwait(false);
           }
           catch (OperationCanceledException)
@@ -221,24 +182,49 @@ namespace MarketTerror.Services
 
       this.currentRefreshCancellationTokenSource?.Cancel();
       this.currentRefreshCancellationTokenSource?.Dispose();
-      this.statusCheckCancellationTokenSource.Cancel();
-      this.statusCheckCancellationTokenSource.Dispose();
       this.isDisposed = true;
     }
 
-    private void StartStatusCheckTask(CancellationToken cancellationToken)
+    private async Task MergeOceania(uint itemId, CancellationToken cancellationToken)
     {
-      Task.Run(
-        async () =>
-        {
-          while (!cancellationToken.IsCancellationRequested)
-          {
-            this.IsUniversalisUp = await this.plugin.UniversalisClient.CheckStatus(cancellationToken).ConfigureAwait(false);
-            this.IsFFXIVMTUp = await this.plugin.FFXIVMTClient.CheckStatus(cancellationToken).ConfigureAwait(false);
-            await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken).ConfigureAwait(false);
-          }
-        },
-        cancellationToken);
+      var oceania = await this.plugin.UniversalisClient
+        .GetMarketData(
+          itemId,
+          WorldRegions.Oceania,
+          this.plugin.Config.ListingCount,
+          this.plugin.Config.HistoryCount,
+          cancellationToken)
+        .ConfigureAwait(false);
+
+      if (oceania == null)
+      {
+        return;
+      }
+
+      if (this.MarketData == null)
+      {
+        this.MarketData = oceania;
+        return;
+      }
+
+      foreach (var listing in oceania.Listings)
+      {
+        this.MarketData.Listings.Add(listing);
+      }
+
+      foreach (var history in oceania.RecentHistory)
+      {
+        this.MarketData.RecentHistory.Add(history);
+      }
+
+      this.MarketData.Listings = this.MarketData.Listings
+        .OrderBy(l => l.PricePerUnit)
+        .Take(this.plugin.Config.ListingCount)
+        .ToList();
+      this.MarketData.RecentHistory = this.MarketData.RecentHistory
+        .OrderByDescending(h => h.Timestamp)
+        .Take(this.plugin.Config.HistoryCount)
+        .ToList();
     }
   }
 }

@@ -19,17 +19,17 @@ namespace MarketTerror.Services
 
     private readonly MarketTerrorPlugin plugin;
 
-    private readonly MarketDataProvider marketData;
+    private readonly ApiStatus status;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="IntegrationStatus"/> class.
     /// </summary>
     /// <param name="plugin">The plugin instance.</param>
-    /// <param name="marketData">The market data provider the service states are read from.</param>
-    public IntegrationStatus(MarketTerrorPlugin plugin, MarketDataProvider marketData)
+    /// <param name="status">The shared API status poller.</param>
+    public IntegrationStatus(MarketTerrorPlugin plugin, ApiStatus status)
     {
       this.plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
-      this.marketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
+      this.status = status ?? throw new ArgumentNullException(nameof(status));
     }
 
     /// <summary>
@@ -133,7 +133,7 @@ namespace MarketTerror.Services
     /// <returns>The Universalis integration.</returns>
     private Integration Universalis()
     {
-      var up = this.marketData.IsUniversalisUp;
+      var up = this.status.IsUniversalisUp;
 
       if (up == null)
       {
@@ -152,7 +152,7 @@ namespace MarketTerror.Services
 
     private Integration Ffxivmt()
     {
-      var up = this.marketData.IsFFXIVMTUp;
+      var up = this.status.IsFFXIVMTUp;
 
       if (up == null)
       {

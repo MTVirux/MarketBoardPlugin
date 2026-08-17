@@ -39,14 +39,16 @@ namespace MarketTerror.GUI
     /// <param name="plugin">The plugin instance.</param>
     /// <param name="theme">The Terror skin.</param>
     /// <param name="catalog">The item catalogue.</param>
-    /// <param name="marketData">The market data provider.</param>
+    /// <param name="marketData">This board's market data view.</param>
+    /// <param name="apiStatus">The shared API status poller.</param>
     /// <param name="worlds">The world selection.</param>
     /// <param name="titleFont">The 1.5x font used for headings.</param>
     public MarketBoardContext(
       MarketTerrorPlugin plugin,
       TerrorTheme theme,
       ItemCatalog catalog,
-      MarketDataProvider marketData,
+      MarketDataView marketData,
+      ApiStatus apiStatus,
       WorldSelection worlds,
       IFontHandle titleFont)
     {
@@ -56,7 +58,7 @@ namespace MarketTerror.GUI
       this.MarketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
       this.Worlds = worlds ?? throw new ArgumentNullException(nameof(worlds));
       this.TitleFont = titleFont ?? throw new ArgumentNullException(nameof(titleFont));
-      this.Integrations = new IntegrationStatus(this.Plugin, this.MarketData);
+      this.Integrations = new IntegrationStatus(this.Plugin, apiStatus);
       this.CatalogView = new CatalogView(this.Catalog, this.Plugin.Log);
     }
 
@@ -86,9 +88,9 @@ namespace MarketTerror.GUI
     public CatalogView CatalogView { get; }
 
     /// <summary>
-    /// Gets the market data provider.
+    /// Gets this board's market data view.
     /// </summary>
-    public MarketDataProvider MarketData { get; }
+    public MarketDataView MarketData { get; }
 
     /// <summary>
     /// Gets the world selection.
