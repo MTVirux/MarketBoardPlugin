@@ -18,7 +18,20 @@ namespace MarketTerror.GUI.Components
   /// </summary>
   public sealed class ItemListPanel
   {
+    /// <summary>How far a tab has to be dragged off the bar before it comes away, in bar heights.</summary>
+    private const float TearOffThreshold = 1.5f;
+
+    private static readonly (ItemListTab Tab, FontAwesomeIcon Icon, string Id, string Tooltip)[] TabDescriptors =
+    {
+      (ItemListTab.All, FontAwesomeIcon.List, "allTab", "All items"),
+      (ItemListTab.Search, FontAwesomeIcon.Search, "searchTab", "Search results"),
+      (ItemListTab.Favorites, FontAwesomeIcon.Star, "favoritesTab", "Favorites"),
+      (ItemListTab.History, FontAwesomeIcon.History, "historyTab", "Recently viewed"),
+    };
+
     private readonly MarketBoardContext context;
+
+    private readonly MarketBoard board;
 
     private bool wasSearchTabHidden = true;
 
@@ -26,9 +39,11 @@ namespace MarketTerror.GUI.Components
     /// Initializes a new instance of the <see cref="ItemListPanel"/> class.
     /// </summary>
     /// <param name="context">The shared market board state.</param>
-    public ItemListPanel(MarketBoardContext context)
+    /// <param name="board">The board this list belongs to.</param>
+    public ItemListPanel(MarketBoardContext context, MarketBoard board)
     {
       this.context = context ?? throw new ArgumentNullException(nameof(context));
+      this.board = board ?? throw new ArgumentNullException(nameof(board));
     }
 
     /// <summary>
@@ -96,47 +111,120 @@ namespace MarketTerror.GUI.Components
     private void DrawTabs()
     {
       var searching = !string.IsNullOrEmpty(this.context.SearchString) || this.context.HasActiveFilters;
-      var hasFavorites = this.context.Config.Favorites.Count > 0;
-      var hasHistory = this.context.Config.History.Count > 0;
+      var single = this.board.Tabs.Count == 1;
 
-      if ((!searching && this.context.ItemListTab == ItemListTab.Search)
-        || (!hasFavorites && this.context.ItemListTab == ItemListTab.Favorites)
-        || (!hasHistory && this.context.ItemListTab == ItemListTab.History))
+      if (single)
       {
-        this.context.ItemListTab = ItemListTab.All;
+        // A board locked to one list always shows it, and the search box narrows it in place.
+        this.context.ItemListTab = this.board.Tabs[0];
+        return;
       }
+
+      if (this.board.Tabs.Count == 0)
+      {
+        this.DrawEmptyBar();
+        return;
+      }
+
+      if (!this.board.Tabs.Contains(this.context.ItemListTab)
+        || !this.IsAvailable(this.context.ItemListTab, searching))
+      {
+        this.context.ItemListTab = this.FallbackTab(searching);
+      }
+
+      // A tab bar is not an ImGui item, so its rect has to be measured rather than queried afterwards.
+      var barOrigin = ImGui.GetCursorScreenPos();
+      var barWidth = ImGui.GetContentRegionAvail().X;
 
       if (ImGui.BeginTabBar("itemListTabs", ImGuiTabBarFlags.Reorderable))
       {
-        if (DrawTab(FontAwesomeIcon.List, "allTab", "All items", ImGuiTabItemFlags.None))
+        foreach (var descriptor in TabDescriptors)
         {
-          this.context.ItemListTab = ItemListTab.All;
-        }
+          if (!this.board.Tabs.Contains(descriptor.Tab) || !this.IsAvailable(descriptor.Tab, searching))
+          {
+            continue;
+          }
 
-        // Selecting the tab as it appears saves a click when the user starts typing or sets a filter.
-        if (searching && DrawTab(
-          FontAwesomeIcon.Search,
-          "searchTab",
-          "Search results",
-          this.wasSearchTabHidden ? ImGuiTabItemFlags.SetSelected : ImGuiTabItemFlags.None))
-        {
-          this.context.ItemListTab = ItemListTab.Search;
-        }
+          // Selecting the search tab as it appears saves a click when the user starts typing.
+          var flags = descriptor.Tab == ItemListTab.Search && this.wasSearchTabHidden
+            ? ImGuiTabItemFlags.SetSelected
+            : ImGuiTabItemFlags.None;
 
-        if (hasFavorites && DrawTab(FontAwesomeIcon.Star, "favoritesTab", "Favorites", ImGuiTabItemFlags.None))
-        {
-          this.context.ItemListTab = ItemListTab.Favorites;
-        }
+          if (DrawTab(descriptor.Icon, descriptor.Id, descriptor.Tooltip, flags))
+          {
+            this.context.ItemListTab = descriptor.Tab;
+          }
 
-        if (hasHistory && DrawTab(FontAwesomeIcon.History, "historyTab", "Recently viewed", ImGuiTabItemFlags.None))
-        {
-          this.context.ItemListTab = ItemListTab.History;
+          this.CheckTearOff(descriptor.Tab);
         }
 
         ImGui.EndTabBar();
       }
 
+      this.board.TabBarScreenRect = (
+        barOrigin,
+        new Vector2(barOrigin.X + barWidth, barOrigin.Y + ImGui.GetFrameHeight()));
       this.wasSearchTabHidden = !searching;
+    }
+
+    private ItemListTab FallbackTab(bool searching)
+    {
+      foreach (var tab in this.board.Tabs)
+      {
+        if (this.IsAvailable(tab, searching))
+        {
+          return tab;
+        }
+      }
+
+      return this.board.Tabs.Count > 0 ? this.board.Tabs[0] : this.context.ItemListTab;
+    }
+
+    private bool IsAvailable(ItemListTab tab, bool searching)
+    {
+      return tab switch
+      {
+        ItemListTab.Search => searching,
+        ItemListTab.Favorites => this.context.Config.Favorites.Count > 0,
+        ItemListTab.History => this.context.Config.History.Count > 0,
+        _ => true,
+      };
+    }
+
+    private void DrawEmptyBar()
+    {
+      var height = ImGui.GetFrameHeight();
+      var min = ImGui.GetCursorScreenPos();
+      var max = new Vector2(min.X + ImGui.GetContentRegionAvail().X, min.Y + height);
+
+      ImGui.Dummy(new Vector2(0, height));
+      ImGui.GetWindowDrawList().AddRect(min, max, this.context.Theme.Border);
+
+      var label = "Every list is in its own window";
+      var labelSize = ImGui.CalcTextSize(label);
+      ImGui.GetWindowDrawList().AddText(
+        new Vector2(min.X + ((max.X - min.X - labelSize.X) / 2.0f), min.Y + ((height - labelSize.Y) / 2.0f)),
+        this.context.Theme.Border,
+        label);
+
+      this.board.TabBarScreenRect = (min, max);
+    }
+
+    private void CheckTearOff(ItemListTab tab)
+    {
+      if (!ImGui.IsItemActive() || this.board.TearOffRequest != null)
+      {
+        return;
+      }
+
+      // Vertical only, so this never fights the bar's own horizontal reordering drag.
+      var drag = ImGui.GetMouseDragDelta(ImGuiMouseButton.Left);
+
+      if (Math.Abs(drag.Y) > ImGui.GetFrameHeight() * TearOffThreshold)
+      {
+        this.board.TearOffRequest = tab;
+        ImGui.ResetMouseDragDelta(ImGuiMouseButton.Left);
+      }
     }
 
     private void DrawHistory()

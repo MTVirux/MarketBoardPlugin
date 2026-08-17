@@ -52,7 +52,7 @@ namespace MarketTerror.GUI
       this.IsMainBoard = isMainBoard;
 
       this.searchPanel = new ItemSearchPanel(this.context);
-      this.itemListPanel = new ItemListPanel(this.context);
+      this.itemListPanel = new ItemListPanel(this.context, this);
       this.headerBar = new ItemHeaderBar(this.context);
       this.listingsTable = new ListingsTable(this.context);
       this.historyTable = new HistoryTable(this.context);
