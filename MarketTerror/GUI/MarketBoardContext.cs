@@ -6,12 +6,12 @@ namespace MarketTerror.GUI
 {
   using System;
   using System.Collections.Generic;
-  using System.Linq;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.ManagedFontAtlas;
   using Lumina.Excel.Sheets;
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
+  using MarketTerror.Models;
   using MarketTerror.Models.ShoppingList;
   using MarketTerror.Models.Universalis;
   using MarketTerror.Services;
@@ -22,7 +22,7 @@ namespace MarketTerror.GUI
   /// <remarks>
   /// Components talk to each other only through this object; none of them holds a reference to another.
   /// </remarks>
-  public sealed class MarketBoardContext
+  public sealed class MarketBoardContext : IDisposable
   {
     /// <summary>
     /// The equip level the maximum equip level filter starts at and resets to.
@@ -34,36 +34,33 @@ namespace MarketTerror.GUI
     /// </summary>
     public const int DefaultMaxItemLevel = 999;
 
+    // An item loaded from stored state, waiting for the world selection to resolve before it can be queried.
+    private uint? pendingSelectedItem;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardContext"/> class.
     /// </summary>
-    /// <param name="plugin">The plugin instance.</param>
-    /// <param name="theme">The Terror skin.</param>
-    /// <param name="catalog">The item catalogue.</param>
-    /// <param name="marketData">The market data provider.</param>
-    /// <param name="worlds">The world selection.</param>
-    /// <param name="titleFont">The 1.5x font used for headings.</param>
-    public MarketBoardContext(
-      MarketTerrorPlugin plugin,
-      TerrorTheme theme,
-      ItemCatalog catalog,
-      MarketDataProvider marketData,
-      WorldSelection worlds,
-      IFontHandle titleFont)
+    /// <param name="services">The services shared by every board.</param>
+    /// <param name="worlds">This board's world selection.</param>
+    public MarketBoardContext(BoardServices services, WorldSelection worlds)
     {
-      this.Plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
-      this.Theme = theme ?? throw new ArgumentNullException(nameof(theme));
-      this.Catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
-      this.MarketData = marketData ?? throw new ArgumentNullException(nameof(marketData));
+      this.Services = services ?? throw new ArgumentNullException(nameof(services));
       this.Worlds = worlds ?? throw new ArgumentNullException(nameof(worlds));
-      this.TitleFont = titleFont ?? throw new ArgumentNullException(nameof(titleFont));
-      this.Integrations = new IntegrationStatus(this.Plugin, this.MarketData);
+
+      this.MarketData = new MarketDataView(services.Plugin, services.MarketDataCache, services.ApiStatus);
+      this.CatalogView = new CatalogView(services.Catalog, services.Plugin.Log);
+      this.Integrations = new IntegrationStatus(services.Plugin, services.ApiStatus);
     }
+
+    /// <summary>
+    /// Gets the services shared by every board.
+    /// </summary>
+    public BoardServices Services { get; }
 
     /// <summary>
     /// Gets the plugin instance.
     /// </summary>
-    public MarketTerrorPlugin Plugin { get; }
+    public MarketTerrorPlugin Plugin => this.Services.Plugin;
 
     /// <summary>
     /// Gets the plugin configuration.
@@ -73,17 +70,22 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Gets the Terror skin.
     /// </summary>
-    public TerrorTheme Theme { get; }
+    public TerrorTheme Theme => this.Services.Theme;
 
     /// <summary>
     /// Gets the item catalogue.
     /// </summary>
-    public ItemCatalog Catalog { get; }
+    public ItemCatalog Catalog => this.Services.Catalog;
 
     /// <summary>
-    /// Gets the market data provider.
+    /// Gets this board's filtered view of the catalogue.
     /// </summary>
-    public MarketDataProvider MarketData { get; }
+    public CatalogView CatalogView { get; }
+
+    /// <summary>
+    /// Gets this board's market data view.
+    /// </summary>
+    public MarketDataView MarketData { get; }
 
     /// <summary>
     /// Gets the world selection.
@@ -98,7 +100,7 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Gets the 1.5x font used for headings.
     /// </summary>
-    public IFontHandle TitleFont { get; }
+    public IFontHandle TitleFont => this.Services.TitleFont;
 
     /// <summary>
     /// Gets or sets the current search string.
@@ -194,6 +196,105 @@ namespace MarketTerror.GUI
       || this.MaxItemLevel != DefaultMaxItemLevel;
 
     /// <summary>
+    /// Stops this board's in-flight market data fetch.
+    /// </summary>
+    public void Dispose()
+    {
+      this.MarketData.Dispose();
+    }
+
+    /// <summary>
+    /// Copies this board's state into a stored entry.
+    /// </summary>
+    /// <param name="state">The entry to write.</param>
+    public void SaveTo(DetachedBoardState state)
+    {
+      ArgumentNullException.ThrowIfNull(state);
+
+      state.SearchString = this.SearchString;
+      state.SelectedItem = this.SelectedItem?.RowId ?? this.pendingSelectedItem ?? 0;
+      state.AdvancedSearchOpen = this.AdvancedSearchOpen;
+      state.SelectedClassJob = this.SelectedClassJob?.RowId;
+      state.MinLevel = this.MinLevel;
+      state.MaxLevel = this.MaxLevel;
+      state.MinItemLevel = this.MinItemLevel;
+      state.MaxItemLevel = this.MaxItemLevel;
+      state.UnlockFilter = this.UnlockFilter;
+
+      state.SelectedCategories.Clear();
+      state.SelectedCategories.AddRange(this.SelectedCategories);
+      state.SelectedRarities.Clear();
+      state.SelectedRarities.AddRange(this.SelectedRarities);
+    }
+
+    /// <summary>
+    /// Restores this board's state from a stored entry.
+    /// </summary>
+    /// <param name="state">The entry to read.</param>
+    public void LoadFrom(DetachedBoardState state)
+    {
+      ArgumentNullException.ThrowIfNull(state);
+
+      this.SearchString = state.SearchString;
+      this.AdvancedSearchOpen = state.AdvancedSearchOpen;
+      this.MinLevel = state.MinLevel;
+      this.MaxLevel = state.MaxLevel;
+      this.MinItemLevel = state.MinItemLevel;
+      this.MaxItemLevel = state.MaxItemLevel;
+      this.UnlockFilter = state.UnlockFilter;
+
+      this.SelectedCategories.Clear();
+      foreach (var category in state.SelectedCategories)
+      {
+        this.SelectedCategories.Add(category);
+      }
+
+      this.SelectedRarities.Clear();
+      foreach (var rarity in state.SelectedRarities)
+      {
+        this.SelectedRarities.Add(rarity);
+      }
+
+      this.SelectedClassJob = null;
+
+      if (state.SelectedClassJob is { } jobId)
+      {
+        foreach (var job in this.Catalog.ClassJobs)
+        {
+          if (job.RowId == jobId)
+          {
+            this.SelectedClassJob = job;
+            break;
+          }
+        }
+      }
+
+      // A stored item that is no longer marketable just loads as nothing selected. The world
+      // selection has not resolved yet this early, so the actual selection is deferred.
+      this.pendingSelectedItem = null;
+
+      if (state.SelectedItem != 0 && this.Catalog.Contains(state.SelectedItem))
+      {
+        this.pendingSelectedItem = state.SelectedItem;
+      }
+    }
+
+    /// <summary>
+    /// Applies a selection loaded from stored state, once the world selection has resolved.
+    /// </summary>
+    /// <remarks>Does nothing until called again on a later frame if the world is not resolved yet.</remarks>
+    public void ApplyPendingSelection()
+    {
+      if (this.pendingSelectedItem is not { } itemId || !this.Worlds.HasSelection)
+      {
+        return;
+      }
+
+      this.pendingSelectedItem = null;
+      this.SelectItem(itemId, true);
+    }
+
+    /// <summary>
     /// Builds the item filter matching the current advanced search settings.
     /// </summary>
     /// <param name="searchString">The item name fragment to search for.</param>
@@ -235,6 +336,7 @@ namespace MarketTerror.GUI
     /// <param name="noHistory">True to leave the search history untouched.</param>
     public void SelectItem(uint itemId, bool noHistory = false)
     {
+      this.pendingSelectedItem = null;
       this.SelectedItem = this.Catalog.GetItem(itemId);
 
       this.RefreshMarketData();
@@ -270,6 +372,10 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Drops the cached market data and refetches the selected item.
     /// </summary>
+    /// <remarks>
+    /// The cache is shared, so this empties it for every board. It is meant for the settings that
+    /// change what a response is made of; moving a board to another place only needs a refetch.
+    /// </remarks>
     public void ResetMarketData()
     {
       this.MarketData.ClearCache();

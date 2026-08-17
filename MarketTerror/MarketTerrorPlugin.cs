@@ -11,10 +11,13 @@ namespace MarketTerror
   using System.Globalization;
   using System.IO;
   using System.Linq;
+  using Dalamud.Bindings.ImPlot;
   using Dalamud.Game.ClientState.Objects.Enums;
   using Dalamud.Game.Command;
   using Dalamud.Game.Gui.ContextMenu;
   using Dalamud.Game.Text;
+  using Dalamud.Interface;
+  using Dalamud.Interface.ManagedFontAtlas;
   using Dalamud.Interface.Windowing;
   using Dalamud.Plugin;
   using Dalamud.Plugin.Services;
@@ -68,7 +71,11 @@ namespace MarketTerror
     /// </summary>
     private static readonly string[] BuyListCommands = { "buylist", "shoppinglist" };
 
-    private readonly MarketBoardWindow marketBoardWindow;
+    private readonly IFontHandle defaultFontHandle;
+
+    private readonly IFontHandle titleFontHandle;
+
+    private readonly BoardManager boardManager;
 
     private readonly MarketTerrorConfigWindow marketBoardConfigWindow;
 
@@ -157,14 +164,47 @@ namespace MarketTerror
         () => this.Config.AutoSearchOnMarketBoard,
         () => this.Config.AutoOpenSearchResult);
 
-      this.marketBoardWindow = new MarketBoardWindow(this);
+      this.defaultFontHandle = this.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(e =>
+        e.OnPreBuild(toolkit =>
+        {
+          var fontStream = typeof(MarketTerrorPlugin).Assembly.GetManifestResourceStream("MarketTerror.Resources.NotoSans-Medium-NNBSP.otf");
+
+          if (fontStream == null)
+          {
+            this.Log.Warning("Failed to load embedded font MarketTerror.Resources.NotoSans-Medium-NNBSP.otf");
+            return;
+          }
+
+          toolkit.AddFontFromStream(
+            fontStream,
+            new SafeFontConfig()
+            {
+              SizePx = UiBuilder.DefaultFontSizePx,
+              GlyphRanges = FontAtlasBuildToolkitUtilities.ToGlyphRange(char.ConvertFromUtf32(0x202F)),
+              MergeFont = toolkit.AddDalamudDefaultFont(-1),
+            },
+            false,
+            "NNBSP");
+        }));
+
+      this.titleFontHandle = this.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(e =>
+        e.OnPreBuild(toolkit =>
+          toolkit.AddDalamudDefaultFont(this.PluginInterface.UiBuilder.DefaultFontSpec.SizePx * 1.5f)));
+
+      var imPlotStylePtr = ImPlot.GetStyle();
+
+      imPlotStylePtr.Use24HourClock = DateTimeFormatInfo.CurrentInfo.ShortTimePattern.Contains('H', StringComparison.InvariantCulture);
+      imPlotStylePtr.UseISO8601 = DateTimeFormatInfo.CurrentInfo.ShortDatePattern != "M/d/yyyy";
+      imPlotStylePtr.UseLocalTime = true;
+
+      this.boardManager = new BoardManager(this, this.defaultFontHandle, this.titleFontHandle, this.windowSystem);
       this.marketBoardConfigWindow = new MarketTerrorConfigWindow(this);
       this.ShoppingListBuyer = new ShoppingListBuyer(this);
       this.marketBoardShoppingListWindow = new MarketBoardShoppingListWindow(this);
       this.themeEditorWindow = new ThemeEditorWindow(this);
-      this.integrationsWindow = new IntegrationsWindow(this.marketBoardWindow.Context);
+      this.integrationsWindow = new IntegrationsWindow(this.boardManager.MainWindow.Context);
 
-      this.windowSystem.AddWindow(this.marketBoardWindow);
+      this.windowSystem.AddWindow(this.boardManager.MainWindow);
       this.windowSystem.AddWindow(this.marketBoardConfigWindow);
       this.windowSystem.AddWindow(this.marketBoardShoppingListWindow);
       this.windowSystem.AddWindow(this.themeEditorWindow);
@@ -200,7 +240,7 @@ namespace MarketTerror
 #if DEBUG
       if (this.Config.OpenOnStart)
       {
-        this.marketBoardWindow.IsOpen = true;
+        this.boardManager.MainWindow.IsOpen = true;
       }
 #endif
     }
@@ -253,7 +293,7 @@ namespace MarketTerror
     /// <summary>
     /// Gets the state and services shared by the main window's components.
     /// </summary>
-    public MarketBoardContext MarketBoardContext => this.marketBoardWindow.Context;
+    public MarketBoardContext MarketBoardContext => this.boardManager.MainWindow.Context;
 
     /// <summary>
     /// Gets the number format info.
@@ -357,7 +397,12 @@ namespace MarketTerror
     /// </summary>
     public void ResetMarketData()
     {
-      this.marketBoardWindow.ResetMarketData();
+      this.boardManager.MainWindow.ResetMarketData();
+
+      foreach (var window in this.boardManager.Detached)
+      {
+        window.Board.Context.ResetMarketData();
+      }
     }
 
     /// <summary>
@@ -365,7 +410,7 @@ namespace MarketTerror
     /// </summary>
     public void OpenMainUi()
     {
-      this.marketBoardWindow.IsOpen = true;
+      this.boardManager.MainWindow.IsOpen = true;
     }
 
     /// <summary>
@@ -416,10 +461,14 @@ namespace MarketTerror
         // Save config
         this.PluginInterface.SavePluginConfig(this.Config);
 
-        // Remove windows
+        // Remove windows - the board manager unregisters its own before the rest go, since
+        // the window system rejects a window that is no longer registered with it.
+        this.boardManager.SaveLayout();
+        this.boardManager.Dispose();
         this.windowSystem.RemoveAllWindows();
-        this.marketBoardWindow.Dispose();
         this.marketBoardShoppingListWindow.Dispose();
+        this.defaultFontHandle.Dispose();
+        this.titleFontHandle.Dispose();
 
         // Remove command handlers
         foreach (var command in OpenCommands)
@@ -611,8 +660,8 @@ namespace MarketTerror
       {
         try
         {
-          this.marketBoardWindow.IsOpen = true;
-          this.marketBoardWindow.ChangeSelectedItem(itemId);
+          this.boardManager.MainWindow.IsOpen = true;
+          this.boardManager.MainWindow.ChangeSelectedItem(itemId);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
@@ -631,24 +680,25 @@ namespace MarketTerror
         }
         else if (uint.TryParse(arguments, out var itemId))
         {
-          this.marketBoardWindow.ChangeSelectedItem(itemId);
-          this.marketBoardWindow.IsOpen = true;
+          this.boardManager.MainWindow.ChangeSelectedItem(itemId);
+          this.boardManager.MainWindow.IsOpen = true;
         }
         else
         {
-          this.marketBoardWindow.SearchString = arguments;
-          this.marketBoardWindow.IsOpen = true;
+          this.boardManager.MainWindow.SearchString = arguments;
+          this.boardManager.MainWindow.IsOpen = true;
         }
       }
       else
       {
-        this.marketBoardWindow.IsOpen = !this.marketBoardWindow.IsOpen;
+        this.boardManager.MainWindow.IsOpen = !this.boardManager.MainWindow.IsOpen;
       }
     }
 
     private void DrawUi()
     {
       this.windowSystem.Draw();
+      this.boardManager.ApplyPendingChanges();
     }
 
     /// <summary>

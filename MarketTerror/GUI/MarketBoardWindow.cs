@@ -4,57 +4,30 @@
 namespace MarketTerror.GUI
 {
   using System;
-  using System.Globalization;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
-  using Dalamud.Bindings.ImPlot;
   using Dalamud.Interface;
-  using Dalamud.Interface.ManagedFontAtlas;
   using Dalamud.Interface.Windowing;
   using MarketTerror.GUI.Components;
-  using MarketTerror.GUI.Theme;
   using MarketTerror.Services;
 
   /// <summary>
   /// The market board window.
   /// </summary>
   /// <remarks>
-  /// This type owns the components and services and composes them; the drawing itself lives in the
-  /// components under <see cref="MarketTerror.GUI.Components"/>.
+  /// This type hosts the main <see cref="MarketBoard"/>; the drawing itself lives in
+  /// <see cref="MarketBoard"/> and the components under <see cref="MarketTerror.GUI.Components"/>.
+  /// The services it draws with belong to the <see cref="BoardManager"/>.
   /// </remarks>
   public class MarketBoardWindow : Window, IDisposable
   {
     private readonly MarketTerrorPlugin plugin;
 
-    private readonly IFontHandle defaultFontHandle;
-
-    private readonly IFontHandle titleFontHandle;
-
-    private readonly TerrorTheme theme;
-
-    private readonly ItemCatalog catalog;
-
-    private readonly MarketDataProvider marketDataProvider;
-
-    private readonly WorldSelection worldSelection;
+    private readonly BoardServices services;
 
     private readonly HoveredItemWatcher hoveredItemWatcher;
 
-    private readonly MarketBoardContext context;
-
-    private readonly ItemSearchPanel searchPanel;
-
-    private readonly ItemListPanel itemListPanel;
-
-    private readonly ItemHeaderBar headerBar;
-
-    private readonly ListingsTable listingsTable;
-
-    private readonly HistoryTable historyTable;
-
-    private readonly StatsPanel statsPanel;
-
-    private readonly LinksPopup linksPopup;
+    private readonly MarketBoard board;
 
     private readonly TitleBarButton integrationsButton;
 
@@ -71,11 +44,14 @@ namespace MarketTerror.GUI
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardWindow"/> class.
     /// </summary>
-    /// <param name="plugin">The <see cref="MarketTerrorPlugin"/>.</param>
-    public MarketBoardWindow(MarketTerrorPlugin plugin)
+    /// <param name="manager">The manager that owns this window and the torn-off ones.</param>
+    public MarketBoardWindow(BoardManager manager)
       : base("Market Terror")
     {
-      this.plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
+      ArgumentNullException.ThrowIfNull(manager);
+
+      this.services = manager.Services;
+      this.plugin = this.services.Plugin;
       this.Flags = ImGuiWindowFlags.NoScrollbar;
       this.Size = new Vector2(800, 600);
       this.SizeCondition = ImGuiCond.FirstUseEver;
@@ -85,73 +61,38 @@ namespace MarketTerror.GUI
         MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
       };
 
-      this.defaultFontHandle = this.plugin.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(e =>
-        e.OnPreBuild(toolkit =>
+      var context = new MarketBoardContext(this.services, WorldSelection.ForMainWindow(this.plugin));
+
+      this.hoveredItemWatcher = new HoveredItemWatcher(this.plugin, this.services.Catalog, id => context.SelectItem(id));
+
+      this.board = new MarketBoard(this.services, context, isMainBoard: true);
+
+      foreach (var tab in Enum.GetValues<ItemListTab>())
+      {
+        this.board.Tabs.Add(tab);
+      }
+
+      this.board.DrawUnderList = () =>
+      {
+        this.hoveredItemWatcher.Tick();
+
+        if (this.plugin.Config.WatchForHovered)
         {
-          var fontStream = this.GetType().Assembly.GetManifestResourceStream("MarketTerror.Resources.NotoSans-Medium-NNBSP.otf");
+          ImGui.ProgressBar(this.hoveredItemWatcher.Progress, new Vector2(-1, 0), string.Empty);
+        }
+      };
 
-          if (fontStream == null)
-          {
-            this.plugin.Log.Warning("Failed to load embedded font MarketTerror.Resources.NotoSans-Medium-NNBSP.otf");
-            return;
-          }
-
-          toolkit.AddFontFromStream(
-            fontStream,
-            new SafeFontConfig()
-            {
-              SizePx = UiBuilder.DefaultFontSizePx,
-              GlyphRanges = FontAtlasBuildToolkitUtilities.ToGlyphRange(char.ConvertFromUtf32(0x202F)),
-              MergeFont = toolkit.AddDalamudDefaultFont(-1),
-            },
-            false,
-            "NNBSP");
-        }));
-
-      this.titleFontHandle = this.plugin.PluginInterface.UiBuilder.FontAtlas.NewDelegateFontHandle(e =>
-        e.OnPreBuild(toolkit =>
-          toolkit.AddDalamudDefaultFont(this.plugin.PluginInterface.UiBuilder.DefaultFontSpec.SizePx * 1.5f)));
-
-      var imPlotStylePtr = ImPlot.GetStyle();
-
-      imPlotStylePtr.Use24HourClock = DateTimeFormatInfo.CurrentInfo.ShortTimePattern.Contains('H', StringComparison.InvariantCulture);
-      imPlotStylePtr.UseISO8601 = DateTimeFormatInfo.CurrentInfo.ShortDatePattern != "M/d/yyyy";
-      imPlotStylePtr.UseLocalTime = true;
-
-      this.theme = new TerrorTheme(this.plugin.Config);
-      this.catalog = new ItemCatalog(this.plugin.DataManager, this.plugin.Log);
-      this.marketDataProvider = new MarketDataProvider(this.plugin);
-      this.worldSelection = new WorldSelection(this.plugin);
-
-      this.context = new MarketBoardContext(
-        this.plugin,
-        this.theme,
-        this.catalog,
-        this.marketDataProvider,
-        this.worldSelection,
-        this.titleFontHandle);
-
-      this.hoveredItemWatcher = new HoveredItemWatcher(this.plugin, this.catalog, id => this.context.SelectItem(id));
-
-      this.searchPanel = new ItemSearchPanel(this.context);
-      this.itemListPanel = new ItemListPanel(this.context);
-      this.headerBar = new ItemHeaderBar(this.context);
-      this.listingsTable = new ListingsTable(this.context);
-      this.historyTable = new HistoryTable(this.context);
-      this.statsPanel = new StatsPanel(this.context);
-      this.linksPopup = new LinksPopup(this.context);
-
-      this.integrationsButton = IntegrationsButton.Build(this.context);
+      this.integrationsButton = IntegrationsButton.Build(this.board.Context);
       this.TitleBarButtons.Add(this.integrationsButton);
 
-      this.shoppingListButton = ShoppingListButton.Build(this.context);
+      this.shoppingListButton = ShoppingListButton.Build(this.board.Context);
       this.TitleBarButtons.Add(this.shoppingListButton);
 
       this.TitleBarButtons.Add(new TitleBarButton
       {
         Icon = FontAwesomeIcon.Heart,
         IconOffset = new Vector2(2, 1),
-        Click = _ => this.linksPopup.Open(),
+        Click = _ => this.board.OpenLinksPopup(),
         ShowTooltip = () =>
         {
           ImGui.BeginTooltip();
@@ -182,17 +123,22 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// Gets the board this window hosts.
+    /// </summary>
+    public MarketBoard Board => this.board;
+
+    /// <summary>
     /// Gets the state and services shared by every component of this window.
     /// </summary>
-    public MarketBoardContext Context => this.context;
+    public MarketBoardContext Context => this.board.Context;
 
     /// <summary>
     /// Gets or sets the current search string.
     /// </summary>
     public string SearchString
     {
-      get => this.context.SearchString;
-      set => this.context.SearchString = value;
+      get => this.board.Context.SearchString;
+      set => this.board.Context.SearchString = value;
     }
 
     /// <inheritdoc/>
@@ -207,15 +153,19 @@ namespace MarketTerror.GUI
     /// </summary>
     public void ResetMarketData()
     {
-      this.context.ResetMarketData();
+      this.board.Context.ResetMarketData();
     }
 
     /// <inheritdoc/>
     public override void PreDraw()
     {
-      IntegrationsButton.Refresh(this.integrationsButton, this.context);
-      ShoppingListButton.Refresh(this.shoppingListButton, this.context);
-      this.themeScope = this.theme.Push();
+      // Draw is skipped while the window is collapsed, so the tab bar rect is dropped here, where
+      // it always runs, rather than left standing as a drop target over nothing.
+      this.board.TabBarScreenRect = default;
+
+      IntegrationsButton.Refresh(this.integrationsButton, this.board.Context);
+      ShoppingListButton.Refresh(this.shoppingListButton, this.board.Context);
+      this.themeScope = this.board.Context.Theme.Push();
     }
 
     /// <inheritdoc/>
@@ -234,79 +184,9 @@ namespace MarketTerror.GUI
       this.RestoreLastOpenedItem();
 #endif
 
-      var scale = ImGui.GetIO().FontGlobalScale;
+      using var fontDispose = this.services.DefaultFont.Push();
 
-      using var fontDispose = this.defaultFontHandle.Push();
-
-      var splitterWidth = ImGui.GetTextLineHeight() * 0.5f;
-      var minColumnWidth = 150.0f * scale;
-      var maxColumnWidth = Math.Max(minColumnWidth, ImGui.GetContentRegionAvail().X - splitterWidth - (200.0f * scale));
-      var columnWidth = Math.Clamp(this.plugin.Config.ItemListColumnWidth * scale, minColumnWidth, maxColumnWidth);
-
-      ImGui.BeginChild("itemListColumn", new Vector2(columnWidth, 0), true);
-
-      this.searchPanel.Draw();
-
-      ImGui.Separator();
-
-      this.itemListPanel.Draw();
-
-      this.hoveredItemWatcher.Tick();
-
-      if (this.plugin.Config.WatchForHovered)
-      {
-        ImGui.ProgressBar(this.hoveredItemWatcher.Progress, new Vector2(-1, 0), string.Empty);
-      }
-
-      ImGui.EndChild();
-      ImGui.SameLine(0.0f, 0.0f);
-
-      var columnDrag = this.DrawSplitter(
-        "itemListSplitter",
-        new Vector2(splitterWidth, ImGui.GetContentRegionAvail().Y),
-        true,
-        scale,
-        false);
-
-      if (columnDrag != 0.0f)
-      {
-        this.plugin.Config.ItemListColumnWidth =
-          Math.Clamp(columnWidth + columnDrag, minColumnWidth, maxColumnWidth) / scale;
-      }
-
-      if (ImGui.IsItemDeactivated())
-      {
-        this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
-      }
-
-      ImGui.SameLine(0.0f, 0.0f);
-      ImGui.BeginChild("tabColumn", new Vector2(0, 0), true, ImGuiWindowFlags.NoScrollbar);
-
-      if (this.context.SelectedItem?.RowId > 0)
-      {
-        this.headerBar.Draw();
-
-        if (ImGui.BeginTabBar("tabBar"))
-        {
-          if (ImGui.BeginTabItem("Market Data##marketDataTab"))
-          {
-            this.DrawMarketData(scale);
-            ImGui.EndTabItem();
-          }
-
-          if (ImGui.BeginTabItem("Stats##statsTab"))
-          {
-            this.statsPanel.Draw();
-            ImGui.EndTabItem();
-          }
-
-          ImGui.EndTabBar();
-        }
-      }
-
-      ImGui.EndChild();
-
-      this.linksPopup.Draw();
+      this.board.Draw();
     }
 
     /// <summary>
@@ -316,7 +196,7 @@ namespace MarketTerror.GUI
     /// <param name="noHistory">True to leave the search history untouched.</param>
     internal void ChangeSelectedItem(uint itemId, bool noHistory = false)
     {
-      this.context.SelectItem(itemId, noHistory);
+      this.board.Context.SelectItem(itemId, noHistory);
     }
 
     /// <summary>
@@ -335,9 +215,7 @@ namespace MarketTerror.GUI
         this.themeScope?.Dispose();
         this.themeScope = null;
         this.hoveredItemWatcher.Dispose();
-        this.marketDataProvider.Dispose();
-        this.defaultFontHandle?.Dispose();
-        this.titleFontHandle?.Dispose();
+        this.board.Dispose();
       }
 
       this.isDisposed = true;
@@ -349,149 +227,15 @@ namespace MarketTerror.GUI
     /// </summary>
     private void RestoreLastOpenedItem()
     {
-      if (this.pendingItemId == 0 || !this.worldSelection.HasSelection)
+      if (this.pendingItemId == 0 || !this.board.Context.Worlds.HasSelection)
       {
         return;
       }
 
       var itemId = this.pendingItemId;
       this.pendingItemId = 0;
-      this.context.SelectItem(itemId, true);
+      this.board.Context.SelectItem(itemId, true);
     }
 #endif
-
-    /// <summary>
-    /// Draws the listings and history sections, split by a bar the user can drag to resize them.
-    /// </summary>
-    /// <param name="scale">The current UI scale.</param>
-    private void DrawMarketData(float scale)
-    {
-      var spacing = ImGui.GetStyle().ItemSpacing.Y;
-      var available = ImGui.GetContentRegionAvail().Y;
-      var config = this.plugin.Config;
-
-      // With one of the tables hidden there is nothing left to drag the splitter between.
-      if (config.CurrentListingsCollapsed || config.SalesHistoryCollapsed)
-      {
-        var rest = Math.Max(available - this.CollapsedSectionHeight(spacing) - spacing, 0.0f);
-
-        this.listingsTable.Draw(config.CurrentListingsCollapsed ? 0.0f : rest);
-        this.historyTable.Draw(config.SalesHistoryCollapsed ? 0.0f : rest);
-        return;
-      }
-
-      var splitterHeight = ImGui.GetTextLineHeight() * 0.5f;
-
-      // The splitter sits flush between the sections, so only the spacing below the last one is left over.
-      var usable = available - splitterHeight - spacing;
-
-      if (usable <= 0.0f)
-      {
-        return;
-      }
-
-      // Keep enough room in either section for its heading, its column labels and a couple of entries.
-      var minRatio = Math.Min(0.4f, this.MinSectionHeight(spacing) / usable);
-      var ratio = Math.Clamp(this.plugin.Config.MarketDataSplitRatio, minRatio, 1.0f - minRatio);
-      var listingsHeight = usable * ratio;
-
-      this.listingsTable.Draw(listingsHeight);
-
-      // Close the item spacing on either side of the splitter so the sections sit right against it.
-      ImGui.SetCursorPosY(ImGui.GetCursorPosY() - spacing);
-
-      var drag = this.DrawSplitter(
-        "marketDataSplitter",
-        new Vector2(ImGui.GetContentRegionAvail().X, splitterHeight),
-        false,
-        scale,
-        false);
-
-      if (drag != 0.0f)
-      {
-        this.plugin.Config.MarketDataSplitRatio = Math.Clamp(ratio + (drag / usable), minRatio, 1.0f - minRatio);
-      }
-
-      if (ImGui.IsItemDeactivated())
-      {
-        this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
-      }
-
-      ImGui.SetCursorPosY(ImGui.GetCursorPosY() - spacing);
-
-      this.historyTable.Draw(usable - listingsHeight);
-    }
-
-    /// <summary>
-    /// The height a section takes up with its table hidden, leaving its heading and separator.
-    /// </summary>
-    /// <param name="spacing">The vertical item spacing.</param>
-    /// <returns>The collapsed section height in pixels.</returns>
-    private float CollapsedSectionHeight(float spacing)
-    {
-      this.titleFontHandle.Push();
-      var height = ImGui.GetTextLineHeightWithSpacing();
-      this.titleFontHandle.Pop();
-
-      return height + 1.0f + spacing;
-    }
-
-    /// <summary>
-    /// The height a section needs for its heading, its separators and a few rows of its table.
-    /// </summary>
-    /// <param name="spacing">The vertical item spacing.</param>
-    /// <returns>The minimum section height in pixels.</returns>
-    private float MinSectionHeight(float spacing)
-    {
-      // The collapsed height, plus the separator closing the table off and a few rows of it.
-      return this.CollapsedSectionHeight(spacing) + 1.0f + spacing + (ImGui.GetTextLineHeightWithSpacing() * 3.0f);
-    }
-
-    /// <summary>
-    /// Draws a bar the user can drag to resize the panels on either side of it.
-    /// </summary>
-    /// <param name="id">The ImGui id of the bar.</param>
-    /// <param name="size">The size of the grab area.</param>
-    /// <param name="vertical">True for a bar between two columns, false for one between two rows.</param>
-    /// <param name="scale">The current UI scale.</param>
-    /// <param name="visibleWhenIdle">True to draw the bar even when it is not hovered.</param>
-    /// <returns>The distance the bar was dragged this frame, in pixels.</returns>
-    private float DrawSplitter(string id, Vector2 size, bool vertical, float scale, bool visibleWhenIdle)
-    {
-      ImGui.InvisibleButton(id, size);
-
-      var active = ImGui.IsItemActive();
-      var hovered = active || ImGui.IsItemHovered();
-
-      if (hovered)
-      {
-        ImGui.SetMouseCursor(vertical ? ImGuiMouseCursor.ResizeEw : ImGuiMouseCursor.ResizeNs);
-      }
-
-      if (hovered || visibleWhenIdle)
-      {
-        var min = ImGui.GetItemRectMin();
-        var max = ImGui.GetItemRectMax();
-        var from = vertical
-          ? new Vector2((min.X + max.X) * 0.5f, min.Y)
-          : new Vector2(min.X, (min.Y + max.Y) * 0.5f);
-        var to = vertical
-          ? new Vector2((min.X + max.X) * 0.5f, max.Y)
-          : new Vector2(max.X, (min.Y + max.Y) * 0.5f);
-
-        ImGui.GetWindowDrawList().AddLine(
-          from,
-          to,
-          hovered ? this.theme.AccentHover : this.theme.Border,
-          (hovered ? 2.0f : 1.0f) * scale);
-      }
-
-      if (!active)
-      {
-        return 0.0f;
-      }
-
-      return vertical ? ImGui.GetIO().MouseDelta.X : ImGui.GetIO().MouseDelta.Y;
-    }
   }
 }

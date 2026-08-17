@@ -227,5 +227,11 @@ namespace MarketTerror
     /// </summary>
     /// <remarks>Colours left at their default are not stored, so shipped defaults can change freely.</remarks>
     public Dictionary<string, uint> ThemeOverrides { get; } = new Dictionary<string, uint>();
+
+    /// <summary>
+    /// Gets the item list windows that were detached from the main window, one entry each.
+    /// </summary>
+    [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale whenever a window is detached or docked")]
+    public List<DetachedBoardState> DetachedBoards { get; } = new List<DetachedBoardState>();
   }
 }

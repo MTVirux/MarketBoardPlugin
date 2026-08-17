@@ -87,12 +87,14 @@ namespace MarketTerror.GUI.Components
       ImGui.BeginGroup();
 
       ImGui.SetNextItemWidth(comboWidth);
-      ScopePicker.Draw("##marketBoardScope", worlds, this.context.ResetMarketData);
+
+      // A refetch is enough here: the cache is keyed on the place, so the new scope misses on its own.
+      ScopePicker.Draw("##marketBoardScope", worlds, this.context.RefreshMarketData);
 
       if (this.context.Config.WorldOverridesEnabled)
       {
         ImGui.SetNextItemWidth(comboWidth);
-        this.worldPicker.Draw(worlds, this.context.Theme, this.context.ResetMarketData);
+        this.worldPicker.Draw(worlds, this.context.Theme, this.context.RefreshMarketData);
       }
 
       var marketData = this.context.MarketData.MarketData;
