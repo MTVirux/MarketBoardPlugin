@@ -122,7 +122,7 @@ namespace MarketTerror.GUI.Components
 
       ImGui.EndGroup();
 
-      DrawContextMenu(item.RowId);
+      this.DrawContextMenu(item.RowId);
     }
 
     private static unsafe void SearchInGame(uint itemId)
@@ -135,7 +135,7 @@ namespace MarketTerror.GUI.Components
       }
     }
 
-    private static void DrawContextMenu(uint itemId)
+    private void DrawContextMenu(uint itemId)
     {
       if (!ImGui.BeginPopup(ContextMenuId))
       {
@@ -156,6 +156,8 @@ namespace MarketTerror.GUI.Components
       {
         SearchInGame(itemId);
       }
+
+      this.context.DrawListsMenu(itemId);
 
       ImGui.EndPopup();
     }

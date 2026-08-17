@@ -92,6 +92,23 @@ namespace MarketTerror.GUI.Components
         {
           this.context.SelectItem(id, true);
         }
+
+        if (ImGui.BeginPopupContextItem($"listItemMenu{list.Id}item{id}"))
+        {
+          if (ImGui.Selectable("Remove from this list"))
+          {
+            this.context.Plugin.ItemLists.Remove(list, id);
+          }
+
+          if (ImGui.Selectable("Add to the shopping list"))
+          {
+            this.context.TryAddCheapestToShoppingList(item.Value, false);
+          }
+
+          this.context.DrawListsMenu(id);
+
+          ImGui.EndPopup();
+        }
       }
 
       ImGui.Indent(ImGui.GetTreeNodeToLabelSpacing());

@@ -34,8 +34,20 @@ namespace MarketTerror.GUI
     /// </summary>
     public const int DefaultMaxItemLevel = 999;
 
+    /// <summary>
+    /// What the box that names a new list is registered under.
+    /// </summary>
+    private const string NewListPopupId = "New list##newItemList";
+
     // An item loaded from stored state, waiting for the world selection to resolve before it can be queried.
     private uint? pendingSelectedItem;
+
+    // The item the new list box was opened for, or 0 when it was opened without one.
+    private uint pendingListItem;
+
+    private bool newListRequested;
+
+    private string newListName = ItemListStore.DefaultName;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardContext"/> class.
@@ -457,6 +469,107 @@ namespace MarketTerror.GUI
       ArgumentNullException.ThrowIfNull(onSearchFinished);
 
       this.GoToMarketBoard(worldName, item, true, true, onSearchFinished);
+    }
+
+    /// <summary>
+    /// Draws the submenu that puts an item on the user's lists, or takes it off them.
+    /// </summary>
+    /// <param name="itemId">The row id of the item the menu belongs to.</param>
+    /// <remarks>Call from inside an already open popup or menu.</remarks>
+    public void DrawListsMenu(uint itemId)
+    {
+      if (!ImGui.BeginMenu("Lists"))
+      {
+        return;
+      }
+
+      var store = this.Plugin.ItemLists;
+
+      foreach (var list in store)
+      {
+        var on = list.ItemIds.Contains(itemId);
+
+        if (ImGui.MenuItem($"{list.Name}##listsMenu{list.Id}", string.Empty, on))
+        {
+          if (on)
+          {
+            store.Remove(list, itemId);
+          }
+          else
+          {
+            store.Add(list, itemId);
+          }
+        }
+      }
+
+      if (store.Count > 0)
+      {
+        ImGui.Separator();
+      }
+
+      if (ImGui.MenuItem("New list..."))
+      {
+        this.pendingListItem = itemId;
+        this.newListName = ItemListStore.DefaultName;
+        this.newListRequested = true;
+      }
+
+      ImGui.EndMenu();
+    }
+
+    /// <summary>
+    /// Draws the box that names a new list, when one has been asked for.
+    /// </summary>
+    /// <remarks>
+    /// Call once a frame outside any popup. The menu entry only raises a flag, because opening a
+    /// popup from a menu that is closing in the same frame does not take.
+    /// </remarks>
+    public void DrawNewListModal()
+    {
+      if (this.newListRequested)
+      {
+        ImGui.OpenPopup(NewListPopupId);
+        this.newListRequested = false;
+      }
+
+      if (!ImGui.BeginPopupModal(NewListPopupId, ImGuiWindowFlags.AlwaysAutoResize))
+      {
+        return;
+      }
+
+      ImGui.SetNextItemWidth(220 * ImGui.GetIO().FontGlobalScale);
+
+      var name = this.newListName;
+      var committed = ImGui.InputText("##newItemListName", ref name, 64, ImGuiInputTextFlags.EnterReturnsTrue);
+      this.newListName = name;
+
+      var valid = !string.IsNullOrWhiteSpace(this.newListName);
+
+      ImGui.BeginDisabled(!valid);
+      var create = ImGui.Button("Create");
+      ImGui.EndDisabled();
+
+      ImGui.SameLine();
+
+      if (ImGui.Button("Cancel"))
+      {
+        this.pendingListItem = 0;
+        ImGui.CloseCurrentPopup();
+      }
+      else if (valid && (create || committed))
+      {
+        var list = this.Plugin.ItemLists.Create(this.newListName);
+
+        if (this.pendingListItem != 0)
+        {
+          this.Plugin.ItemLists.Add(list, this.pendingListItem);
+        }
+
+        this.pendingListItem = 0;
+        ImGui.CloseCurrentPopup();
+      }
+
+      ImGui.EndPopup();
     }
 
     /// <summary>

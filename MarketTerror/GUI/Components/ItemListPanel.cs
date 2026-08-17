@@ -310,6 +310,8 @@ namespace MarketTerror.GUI.Components
             this.context.TryAddCheapestToShoppingList(item.Value, false);
           }
 
+          this.context.DrawListsMenu(item.Value.RowId);
+
           if (ImGui.Selectable("Remove from history"))
           {
             this.context.Config.History.Remove(item.Value.RowId);
@@ -402,6 +404,8 @@ namespace MarketTerror.GUI.Components
                 this.context.TryAddCheapestToShoppingList(item, true);
               }
 
+              this.context.DrawListsMenu(item.RowId);
+
               ImGui.EndPopup();
             }
 
@@ -430,11 +434,54 @@ namespace MarketTerror.GUI.Components
         var missingFromBuyList = items.Where(i => !priced.Contains(i.RowId)).ToArray();
 
         this.DrawCategoryBuyListEntries(categoryName, items, missingFromBuyList, items.Any(i => listed.Contains(i.RowId)));
+        this.DrawCategoryListEntries(items);
 
         ImGui.EndPopup();
       }
 
       ImGui.OpenPopupOnItemClick(popupId, ImGuiPopupFlags.MouseButtonRight);
+    }
+
+    /// <summary>
+    /// Draws the entries that put a whole category on one of the user's lists, or take it off one.
+    /// </summary>
+    /// <param name="items">The items in the category.</param>
+    private void DrawCategoryListEntries(List<Item> items)
+    {
+      var store = this.context.Plugin.ItemLists;
+
+      if (store.Count == 0)
+      {
+        return;
+      }
+
+      var ids = items.ConvertAll(i => i.RowId);
+
+      if (ImGui.BeginMenu("Add all to"))
+      {
+        foreach (var list in store)
+        {
+          if (ImGui.MenuItem($"{list.Name}##catAdd{list.Id}"))
+          {
+            store.AddRange(list, ids);
+          }
+        }
+
+        ImGui.EndMenu();
+      }
+
+      if (ImGui.BeginMenu("Remove all from"))
+      {
+        foreach (var list in store)
+        {
+          if (ImGui.MenuItem($"{list.Name}##catRemove{list.Id}"))
+          {
+            store.RemoveRange(list, ids);
+          }
+        }
+
+        ImGui.EndMenu();
+      }
     }
 
     private void DrawCategoryBuyListEntries(string categoryName, List<Item> items, Item[] missing, bool anyListed)

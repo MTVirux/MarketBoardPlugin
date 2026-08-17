@@ -289,6 +289,8 @@ namespace MarketTerror.GUI
             convert = item;
           }
 
+          this.Plugin.MarketBoardContext.DrawListsMenu(item.SourceItem.RowId);
+
           ImGui.EndPopup();
         }
 

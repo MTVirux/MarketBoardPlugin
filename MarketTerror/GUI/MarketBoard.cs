@@ -103,6 +103,9 @@ namespace MarketTerror.GUI
     {
       this.context.ApplyPendingSelection();
 
+      // Outside every child and popup, so the box a menu asked for is not scoped to one of them.
+      this.context.DrawNewListModal();
+
       var scale = ImGui.GetIO().FontGlobalScale;
 
       var splitterWidth = ImGui.GetTextLineHeight() * 0.5f;
