@@ -88,14 +88,15 @@ namespace MarketTerror.Helpers
     /// <param name="listingCount">The number of current listings to retrieve.</param>
     /// <param name="historyCount">The number of historical entries to retrieve.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+    /// <param name="hq">True for high quality listings only, false for normal quality only, null for both.</param>
     /// <returns>A <see cref="MarketDataResponse"/> object containing the retrieved market data, or null if the operation fails.</returns>
-    public async Task<MarketDataResponse> GetMarketData(uint itemId, string worldName, int listingCount, int historyCount, CancellationToken cancellationToken)
+    public async Task<MarketDataResponse> GetMarketData(uint itemId, string worldName, int listingCount, int historyCount, CancellationToken cancellationToken, bool? hq = null)
     {
       try
       {
         using var content = await this.resiliencePipeline.ExecuteAsync(
             async (ct) =>
-              await this.client.GetStreamAsync(new Uri($"{worldName}/{itemId}?listings={listingCount}&entries={historyCount}", UriKind.Relative), ct).ConfigureAwait(false),
+              await this.client.GetStreamAsync(new Uri($"{worldName}/{itemId}?listings={listingCount}&entries={historyCount}{QualityFilter(hq)}", UriKind.Relative), ct).ConfigureAwait(false),
             cancellationToken)
           .ConfigureAwait(false);
 
@@ -126,12 +127,14 @@ namespace MarketTerror.Helpers
     /// <param name="itemIds">The item ids to retrieve listings for, at most <see cref="MaxItemsPerRequest"/> of them.</param>
     /// <param name="worldName">The world, data centre or region to retrieve market data from.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+    /// <param name="hq">True for high quality listings only, false for normal quality only, null for both.</param>
     /// <returns>The market data of the items that resolved, keyed by item id. Items with no listings are left out.</returns>
     /// <exception cref="ArgumentException">More ids than <see cref="MaxItemsPerRequest"/> were passed.</exception>
     public async Task<IReadOnlyDictionary<uint, MarketDataResponse>> GetCheapestListings(
       IReadOnlyCollection<uint> itemIds,
       string worldName,
-      CancellationToken cancellationToken)
+      CancellationToken cancellationToken,
+      bool? hq = null)
     {
       ArgumentNullException.ThrowIfNull(itemIds);
 
@@ -151,7 +154,7 @@ namespace MarketTerror.Helpers
       if (itemIds.Count == 1)
       {
         var onlyId = itemIds.First();
-        var single = await this.GetMarketData(onlyId, worldName, 1, 0, cancellationToken).ConfigureAwait(false);
+        var single = await this.GetMarketData(onlyId, worldName, 1, 0, cancellationToken, hq).ConfigureAwait(false);
 
         return new Dictionary<uint, MarketDataResponse> { [onlyId] = single };
       }
@@ -163,7 +166,7 @@ namespace MarketTerror.Helpers
         using var content = await this.resiliencePipeline.ExecuteAsync(
             async (ct) =>
               await this.client.GetStreamAsync(
-                new Uri($"{worldName}/{ids}?listings=1&entries=0&fields={CheapestListingFields}", UriKind.Relative), ct)
+                new Uri($"{worldName}/{ids}?listings=1&entries=0{QualityFilter(hq)}&fields={CheapestListingFields}", UriKind.Relative), ct)
                 .ConfigureAwait(false),
             cancellationToken)
           .ConfigureAwait(false);
@@ -319,6 +322,21 @@ namespace MarketTerror.Helpers
 
         this.disposedValue = true;
       }
+    }
+
+    /// <summary>
+    /// Builds the part of a query that holds a request to one quality.
+    /// </summary>
+    /// <param name="hq">True for high quality only, false for normal quality only, null for both.</param>
+    /// <returns>The query to append, or an empty string when both qualities are wanted.</returns>
+    private static string QualityFilter(bool? hq)
+    {
+      if (hq == null)
+      {
+        return string.Empty;
+      }
+
+      return hq.Value ? "&hq=true" : "&hq=false";
     }
   }
 }

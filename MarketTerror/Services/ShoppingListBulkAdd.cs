@@ -136,6 +136,30 @@ namespace MarketTerror.Services
       this.isDisposed = true;
     }
 
+    /// <summary>
+    /// Splits the items into the qualities they have to be priced at.
+    /// </summary>
+    /// <param name="items">The items being priced.</param>
+    /// <param name="quality">The quality each item's row is holding out for, when it has one.</param>
+    /// <returns>One group an item can be asked for in a single request, with the quality to ask for.</returns>
+    /// <remarks>
+    /// A row keeps the quality it was priced at, so a cheaper listing of the other one cannot take its
+    /// place. Rows of both qualities therefore cost a request each, since Universalis filters per request.
+    /// </remarks>
+    private static IEnumerable<(bool? Hq, Item[] Items)> QualityGroups(Item[] items, IReadOnlyDictionary<uint, bool> quality)
+    {
+      if (quality.Count == 0)
+      {
+        yield return (null, items);
+        yield break;
+      }
+
+      foreach (var group in items.GroupBy(i => quality.TryGetValue(i.RowId, out var hq) ? (bool?)hq : null))
+      {
+        yield return (group.Key, group.ToArray());
+      }
+    }
+
     private void StartJob(string categoryName, IReadOnlyList<Item> items, IReadOnlyList<string> queryTargets, bool refresh)
     {
       ArgumentNullException.ThrowIfNull(items);
@@ -153,6 +177,7 @@ namespace MarketTerror.Services
       var queued = items.ToArray();
       var targets = queryTargets.ToArray();
       var picked = Array.Empty<SavedItem>();
+      var quality = new Dictionary<uint, bool>();
 
       if (refresh)
       {
@@ -164,6 +189,11 @@ namespace MarketTerror.Services
         // The bulk query only ever comes back with one listing an item, which cannot say whether a
         // particular picked listing is still there, so those rows are checked one at a time after it.
         picked = this.plugin.ShoppingList.Where(row => row.HasPicks && ids.Contains(row.SourceItem.RowId)).ToArray();
+
+        foreach (var row in this.plugin.ShoppingList.Where(row => !row.HasPicks && ids.Contains(row.SourceItem.RowId)))
+        {
+          quality[row.SourceItem.RowId] = row.Hq;
+        }
       }
 
       this.CategoryName = categoryName;
@@ -172,10 +202,10 @@ namespace MarketTerror.Services
       this.refreshing = refresh;
       this.lastRevealUtc = DateTime.UtcNow;
 
-      this.job = Task.Run(() => this.Run(queued, targets, picked, token), token);
+      this.job = Task.Run(() => this.Run(queued, targets, picked, quality, token), token);
     }
 
-    private async Task Run(Item[] items, string[] targets, SavedItem[] picked, CancellationToken token)
+    private async Task Run(Item[] items, string[] targets, SavedItem[] picked, IReadOnlyDictionary<uint, bool> quality, CancellationToken token)
     {
       var firstRequest = true;
       var queries = 0;
@@ -183,64 +213,67 @@ namespace MarketTerror.Services
 
       try
       {
-        foreach (var chunk in items.Chunk(UniversalisClient.MaxItemsPerRequest))
+        foreach (var (hq, group) in QualityGroups(items, quality))
         {
-          token.ThrowIfCancellationRequested();
-
-          var ids = chunk.Select(i => i.RowId).ToArray();
-          var cooldowns = firstRequest ? targets.Length - 1 : targets.Length;
-          var startedUtc = DateTime.UtcNow;
-          var answers = new List<(string Target, IReadOnlyDictionary<uint, MarketDataResponse> Prices)>();
-
-          // Every target is asked before anything is priced, so a row can show the cheapest of them.
-          foreach (var target in targets)
+          foreach (var chunk in group.Chunk(UniversalisClient.MaxItemsPerRequest))
           {
-            if (!firstRequest)
+            token.ThrowIfCancellationRequested();
+
+            var ids = chunk.Select(i => i.RowId).ToArray();
+            var cooldowns = firstRequest ? targets.Length - 1 : targets.Length;
+            var startedUtc = DateTime.UtcNow;
+            var answers = new List<(string Target, IReadOnlyDictionary<uint, MarketDataResponse> Prices)>();
+
+            // Every target is asked before anything is priced, so a row can show the cheapest of them.
+            foreach (var target in targets)
             {
-              await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
+              if (!firstRequest)
+              {
+                await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
+              }
+
+              firstRequest = false;
+              queries++;
+
+              answers.Add((target, await this.Fetch(ids, target, hq, token).ConfigureAwait(false)));
             }
 
-            firstRequest = false;
-            queries++;
+            var entries = new List<SavedItem>();
 
-            answers.Add((target, await this.Fetch(ids, target, token).ConfigureAwait(false)));
-          }
-
-          var entries = new List<SavedItem>();
-
-          foreach (var item in chunk)
-          {
-            SavedItem? cheapest = null;
-
-            foreach (var (target, prices) in answers)
+            foreach (var item in chunk)
             {
-              var entry = SavedItem.FromCheapestListing(
-                item,
-                prices.GetValueOrDefault(item.RowId),
-                !this.plugin.Config.NoGilSalesTax,
-                target);
+              SavedItem? cheapest = null;
 
-              if (entry != null && (cheapest == null || entry.Price < cheapest.Price))
+              foreach (var (target, prices) in answers)
               {
-                cheapest = entry;
+                var entry = SavedItem.FromCheapestListing(
+                  item,
+                  prices.GetValueOrDefault(item.RowId),
+                  !this.plugin.Config.NoGilSalesTax,
+                  target);
+
+                if (entry != null && (cheapest == null || entry.Price < cheapest.Price))
+                {
+                  cheapest = entry;
+                }
+              }
+
+              if (cheapest != null)
+              {
+                entries.Add(cheapest);
               }
             }
 
-            if (cheapest != null)
-            {
-              entries.Add(cheapest);
-            }
+            token.ThrowIfCancellationRequested();
+
+            // How long this chunk's requests really took, so the rows are shown over the time the next one needs.
+            var requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - (cooldowns * ChunkDelayMilliseconds));
+
+            // The buy list is read while the window draws, so it may only be touched on the framework thread.
+            await this.plugin.Framework
+              .RunOnFrameworkThread(() => this.Apply(entries, chunk, (targets.Length * ChunkDelayMilliseconds) + requestGuess))
+              .ConfigureAwait(false);
           }
-
-          token.ThrowIfCancellationRequested();
-
-          // How long this chunk's requests really took, so the rows are shown over the time the next one needs.
-          var requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - (cooldowns * ChunkDelayMilliseconds));
-
-          // The buy list is read while the window draws, so it may only be touched on the framework thread.
-          await this.plugin.Framework
-            .RunOnFrameworkThread(() => this.Apply(entries, chunk, (targets.Length * ChunkDelayMilliseconds) + requestGuess))
-            .ConfigureAwait(false);
         }
 
         foreach (var row in picked)
@@ -285,11 +318,11 @@ namespace MarketTerror.Services
       this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
     }
 
-    private async Task<IReadOnlyDictionary<uint, MarketDataResponse>> Fetch(uint[] ids, string target, CancellationToken token)
+    private async Task<IReadOnlyDictionary<uint, MarketDataResponse>> Fetch(uint[] ids, string target, bool? hq, CancellationToken token)
     {
       try
       {
-        return await this.plugin.UniversalisClient.GetCheapestListings(ids, target, token).ConfigureAwait(false);
+        return await this.plugin.UniversalisClient.GetCheapestListings(ids, target, token, hq).ConfigureAwait(false);
       }
       catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
       {

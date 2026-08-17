@@ -172,9 +172,9 @@ namespace MarketTerror.Services
           continue;
         }
 
+        // The quality stays, since it is what the row goes looking for the next time it is priced.
         existing.Price = 0;
         existing.Quantity = 0;
-        existing.Hq = false;
         existing.World = string.Empty;
       }
 
