@@ -7,6 +7,8 @@ namespace MarketTerror.GUI
   using System;
   using System.Collections.Generic;
   using System.Linq;
+  using System.Numerics;
+  using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.ManagedFontAtlas;
   using Dalamud.Interface.Windowing;
   using MarketTerror.Models;
@@ -178,6 +180,13 @@ namespace MarketTerror.GUI
         IsOpen = true,
         Grabbed = grabbed,
       };
+
+      if (grabbed)
+      {
+        // Sit the cursor on the title bar, a little in from the left, so the grab reads as natural.
+        var titleBarHeight = ImGui.GetFrameHeight();
+        window.GrabOffset = new Vector2(titleBarHeight * 2.0f, titleBarHeight * 0.5f);
+      }
 
       this.detached.Add(window);
       this.windowSystem.AddWindow(window);
