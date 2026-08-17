@@ -5,6 +5,8 @@
 namespace MarketTerror.Models.ShoppingList
 {
   using System;
+  using System.Collections.Generic;
+  using System.Diagnostics.CodeAnalysis;
   using System.Linq;
   using Lumina.Excel.Sheets;
   using MarketTerror.Models.Universalis;
@@ -12,8 +14,18 @@ namespace MarketTerror.Models.ShoppingList
   /// <summary>
   /// A model representing an Item saved into the shopping list.
   /// </summary>
+  /// <remarks>
+  /// A row stands for one listing until listings are picked for it, and for the whole basket of picks
+  /// after that. The price, stack size, total and world are read off the picks in that case, so the
+  /// rest of the plugin can keep asking the row the same four questions either way.
+  /// </remarks>
   public class SavedItem
   {
+    /// <summary>
+    /// What the world reads as when a row's picks are spread over more than one of them.
+    /// </summary>
+    private const string ManyWorldsSuffix = " worlds";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="SavedItem"/> class.
     /// </summary>
@@ -37,30 +49,89 @@ namespace MarketTerror.Models.ShoppingList
     public Item SourceItem { get; set; }
 
     /// <summary>
+    /// Gets the listings this row has been told to buy, or an empty list when it stands for one listing.
+    /// </summary>
+    [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale whenever the picks change")]
+    public List<PickedListing> Picks { get; } = new List<PickedListing>();
+
+    /// <summary>
+    /// Gets a value indicating whether listings have been picked for this row.
+    /// </summary>
+    public bool HasPicks => this.Picks.Count > 0;
+
+    /// <summary>
+    /// Gets the picks a buy run may still try, which is every one the last refresh could still find.
+    /// </summary>
+    public IEnumerable<PickedListing> LivePicks => this.Picks.Where(p => !p.Gone);
+
+    /// <summary>
     ///  Gets or sets Cheapest price of the item saved.
     /// </summary>
-    public double Price { get; set; }
+    public double Price
+    {
+      get => this.HasPicks ? this.Aggregated.Min(p => p.Price) : this.SinglePrice;
+      set => this.SinglePrice = value;
+    }
 
     /// <summary>
     ///  Gets or sets world from where the price attribute was fetched.
     /// </summary>
-    public string World { get; set; }
+    /// <remarks>Picks spread over several worlds read as a count rather than a name.</remarks>
+    public string World
+    {
+      get
+      {
+        if (!this.HasPicks)
+        {
+          return this.SingleWorld;
+        }
+
+        var worlds = this.Worlds;
+
+        return worlds.Count == 1 ? worlds[0] : worlds.Count + ManyWorldsSuffix;
+      }
+
+      set => this.SingleWorld = value;
+    }
+
+    /// <summary>
+    /// Gets the distinct worlds this row's picks sit on, closest name first.
+    /// </summary>
+    public IReadOnlyList<string> Worlds =>
+      this.Aggregated
+        .Select(p => p.World)
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .OrderBy(w => w, StringComparer.CurrentCultureIgnoreCase)
+        .ToArray();
 
     /// <summary>
     ///  Gets or sets the stack size of the listing the price came from, or 0 when it is unknown.
     /// </summary>
     /// <remarks>Rows saved before buying existed have no stack size, and cannot be bought until refreshed.</remarks>
-    public long Quantity { get; set; }
+    public long Quantity
+    {
+      get => this.HasPicks ? this.Aggregated.Sum(p => p.Quantity) : this.SingleQuantity;
+      set => this.SingleQuantity = value;
+    }
 
     /// <summary>
     ///  Gets or sets a value indicating whether the listing the price came from is high quality.
     /// </summary>
-    public bool Hq { get; set; }
+    /// <remarks>A row of picks only counts as high quality when every one of them is.</remarks>
+    public bool Hq
+    {
+      get => this.HasPicks ? this.Aggregated.All(p => p.Hq) : this.SingleHq;
+      set => this.SingleHq = value;
+    }
 
     /// <summary>
     ///  Gets the gil the whole listing costs.
     /// </summary>
-    public double Total => this.Price * this.Quantity;
+    /// <remarks>
+    ///  Picks differ in price, so this is the sum of their totals rather than the row's price times
+    ///  its stack size.
+    /// </remarks>
+    public double Total => this.HasPicks ? this.Aggregated.Sum(p => p.Total) : this.Price * this.Quantity;
 
     /// <summary>
     ///  Gets or sets how the last buy attempt on this row ended.
@@ -85,6 +156,27 @@ namespace MarketTerror.Models.ShoppingList
     public bool IsDirect { get; set; }
 
     /// <summary>
+    /// Gets the picks the row's figures are read off.
+    /// </summary>
+    /// <remarks>
+    /// The picks that are still there, so a sold out one stops counting towards the total. A row whose
+    /// picks have all gone keeps showing what it was asked to buy rather than dropping to nothing.
+    /// </remarks>
+    private IEnumerable<PickedListing> Aggregated => this.Picks.Exists(p => !p.Gone) ? this.LivePicks : this.Picks;
+
+    /// <summary>Gets or sets the price of the one listing a row without picks stands for.</summary>
+    private double SinglePrice { get; set; }
+
+    /// <summary>Gets or sets the world of the one listing a row without picks stands for.</summary>
+    private string SingleWorld { get; set; } = string.Empty;
+
+    /// <summary>Gets or sets the stack size of the one listing a row without picks stands for.</summary>
+    private long SingleQuantity { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether the one listing a row without picks stands for is high quality.</summary>
+    private bool SingleHq { get; set; }
+
+    /// <summary>
     /// Builds an entry from the cheapest listing of a market data response.
     /// </summary>
     /// <param name="sourceItem">The item the market data belongs to.</param>
@@ -103,13 +195,10 @@ namespace MarketTerror.Models.ShoppingList
       }
 
       var cheapest = listings.OrderBy(l => l.PricePerUnit).First();
-      var price = includeSalesTax
-        ? cheapest.PricePerUnit + (cheapest.Tax / cheapest.Quantity)
-        : cheapest.PricePerUnit;
 
       return new SavedItem(
         sourceItem,
-        price,
+        PickedListing.UnitPrice(cheapest, includeSalesTax),
         cheapest.WorldName ?? fallbackWorld,
         cheapest.Quantity,
         cheapest.Hq);
@@ -127,18 +216,75 @@ namespace MarketTerror.Models.ShoppingList
     {
       ArgumentNullException.ThrowIfNull(listing);
 
-      var price = includeSalesTax
-        ? listing.PricePerUnit + (listing.Tax / listing.Quantity)
-        : listing.PricePerUnit;
-
       return new SavedItem(
         sourceItem,
-        price,
+        PickedListing.UnitPrice(listing, includeSalesTax),
         listing.WorldName ?? fallbackWorld,
         listing.Quantity,
         listing.Hq)
       {
         IsDirect = true,
+      };
+    }
+
+    /// <summary>
+    /// Replaces the listings this row has been told to buy.
+    /// </summary>
+    /// <param name="picks">The picks, or an empty list to go back to standing for one listing.</param>
+    public void SetPicks(IEnumerable<PickedListing> picks)
+    {
+      ArgumentNullException.ThrowIfNull(picks);
+
+      var replacement = picks.ToArray();
+
+      // Taking every pick off a row leaves it standing for one listing again, so it keeps the cheapest
+      // of the picks it had rather than whatever it was priced at before they were made.
+      if (replacement.Length == 0 && this.HasPicks)
+      {
+        var cheapest = this.Picks.OrderBy(p => p.Price).First();
+
+        this.SinglePrice = cheapest.Price;
+        this.SingleWorld = cheapest.World;
+        this.SingleQuantity = cheapest.Quantity;
+        this.SingleHq = cheapest.Hq;
+      }
+
+      this.Picks.Clear();
+      this.Picks.AddRange(replacement);
+      this.Outcome = BuyOutcome.None;
+
+      if (this.HasPicks)
+      {
+        // The row is priced by its picks from here, and every one of them was on sale to be picked.
+        this.Unlisted = false;
+      }
+    }
+
+    /// <summary>
+    /// Rolls the outcomes of a row's picks up into the row's own.
+    /// </summary>
+    public void RollUpOutcome()
+    {
+      if (!this.HasPicks)
+      {
+        return;
+      }
+
+      var tried = this.Picks.Where(p => p.Outcome != BuyOutcome.None).ToArray();
+
+      if (tried.Length == 0)
+      {
+        return;
+      }
+
+      var bought = tried.Where(p => p.Outcome is BuyOutcome.Bought or BuyOutcome.BoughtCheaper).ToArray();
+
+      this.Outcome = bought.Length switch
+      {
+        0 => BuyOutcome.Failed,
+        _ when bought.Length < tried.Length => BuyOutcome.PartlyBought,
+        _ when bought.Any(p => p.Outcome == BuyOutcome.BoughtCheaper) => BuyOutcome.BoughtCheaper,
+        _ => BuyOutcome.Bought,
       };
     }
   }

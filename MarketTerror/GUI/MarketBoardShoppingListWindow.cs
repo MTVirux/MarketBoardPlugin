@@ -23,7 +23,7 @@ namespace MarketTerror.GUI
   /// <summary>
   /// The market board config window.
   /// </summary>
-  public class MarketBoardShoppingListWindow : Window
+  public class MarketBoardShoppingListWindow : Window, IDisposable
   {
     /// <summary>
     /// What a row shows in place of a price or a world it does not have.
@@ -43,7 +43,7 @@ namespace MarketTerror.GUI
     /// <summary>
     /// How many icon buttons a row can show.
     /// </summary>
-    private const int ActionButtonCount = 4;
+    private const int ActionButtonCount = 5;
 
     private const ImGuiTableFlags TableFlags =
       ImGuiTableFlags.RowBg | ImGuiTableFlags.BordersInnerV | ImGuiTableFlags.Resizable | ImGuiTableFlags.SizingStretchProp |
@@ -55,7 +55,11 @@ namespace MarketTerror.GUI
 
     private readonly List<SavedItem> sortedItems = new List<SavedItem>();
 
+    private readonly ListingPicker picker;
+
     private IDisposable? themeScope;
+
+    private bool isDisposed;
 
     private bool forceShown;
 
@@ -91,6 +95,7 @@ namespace MarketTerror.GUI
       };
 
       this.theme = new TerrorTheme(this.Plugin.Config);
+      this.picker = new ListingPicker(this.Plugin);
     }
 
     /// <summary>
@@ -110,6 +115,13 @@ namespace MarketTerror.GUI
     {
       this.hidden = this.IsShown;
       this.forceShown = !this.hidden;
+    }
+
+    /// <inheritdoc/>
+    public void Dispose()
+    {
+      this.Dispose(true);
+      GC.SuppressFinalize(this);
     }
 
     /// <inheritdoc/>
@@ -178,6 +190,9 @@ namespace MarketTerror.GUI
 
       this.DrawActionBar();
 
+      // Drawn before the table so a frame the table cannot open does not take the popup down with it.
+      this.picker.Draw(this.theme);
+
       var bought = this.Plugin.ShoppingList.Count(WasBought);
       var failed = this.Plugin.ShoppingList.Count(BuyFailed);
 
@@ -227,7 +242,9 @@ namespace MarketTerror.GUI
         {
           BuyOutcome.Bought => this.theme.BuySuccess,
           BuyOutcome.BoughtCheaper => this.theme.BuyBargain,
-          BuyOutcome.Failed => this.theme.BuyFailed,
+
+          // A row that only partly bought still wants looking at, so it reads like one that did not.
+          BuyOutcome.Failed or BuyOutcome.PartlyBought => this.theme.BuyFailed,
           _ => item.Unlisted ? this.theme.TextDim : this.theme.Text,
         };
 
@@ -256,19 +273,23 @@ namespace MarketTerror.GUI
         ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
         RightAligned(this.PriceText(item));
         ImGui.PopStyleColor();
+        this.PickTooltip(item);
 
         ImGui.TableSetColumnIndex(2);
         ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
         RightAligned(item.Unlisted || item.Quantity <= 0 ? NoValue : item.Quantity.ToString("N0", CultureInfo.CurrentCulture));
         ImGui.PopStyleColor();
+        this.PickTooltip(item);
 
         ImGui.TableSetColumnIndex(3);
         ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
         RightAligned(this.TotalText(item));
         ImGui.PopStyleColor();
+        this.PickTooltip(item);
 
         ImGui.TableSetColumnIndex(4);
         ImGui.Text(item.Unlisted ? NoValue : item.World);
+        this.PickTooltip(item);
 
         var buttonSize = new Vector2(ActionButtonWidth * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
 
@@ -297,7 +318,21 @@ namespace MarketTerror.GUI
         Utilities.HoverTooltip(
           buyBlockedReason.Length > 0
             ? buyBlockedReason
-            : $"Buy this listing on {item.World} if it is still there at {this.PriceText(item)} or less.",
+            : this.BuyTooltip(item),
+          ImGuiHoveredFlags.AllowWhenDisabled);
+
+        ImGui.SameLine();
+
+        // Picks are kept honest by the scope refresh, which a direct listing opts out of.
+        ImGui.BeginDisabled(item.IsDirect || !idle || !this.Plugin.ShoppingListScope.HasSelection);
+        ImGui.PushStyleColor(ImGuiCol.Text, item.HasPicks ? this.theme.BuyBargain : this.theme.Text);
+        ImGui.PushFont(UiBuilder.IconFont);
+        var pick = ImGui.Button($"{(char)FontAwesomeIcon.ListUl}##shoplistpick" + k, buttonSize);
+        ImGui.PopFont();
+        ImGui.PopStyleColor();
+        ImGui.EndDisabled();
+        Utilities.HoverTooltip(
+          this.PickTooltipText(item),
           ImGuiHoveredFlags.AllowWhenDisabled);
 
         ImGui.SameLine();
@@ -340,6 +375,11 @@ namespace MarketTerror.GUI
           this.Plugin.ShoppingListBuyer.BuyOne(item);
         }
 
+        if (pick)
+        {
+          this.picker.Open(item);
+        }
+
         if (refresh)
         {
           this.Plugin.ShoppingListBulkAdd.StartRefresh(
@@ -378,6 +418,27 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// Protected implementation of Dispose pattern.
+    /// </summary>
+    /// <param name="disposing">A value indicating whether we are disposing.</param>
+    protected virtual void Dispose(bool disposing)
+    {
+      if (this.isDisposed)
+      {
+        return;
+      }
+
+      if (disposing)
+      {
+        this.themeScope?.Dispose();
+        this.themeScope = null;
+        this.picker.Dispose();
+      }
+
+      this.isDisposed = true;
+    }
+
+    /// <summary>
     /// Sums up the last pricing job, or an empty string while none has run.
     /// </summary>
     /// <param name="stats">The stats of the last finished job.</param>
@@ -407,13 +468,28 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Checks whether a row was tried by the last buy run and came back empty handed.
+    /// Checks whether a row was tried by the last buy run and did not come away with everything.
     /// </summary>
     /// <param name="item">The row to check.</param>
-    /// <returns>True when the row was not bought.</returns>
+    /// <returns>True when the row was not bought, or only partly bought.</returns>
     private static bool BuyFailed(SavedItem item)
     {
-      return item.Outcome == BuyOutcome.Failed;
+      return item.Outcome is BuyOutcome.Failed or BuyOutcome.PartlyBought;
+    }
+
+    /// <summary>
+    /// Counts a row's picked listings, saying how many of them are still on sale.
+    /// </summary>
+    /// <param name="item">The row to count.</param>
+    /// <returns>The count as it reads in a tooltip.</returns>
+    private static string PickCountText(SavedItem item)
+    {
+      var total = item.Picks.Count;
+      var live = item.LivePicks.Count();
+
+      var listings = total == 1 ? "1 listing" : $"{total} listings";
+
+      return live == total ? listings : $"{listings}, {total - live} gone";
     }
 
     /// <summary>
@@ -646,6 +722,72 @@ namespace MarketTerror.GUI
       }
 
       ImGui.SameLine();
+    }
+
+    /// <summary>
+    /// Spells out a row's picked listings while the cursor is over one of its figures.
+    /// </summary>
+    /// <param name="item">The row being hovered.</param>
+    private void PickTooltip(SavedItem item)
+    {
+      if (!item.HasPicks || !ImGui.IsItemHovered())
+      {
+        return;
+      }
+
+      ImGui.BeginTooltip();
+
+      foreach (var pick in item.Picks.OrderBy(p => p.Price))
+      {
+        var price = pick.Price.ToString("N0", CultureInfo.CurrentCulture);
+        var line = $"{pick.Quantity} @ {price} on {pick.World} ({pick.RetainerName})";
+
+        ImGui.PushStyleColor(ImGuiCol.Text, pick.Gone ? this.theme.TextDim : this.theme.Text);
+        ImGui.Text(pick.Gone ? $"{line} - gone" : line);
+        ImGui.PopStyleColor();
+      }
+
+      ImGui.EndTooltip();
+    }
+
+    /// <summary>
+    /// Says what the pick button on a row would do.
+    /// </summary>
+    /// <param name="item">The row the button belongs to.</param>
+    /// <returns>The tooltip text.</returns>
+    private string PickTooltipText(SavedItem item)
+    {
+      if (item.IsDirect)
+      {
+        return "This is a direct listing, so it already buys exactly one listing.";
+      }
+
+      if (!this.Plugin.ShoppingListScope.HasSelection)
+      {
+        return "Pick a scope first so the listings to choose from can be fetched.";
+      }
+
+      return item.HasPicks
+        ? $"Choose which listings to buy. {PickCountText(item)} chosen."
+        : "Choose which listings to buy, instead of just the cheapest one.";
+    }
+
+    /// <summary>
+    /// Says what the buy button on a row would do.
+    /// </summary>
+    /// <param name="item">The row the button belongs to.</param>
+    /// <returns>The tooltip text.</returns>
+    private string BuyTooltip(SavedItem item)
+    {
+      if (!item.HasPicks)
+      {
+        return $"Buy this listing on {item.World} if it is still there at {this.PriceText(item)} or less.";
+      }
+
+      var live = item.LivePicks.Count();
+      var listings = live == 1 ? "the 1 listing" : $"the {live} listings";
+
+      return $"Buy {listings} picked for this row, for {this.TotalText(item)} in all.";
     }
 
     private string PriceText(SavedItem item)

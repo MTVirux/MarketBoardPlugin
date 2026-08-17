@@ -36,11 +36,14 @@ namespace MarketTerror.Services
 
         if (item.HasValue)
         {
-          this.items.Add(new SavedItem(item.Value, stored.Price, stored.World, stored.Quantity, stored.Hq)
+          var entry = new SavedItem(item.Value, stored.Price, stored.World, stored.Quantity, stored.Hq)
           {
             Unlisted = stored.Unlisted,
             IsDirect = stored.IsDirect,
-          });
+          };
+
+          entry.Picks.AddRange(stored.Picks.Select(p => p.ToPick()));
+          this.items.Add(entry);
         }
       }
     }
@@ -113,16 +116,19 @@ namespace MarketTerror.Services
       {
         var existing = this.FindRefreshable(entry.SourceItem.RowId);
 
-        if (existing != null)
+        if (existing == null || existing.HasPicks)
         {
-          existing.Price = entry.Price;
-          existing.World = entry.World;
-          existing.Quantity = entry.Quantity;
-          existing.Hq = entry.Hq;
-          existing.Outcome = BuyOutcome.None;
-          existing.Unlisted = false;
-          changed = true;
+          // A picked row is priced by its picks, which the pick refresh updates on their own.
+          continue;
         }
+
+        existing.Price = entry.Price;
+        existing.World = entry.World;
+        existing.Quantity = entry.Quantity;
+        existing.Hq = entry.Hq;
+        existing.Outcome = BuyOutcome.None;
+        existing.Unlisted = false;
+        changed = true;
       }
 
       if (changed)
@@ -151,13 +157,25 @@ namespace MarketTerror.Services
           continue;
         }
 
+        existing.Outcome = BuyOutcome.None;
+        existing.Unlisted = true;
+        changed = true;
+
+        if (existing.HasPicks)
+        {
+          // Nothing of this item is on sale in the scope, so none of the picked listings can still be.
+          foreach (var pick in existing.Picks)
+          {
+            pick.Gone = true;
+          }
+
+          continue;
+        }
+
         existing.Price = 0;
         existing.Quantity = 0;
         existing.Hq = false;
-        existing.Outcome = BuyOutcome.None;
         existing.World = string.Empty;
-        existing.Unlisted = true;
-        changed = true;
       }
 
       if (changed)
@@ -243,6 +261,27 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
+    /// Replaces the listings a row has been told to buy, and writes the list out.
+    /// </summary>
+    /// <param name="item">The row to set the picks on.</param>
+    /// <param name="picks">The picks, or an empty list to go back to standing for one listing.</param>
+    public void SetPicks(SavedItem item, IEnumerable<PickedListing> picks)
+    {
+      ArgumentNullException.ThrowIfNull(item);
+
+      item.SetPicks(picks);
+      this.Save();
+    }
+
+    /// <summary>
+    /// Writes the list out after something changed a row in place.
+    /// </summary>
+    public void Persist()
+    {
+      this.Save();
+    }
+
+    /// <summary>
     /// Empties the shopping list.
     /// </summary>
     public void Clear()
@@ -298,7 +337,12 @@ namespace MarketTerror.Services
 
       foreach (var item in this.items)
       {
-        stored.Add(new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted, item.Quantity, item.Hq, item.IsDirect));
+        // A picked row's price, world, stack size and quality are read off its picks, so these four
+        // are its summary rather than a listing. Nothing reads them back while picks are on the row,
+        // and taking the last pick off rebuilds them from the picks that were there.
+        var row = new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted, item.Quantity, item.Hq, item.IsDirect);
+        row.Picks.AddRange(item.Picks.Select(p => new StoredPick(p)));
+        stored.Add(row);
       }
 
       this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);

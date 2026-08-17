@@ -18,6 +18,9 @@ namespace MarketTerror.Models.ShoppingList
     /// <summary>The item was bought below the price the row was saved at.</summary>
     BoughtCheaper,
 
+    /// <summary>Some of the row's picked listings were bought and some were not.</summary>
+    PartlyBought,
+
     /// <summary>Nothing was bought.</summary>
     Failed,
   }

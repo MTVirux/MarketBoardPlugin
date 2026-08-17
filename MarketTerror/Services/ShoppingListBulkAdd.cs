@@ -34,6 +34,11 @@ namespace MarketTerror.Services
     /// </summary>
     private const int ChunkDelayMilliseconds = 1000;
 
+    /// <summary>
+    /// How many listings a picked row is checked against. More than a market board can show in one go.
+    /// </summary>
+    private const int PickListingCount = 100;
+
     private readonly MarketTerrorPlugin plugin;
 
     /// <summary>
@@ -147,25 +152,30 @@ namespace MarketTerror.Services
       var token = this.cancellation.Token;
       var queued = items.ToArray();
       var targets = queryTargets.ToArray();
-
-      this.CategoryName = categoryName;
-      this.Counted = 0;
-      this.Total = queued.Length;
-      this.refreshing = refresh;
-      this.lastRevealUtc = DateTime.UtcNow;
+      var picked = Array.Empty<SavedItem>();
 
       if (refresh)
       {
         // Only the rows being priced again, so a single row refresh leaves the rest of the list alone.
-        var ids = queued.Select(i => i.RowId).ToArray();
+        var ids = queued.Select(i => i.RowId).ToHashSet();
         this.plugin.ShoppingList.ClearOutcomes(ids);
         this.plugin.ShoppingList.MarkRefreshing(ids);
+
+        // The bulk query only ever comes back with one listing an item, which cannot say whether a
+        // particular picked listing is still there, so those rows are checked one at a time after it.
+        picked = this.plugin.ShoppingList.Where(row => row.HasPicks && ids.Contains(row.SourceItem.RowId)).ToArray();
       }
 
-      this.job = Task.Run(() => this.Run(queued, targets, token), token);
+      this.CategoryName = categoryName;
+      this.Counted = 0;
+      this.Total = queued.Length + picked.Length;
+      this.refreshing = refresh;
+      this.lastRevealUtc = DateTime.UtcNow;
+
+      this.job = Task.Run(() => this.Run(queued, targets, picked, token), token);
     }
 
-    private async Task Run(Item[] items, string[] targets, CancellationToken token)
+    private async Task Run(Item[] items, string[] targets, SavedItem[] picked, CancellationToken token)
     {
       var firstRequest = true;
       var queries = 0;
@@ -233,12 +243,29 @@ namespace MarketTerror.Services
             .ConfigureAwait(false);
         }
 
+        foreach (var row in picked)
+        {
+          token.ThrowIfCancellationRequested();
+
+          var fresh = new List<PickedListing>();
+
+          foreach (var target in targets)
+          {
+            await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
+            queries++;
+
+            fresh.AddRange(await this.FetchListings(row.SourceItem.RowId, target, token).ConfigureAwait(false));
+          }
+
+          await this.plugin.Framework.RunOnFrameworkThread(() => this.ApplyPicks(row, fresh)).ConfigureAwait(false);
+        }
+
         elapsed.Stop();
 
         // A cancelled job keeps the previous stats, since it only priced part of what it was given.
         var stats = new QueryStats
         {
-          Items = items.Length,
+          Items = items.Length + picked.Length,
           Queries = queries,
           Scope = string.Join(" and ", targets),
           Milliseconds = elapsed.ElapsedMilliseconds,
@@ -270,6 +297,76 @@ namespace MarketTerror.Services
         this.plugin.Log.Warning(ex, $"Skipped {ids.Length} items on {target} while adding {this.CategoryName} to the buy list.");
         return new Dictionary<uint, MarketDataResponse>();
       }
+    }
+
+    /// <summary>
+    /// Fetches every listing of one item on one target.
+    /// </summary>
+    /// <param name="itemId">The row id of the item to fetch.</param>
+    /// <param name="target">The world, data centre or region to fetch from.</param>
+    /// <param name="token">Cancels the fetch.</param>
+    /// <returns>The listings, or an empty list when the request could not be made.</returns>
+    private async Task<IReadOnlyList<PickedListing>> FetchListings(uint itemId, string target, CancellationToken token)
+    {
+      try
+      {
+        var data = await this.plugin.UniversalisClient
+          .GetMarketData(itemId, target, PickListingCount, 0, token)
+          .ConfigureAwait(false);
+
+        var withTax = !this.plugin.Config.NoGilSalesTax;
+
+        return data.Listings
+          .Select(listing => PickedListing.FromListing(listing, withTax, data.WorldName ?? target))
+          .ToArray();
+      }
+      catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
+      {
+        // The row keeps the picks it has rather than having them all called gone by a failed request.
+        this.plugin.Log.Warning(ex, $"Skipped checking the picked listings of item {itemId} on {target}.");
+        return Array.Empty<PickedListing>();
+      }
+    }
+
+    /// <summary>
+    /// Marks a picked row's listings against what is on sale now.
+    /// </summary>
+    /// <param name="row">The row to check.</param>
+    /// <param name="fresh">Every listing of the item across the scope.</param>
+    private void ApplyPicks(SavedItem row, IReadOnlyList<PickedListing> fresh)
+    {
+      // One retainer can have two stacks that look alike, so a listing only answers for one pick.
+      var claimed = new HashSet<PickedListing>();
+      var live = 0;
+
+      foreach (var pick in row.Picks)
+      {
+        var match = fresh.FirstOrDefault(f => !claimed.Contains(f) && pick.SameAs(f));
+
+        if (match == null)
+        {
+          pick.Gone = true;
+          continue;
+        }
+
+        claimed.Add(match);
+        pick.Gone = false;
+        pick.Price = match.Price;
+        pick.Outcome = BuyOutcome.None;
+        pick.Paid = null;
+        live++;
+      }
+
+      if (live > 0)
+      {
+        row.Unlisted = false;
+      }
+
+      row.Outcome = BuyOutcome.None;
+      row.Refreshing = false;
+      this.Counted++;
+
+      this.plugin.ShoppingList.Persist();
     }
 
     private void Apply(IReadOnlyList<SavedItem> entries, IReadOnlyList<Item> chunk, double windowMilliseconds)

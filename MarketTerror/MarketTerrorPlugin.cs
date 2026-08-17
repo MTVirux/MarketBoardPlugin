@@ -419,6 +419,7 @@ namespace MarketTerror
         // Remove windows
         this.windowSystem.RemoveAllWindows();
         this.marketBoardWindow.Dispose();
+        this.marketBoardShoppingListWindow.Dispose();
 
         // Remove command handlers
         foreach (var command in OpenCommands)
