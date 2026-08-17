@@ -212,7 +212,7 @@ namespace MarketTerror.GUI
       ArgumentNullException.ThrowIfNull(state);
 
       state.SearchString = this.SearchString;
-      state.SelectedItem = this.SelectedItem?.RowId ?? 0;
+      state.SelectedItem = this.SelectedItem?.RowId ?? this.pendingSelectedItem ?? 0;
       state.AdvancedSearchOpen = this.AdvancedSearchOpen;
       state.SelectedClassJob = this.SelectedClassJob?.RowId;
       state.MinLevel = this.MinLevel;
@@ -336,6 +336,7 @@ namespace MarketTerror.GUI
     /// <param name="noHistory">True to leave the search history untouched.</param>
     public void SelectItem(uint itemId, bool noHistory = false)
     {
+      this.pendingSelectedItem = null;
       this.SelectedItem = this.Catalog.GetItem(itemId);
 
       this.RefreshMarketData();
