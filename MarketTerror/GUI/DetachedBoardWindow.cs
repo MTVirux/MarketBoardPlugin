@@ -7,7 +7,9 @@ namespace MarketTerror.GUI
   using System;
   using System.Numerics;
   using Dalamud.Bindings.ImGui;
+  using Dalamud.Interface;
   using Dalamud.Interface.Windowing;
+  using MarketTerror.GUI.Components;
   using MarketTerror.Models;
 
   /// <summary>
@@ -18,6 +20,10 @@ namespace MarketTerror.GUI
     private readonly BoardServices services;
 
     private readonly Action<ItemListTab> onClosed;
+
+    private readonly TitleBarButton integrationsButton;
+
+    private readonly TitleBarButton shoppingListButton;
 
     private IDisposable? themeScope;
 
@@ -53,6 +59,38 @@ namespace MarketTerror.GUI
         MinimumSize = new Vector2(350, 225),
         MaximumSize = new Vector2(float.MaxValue, float.MaxValue),
       };
+
+      this.integrationsButton = IntegrationsButton.Build(this.Board.Context);
+      this.TitleBarButtons.Add(this.integrationsButton);
+
+      this.shoppingListButton = ShoppingListButton.Build(this.Board.Context);
+      this.TitleBarButtons.Add(this.shoppingListButton);
+
+      this.TitleBarButtons.Add(new TitleBarButton
+      {
+        Icon = FontAwesomeIcon.Heart,
+        IconOffset = new Vector2(2, 1),
+        Click = _ => this.Board.OpenLinksPopup(),
+        ShowTooltip = () =>
+        {
+          ImGui.BeginTooltip();
+          ImGui.Text("Links");
+          ImGui.EndTooltip();
+        },
+      });
+
+      this.TitleBarButtons.Add(new TitleBarButton
+      {
+        Icon = FontAwesomeIcon.Cog,
+        IconOffset = new Vector2(2, 1),
+        Click = _ => this.services.Plugin.OpenConfigUi(),
+        ShowTooltip = () =>
+        {
+          ImGui.BeginTooltip();
+          ImGui.Text("Settings");
+          ImGui.EndTooltip();
+        },
+      });
     }
 
     /// <summary>
@@ -95,6 +133,13 @@ namespace MarketTerror.GUI
     /// <inheritdoc/>
     public override void PreDraw()
     {
+      // Draw is skipped while the window is collapsed or clipped, so the flag is cleared here,
+      // where it always runs, rather than left frozen at what the last drawn frame saw.
+      this.IsBeingDragged = false;
+
+      IntegrationsButton.Refresh(this.integrationsButton, this.Board.Context);
+      ShoppingListButton.Refresh(this.shoppingListButton, this.Board.Context);
+
       // ImGui has no way to hand a window an in-progress drag, so a freshly torn-off window
       // is walked under the cursor by hand until the button comes up.
       if (this.Grabbed)
