@@ -13,13 +13,14 @@ namespace MarketTerror.Services
   /// </summary>
   /// <remarks>
   /// Keying on the query target as well as the item is what lets two windows sit on different
-  /// worlds without one serving the other's prices.
+  /// worlds without one serving the other's prices. The Oceania add-on is part of the key too,
+  /// since a region with it merged in queries the same target as the region on its own.
   /// </remarks>
   public sealed class MarketDataCache
   {
     private readonly MarketTerrorPlugin plugin;
 
-    private readonly ConcurrentDictionary<(uint ItemId, string QueryTarget), MarketDataResponse> entries = new();
+    private readonly ConcurrentDictionary<(uint ItemId, string QueryTarget, bool IncludeOceania), MarketDataResponse> entries = new();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketDataCache"/> class.
@@ -35,10 +36,11 @@ namespace MarketTerror.Services
     /// </summary>
     /// <param name="itemId">The item row id.</param>
     /// <param name="queryTarget">The world, data centre or region the data was priced at.</param>
+    /// <param name="includeOceania">True when the Oceania data centre was merged into the data.</param>
     /// <returns>The cached response, or null when there is none or it has gone stale.</returns>
-    public MarketDataResponse? Get(uint itemId, string queryTarget)
+    public MarketDataResponse? Get(uint itemId, string queryTarget, bool includeOceania)
     {
-      if (!this.entries.TryGetValue((itemId, queryTarget), out var entry))
+      if (!this.entries.TryGetValue((itemId, queryTarget, includeOceania), out var entry))
       {
         return null;
       }
@@ -50,7 +52,7 @@ namespace MarketTerror.Services
         return entry;
       }
 
-      this.entries.TryRemove((itemId, queryTarget), out _);
+      this.entries.TryRemove((itemId, queryTarget, includeOceania), out _);
 
       return null;
     }
@@ -60,10 +62,11 @@ namespace MarketTerror.Services
     /// </summary>
     /// <param name="itemId">The item row id.</param>
     /// <param name="queryTarget">The world, data centre or region the data was priced at.</param>
+    /// <param name="includeOceania">True when the Oceania data centre was merged into the data.</param>
     /// <param name="response">The response to keep.</param>
-    public void Put(uint itemId, string queryTarget, MarketDataResponse response)
+    public void Put(uint itemId, string queryTarget, bool includeOceania, MarketDataResponse response)
     {
-      this.entries[(itemId, queryTarget)] = response;
+      this.entries[(itemId, queryTarget, includeOceania)] = response;
     }
 
     /// <summary>

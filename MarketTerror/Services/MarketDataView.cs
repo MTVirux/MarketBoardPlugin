@@ -106,7 +106,7 @@ namespace MarketTerror.Services
       this.currentRefreshTask = Task.Run(
         async () =>
         {
-          var cached = this.cache.Get(itemId, queryTarget);
+          var cached = this.cache.Get(itemId, queryTarget, includeOceania);
 
           if (cached != null)
           {
@@ -144,7 +144,7 @@ namespace MarketTerror.Services
 
           if (this.MarketData != null)
           {
-            this.cache.Put(itemId, queryTarget, this.MarketData);
+            this.cache.Put(itemId, queryTarget, includeOceania, this.MarketData);
           }
 
           this.IsLoadingGilflux = true;
