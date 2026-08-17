@@ -12,6 +12,7 @@ namespace MarketTerror.GUI
   using Lumina.Excel.Sheets;
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
+  using MarketTerror.Models;
   using MarketTerror.Models.ShoppingList;
   using MarketTerror.Services;
 
@@ -32,6 +33,9 @@ namespace MarketTerror.GUI
     /// The item level the maximum item level filter starts at and resets to.
     /// </summary>
     public const int DefaultMaxItemLevel = 999;
+
+    // An item loaded from stored state, waiting for the world selection to resolve before it can be queried.
+    private uint? pendingSelectedItem;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MarketBoardContext"/> class.
@@ -197,6 +201,97 @@ namespace MarketTerror.GUI
     public void Dispose()
     {
       this.MarketData.Dispose();
+    }
+
+    /// <summary>
+    /// Copies this board's state into a stored entry.
+    /// </summary>
+    /// <param name="state">The entry to write.</param>
+    public void SaveTo(DetachedBoardState state)
+    {
+      ArgumentNullException.ThrowIfNull(state);
+
+      state.SearchString = this.SearchString;
+      state.SelectedItem = this.SelectedItem?.RowId ?? 0;
+      state.AdvancedSearchOpen = this.AdvancedSearchOpen;
+      state.SelectedClassJob = this.SelectedClassJob?.RowId;
+      state.MinLevel = this.MinLevel;
+      state.MaxLevel = this.MaxLevel;
+      state.MinItemLevel = this.MinItemLevel;
+      state.MaxItemLevel = this.MaxItemLevel;
+      state.UnlockFilter = this.UnlockFilter;
+
+      state.SelectedCategories.Clear();
+      state.SelectedCategories.AddRange(this.SelectedCategories);
+      state.SelectedRarities.Clear();
+      state.SelectedRarities.AddRange(this.SelectedRarities);
+    }
+
+    /// <summary>
+    /// Restores this board's state from a stored entry.
+    /// </summary>
+    /// <param name="state">The entry to read.</param>
+    public void LoadFrom(DetachedBoardState state)
+    {
+      ArgumentNullException.ThrowIfNull(state);
+
+      this.SearchString = state.SearchString;
+      this.AdvancedSearchOpen = state.AdvancedSearchOpen;
+      this.MinLevel = state.MinLevel;
+      this.MaxLevel = state.MaxLevel;
+      this.MinItemLevel = state.MinItemLevel;
+      this.MaxItemLevel = state.MaxItemLevel;
+      this.UnlockFilter = state.UnlockFilter;
+
+      this.SelectedCategories.Clear();
+      foreach (var category in state.SelectedCategories)
+      {
+        this.SelectedCategories.Add(category);
+      }
+
+      this.SelectedRarities.Clear();
+      foreach (var rarity in state.SelectedRarities)
+      {
+        this.SelectedRarities.Add(rarity);
+      }
+
+      this.SelectedClassJob = null;
+
+      if (state.SelectedClassJob is { } jobId)
+      {
+        foreach (var job in this.Catalog.ClassJobs)
+        {
+          if (job.RowId == jobId)
+          {
+            this.SelectedClassJob = job;
+            break;
+          }
+        }
+      }
+
+      // A stored item that is no longer marketable just loads as nothing selected. The world
+      // selection has not resolved yet this early, so the actual selection is deferred.
+      this.pendingSelectedItem = null;
+
+      if (state.SelectedItem != 0 && this.Catalog.Contains(state.SelectedItem))
+      {
+        this.pendingSelectedItem = state.SelectedItem;
+      }
+    }
+
+    /// <summary>
+    /// Applies a selection loaded from stored state, once the world selection has resolved.
+    /// </summary>
+    /// <remarks>Does nothing until called again on a later frame if the world is not resolved yet.</remarks>
+    public void ApplyPendingSelection()
+    {
+      if (this.pendingSelectedItem is not { } itemId || !this.Worlds.HasSelection)
+      {
+        return;
+      }
+
+      this.pendingSelectedItem = null;
+      this.SelectItem(itemId, true);
     }
 
     /// <summary>

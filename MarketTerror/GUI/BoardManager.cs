@@ -58,6 +58,8 @@ namespace MarketTerror.GUI
       this.Services = new BoardServices(plugin, defaultFont, titleFont);
       this.MainWindow = new MarketBoardWindow(this);
       this.MainWindow.Board.Manager = this;
+
+      this.RestoreDetachedBoards();
     }
 
     /// <summary>
@@ -155,6 +157,19 @@ namespace MarketTerror.GUI
       this.isDisposed = true;
     }
 
+    /// <summary>
+    /// Writes every detached window's current state into its stored entry and saves the config.
+    /// </summary>
+    internal void SaveLayout()
+    {
+      foreach (var window in this.detached)
+      {
+        window.Board.Context.SaveTo(window.State);
+      }
+
+      this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+    }
+
     private void DetachNow(ItemListTab tab, bool grabbed)
     {
       var state = this.plugin.Config.DetachedBoards.FirstOrDefault(s => s.Tab == tab);
@@ -176,6 +191,7 @@ namespace MarketTerror.GUI
 
       board.Tabs.Add(tab);
       context.ItemListTab = tab;
+      context.LoadFrom(state);
 
       var window = new DetachedBoardWindow(this.Services, board, tab, state, this.Reattach)
       {
@@ -276,9 +292,24 @@ namespace MarketTerror.GUI
       }
     }
 
-    private void SaveLayout()
+    /// <summary>
+    /// Reopens every window that was detached when the plugin last saved its config.
+    /// </summary>
+    private void RestoreDetachedBoards()
     {
-      this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
+      var seen = new HashSet<ItemListTab>();
+
+      // A tab is either docked or detached, so a duplicate entry is dropped rather than opened twice.
+      foreach (var state in this.plugin.Config.DetachedBoards.ToList())
+      {
+        if (!Enum.IsDefined(state.Tab) || !seen.Add(state.Tab))
+        {
+          this.plugin.Config.DetachedBoards.Remove(state);
+          continue;
+        }
+
+        this.DetachNow(state.Tab, grabbed: false);
+      }
     }
   }
 }

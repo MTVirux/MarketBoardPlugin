@@ -101,6 +101,8 @@ namespace MarketTerror.GUI
     /// </summary>
     public void Draw()
     {
+      this.context.ApplyPendingSelection();
+
       var scale = ImGui.GetIO().FontGlobalScale;
 
       var splitterWidth = ImGui.GetTextLineHeight() * 0.5f;

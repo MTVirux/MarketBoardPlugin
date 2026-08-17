@@ -458,6 +458,7 @@ namespace MarketTerror
 
         // Remove windows - the board manager unregisters its own before the rest go, since
         // the window system rejects a window that is no longer registered with it.
+        this.boardManager.SaveLayout();
         this.boardManager.Dispose();
         this.windowSystem.RemoveAllWindows();
         this.defaultFontHandle.Dispose();
