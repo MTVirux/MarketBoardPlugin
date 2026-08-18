@@ -33,6 +33,7 @@ namespace MarketTerror.Helpers
     private const long ResultsTimeoutMs = 10000;
     private const long ResultWindowTimeoutMs = 10000;
     private const long ResultCloseTimeoutMs = 3000;
+    private const long KeptResultsTimeoutMs = 2000;
     private const uint HqItemIdOffset = 1000000;
 
     private readonly IFramework framework;
@@ -54,6 +55,7 @@ namespace MarketTerror.Helpers
     private long addonSettleTick;
     private bool addonSeen;
     private bool resultsLogged;
+    private bool keepResults;
     private Action<bool>? onFinished;
     private bool forced;
 
@@ -172,6 +174,39 @@ namespace MarketTerror.Helpers
       this.BeginSearch(addon);
     }
 
+    /// <summary>
+    /// Opens an item's listings again off the search results the board is already holding, instead of
+    /// searching for it a second time.
+    /// </summary>
+    /// <param name="name">The item name the board was last searched for.</param>
+    /// <param name="id">The row ID of the item, used to pick the matching result.</param>
+    /// <param name="onFinished">Called exactly once with true when the item's listings were opened, false otherwise.</param>
+    /// <returns>True when the results were reused, false when the board cannot serve them and has to be searched.</returns>
+    /// <remarks>
+    /// Buying closes the listings window, so another listing of the same item needs them open again -
+    /// but the result row is still there, and clicking it is what asks the board for the listings.
+    /// A search that no longer has the row falls back to running the search again.
+    /// </remarks>
+    public bool TryOpenKeptResult(string name, uint id, Action<bool>? onFinished = null)
+    {
+      nint addon = string.IsNullOrWhiteSpace(name) || id == 0 ? nint.Zero : this.gameGui.GetAddonByName(AddonName);
+
+      if (addon == nint.Zero || !this.IsItemSearchReady(addon))
+      {
+        return false;
+      }
+
+      this.Finish(false);
+
+      this.itemName = name;
+      this.itemId = id;
+      this.onFinished = onFinished;
+      this.forced = true;
+      this.keepResults = true;
+      this.BeginSearch(addon);
+      return true;
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {
@@ -247,6 +282,7 @@ namespace MarketTerror.Helpers
       this.addonSeen = false;
       this.addonSettleTick = 0;
       this.resultsLogged = false;
+      this.keepResults = false;
 
       if (callback == null)
       {
@@ -317,6 +353,16 @@ namespace MarketTerror.Helpers
         }
         else if (now > this.resultsDeadlineTick)
         {
+          if (this.keepResults)
+          {
+            // The row the board was holding has gone, so it has to be searched for after all.
+            this.keepResults = false;
+            this.resultsLogged = false;
+            this.log.Debug($"The Market Board no longer lists \"{this.itemName}\" (id {this.itemId}); searching for it again");
+            this.Fire(this.gameGui.GetAddonByName(AddonName));
+            return;
+          }
+
           this.log.Debug($"No Market Board result for \"{this.itemName}\" (id {this.itemId}) arrived in time; leaving the search as-is");
           this.Finish(false);
         }
@@ -440,7 +486,7 @@ namespace MarketTerror.Helpers
       nint resultPtr = this.gameGui.GetAddonByName(ResultAddonName);
       if (resultPtr == nint.Zero)
       {
-        this.Fire(addonPtr);
+        this.OpenListings(addonPtr);
         return;
       }
 
@@ -466,15 +512,34 @@ namespace MarketTerror.Helpers
 
       if (this.gameGui.GetAddonByName(ResultAddonName) == nint.Zero)
       {
-        this.Fire(addonPtr);
+        this.OpenListings(addonPtr);
         return;
       }
 
       if (now > this.resultCloseDeadlineTick)
       {
         this.log.Debug($"The listings window never closed; searching for \"{this.itemName}\" anyway");
+        this.keepResults = false;
         this.Fire(addonPtr);
       }
+    }
+
+    /// <summary>
+    /// Asks the board for the item's listings, either by searching for it or, when the results it is
+    /// already holding are this item's, by going straight to clicking its row.
+    /// </summary>
+    /// <param name="addonPtr">The Market Board addon to work on.</param>
+    private void OpenListings(nint addonPtr)
+    {
+      if (!this.keepResults)
+      {
+        this.Fire(addonPtr);
+        return;
+      }
+
+      this.state = State.WaitingResults;
+      this.resultsDeadlineTick = Environment.TickCount64 + KeptResultsTimeoutMs;
+      this.log.Debug($"Opening \"{this.itemName}\" off the results the Market Board already has");
     }
 
     private unsafe bool IsResultWindowOpen()

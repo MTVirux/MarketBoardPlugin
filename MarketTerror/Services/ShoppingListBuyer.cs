@@ -376,6 +376,16 @@ namespace MarketTerror.Services
       }
 
       this.CurrentItemName = this.Describe(job);
+
+      // Another listing of the same item on the same world: the board is still on it, so its listings
+      // only have to be opened again rather than searched for from scratch.
+      if (this.boardItemId == job.Row.SourceItem.RowId
+        && string.Equals(this.boardWorld, job.World, StringComparison.OrdinalIgnoreCase)
+        && this.plugin.MarketBoardContext.TryReopenListingsForBuy(job.World, job.Row.SourceItem, opened => this.OnSearchFinished(job, opened)))
+      {
+        return;
+      }
+
       this.plugin.MarketBoardContext.GoToMarketBoardForBuy(job.World, job.Row.SourceItem, opened => this.OnSearchFinished(job, opened));
     }
 

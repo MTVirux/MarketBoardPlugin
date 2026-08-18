@@ -486,6 +486,35 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// Opens an item's listings again on the Market Board that is already open in front of the player,
+    /// without travelling or searching for the item a second time.
+    /// </summary>
+    /// <param name="worldName">The world the listings have to be on.</param>
+    /// <param name="item">The item whose listings are wanted.</param>
+    /// <param name="onSearchFinished">Called with true once the listings are open, false when they never opened.</param>
+    /// <returns>True when the open board was used, false when the caller has to travel and search instead.</returns>
+    public bool TryReopenListingsForBuy(string worldName, Item item, Action<bool> onSearchFinished)
+    {
+      ArgumentNullException.ThrowIfNull(onSearchFinished);
+
+      var plugin = this.Plugin;
+
+      if (!plugin.ClientState.IsLoggedIn || string.IsNullOrEmpty(worldName))
+      {
+        return false;
+      }
+
+      var currentWorld = PlayerWorld.CurrentName(plugin.PlayerState);
+
+      if (!string.Equals(worldName, currentWorld, StringComparison.OrdinalIgnoreCase))
+      {
+        return false;
+      }
+
+      return plugin.AutoSearch.TryOpenKeptResult(item.Name.ExtractText(), item.RowId, onSearchFinished);
+    }
+
+    /// <summary>
     /// Draws the submenu that puts an item on the user's lists, or takes it off them.
     /// </summary>
     /// <param name="itemId">The row id of the item the menu belongs to.</param>
