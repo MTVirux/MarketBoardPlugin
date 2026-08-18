@@ -14,37 +14,37 @@ namespace MarketTerror.Services
   using System.Threading.Tasks;
   using Dalamud.Plugin.Services;
   using Lumina.Excel.Sheets;
-  using MarketTerror.Helpers;
   using MarketTerror.Models.ShoppingList;
-  using MarketTerror.Models.Universalis;
 
   /// <summary>
-  /// Adds a whole category of items to the buy list, one Universalis request per chunk of item ids.
+  /// Prices the buy list against Universalis, one market and item at a time, and adds whole categories
+  /// to it.
   /// </summary>
   /// <remarks>
-  /// Only one job runs at a time. A chunk arrives all at once but its rows are shown one at a time
-  /// over the time the next chunk is expected to take, so the list fills gradually. When the scope
-  /// covers more than one target, each chunk is asked for every target in turn and a row is only
-  /// priced once all the answers are in, so it can show the cheapest of them.
+  /// Only one job runs at a time. Entries are grouped by the market they shop in, and one item of one
+  /// market is the unit of work: it is asked for on every target that market reaches before any entry
+  /// under it is resolved, so an entry chooses out of the whole scope rather than out of whichever part
+  /// answered first. Each answer is revealed over the time the next one is expected to take, so the
+  /// progress line climbs steadily instead of jumping.
   /// </remarks>
   public sealed class ShoppingListBulkAdd : IDisposable
   {
     /// <summary>
     /// The pause between two requests. Universalis documents no rate limit, so this is a courtesy margin.
     /// </summary>
-    private const int ChunkDelayMilliseconds = 1000;
+    private const int RequestDelayMilliseconds = 1000;
 
     /// <summary>
-    /// How many listings a picked row is checked against. More than a market board can show in one go.
+    /// How many listings an entry is resolved against. More than a market board can show in one go.
     /// </summary>
-    private const int PickListingCount = 100;
+    private const int ListingsPerRequest = 100;
 
     private readonly MarketTerrorPlugin plugin;
 
     /// <summary>
-    /// One entry per queried item, in query order, null when the item has no row to show.
+    /// One item per priced market and item pair, in query order, null when the pair has no entry to show.
     /// </summary>
-    private readonly Queue<SavedItem?> pendingReveal = new Queue<SavedItem?>();
+    private readonly Queue<ListingEntry?> pendingReveal = new Queue<ListingEntry?>();
 
     private double revealPerMillisecond;
 
@@ -53,8 +53,6 @@ namespace MarketTerror.Services
     private CancellationTokenSource? cancellation;
 
     private Task? job;
-
-    private bool refreshing;
 
     private bool isDisposed;
 
@@ -75,17 +73,18 @@ namespace MarketTerror.Services
     public string CategoryName { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Gets the number of items shown so far.
+    /// Gets the number of market and item pairs priced so far.
     /// </summary>
     public int Counted { get; private set; }
 
     /// <summary>
-    /// Gets the number of items the running job started with.
+    /// Gets the number of market and item pairs the running job started with.
     /// </summary>
+    /// <remarks>An item on the list twice under two markets is two of them, since it costs two fetches.</remarks>
     public int Total { get; private set; }
 
     /// <summary>
-    /// Gets a value indicating whether a job is still running or still has rows left to show.
+    /// Gets a value indicating whether a job is still running or still has answers left to show.
     /// </summary>
     public bool IsRunning => this.job is { IsCompleted: false } || this.pendingReveal.Count > 0;
 
@@ -94,25 +93,44 @@ namespace MarketTerror.Services
     /// </summary>
     /// <param name="categoryName">The name of the category, shown while the job runs.</param>
     /// <param name="items">The items to add.</param>
-    /// <param name="queryTargets">The worlds, data centres or regions to price the items against.</param>
-    public void Start(string categoryName, IReadOnlyList<Item> items, IReadOnlyList<string> queryTargets)
+    /// <param name="scope">The market the new entries shop in.</param>
+    public void Start(string categoryName, IReadOnlyList<Item> items, ListingScope scope)
     {
-      this.StartJob(categoryName, items, queryTargets, false);
+      ArgumentNullException.ThrowIfNull(items);
+      ArgumentNullException.ThrowIfNull(scope);
+
+      if (this.IsRunning || items.Count == 0)
+      {
+        return;
+      }
+
+      this.plugin.ShoppingList.AddLowestRange(items, scope);
+
+      var ids = items.Select(i => i.RowId).ToHashSet();
+
+      // An item that already had an entry in this scope was left alone by the add, and is priced
+      // along with the new ones rather than being the one row the category leaves stale.
+      this.StartJob(
+        categoryName,
+        this.plugin.ShoppingList.InScope(scope)
+          .Where(e => e.Kind == ListingKind.Lowest && ids.Contains(e.SourceItem.RowId))
+          .ToArray());
     }
 
     /// <summary>
-    /// Starts pricing the items already on the buy list again, unless a job is already running.
+    /// Starts pricing entries already on the buy list again, unless a job is already running.
     /// </summary>
-    /// <param name="items">The items to price again.</param>
-    /// <param name="queryTargets">The worlds, data centres or regions to price the items against.</param>
+    /// <param name="entries">The entries to price again.</param>
     /// <param name="label">What to call the job while it runs, or null for the whole list.</param>
-    public void StartRefresh(IReadOnlyList<Item> items, IReadOnlyList<string> queryTargets, string? label = null)
+    public void StartRefresh(IEnumerable<ListingEntry> entries, string? label = null)
     {
-      this.StartJob(label ?? "the shopping list", items, queryTargets, true);
+      ArgumentNullException.ThrowIfNull(entries);
+
+      this.StartJob(label ?? "the shopping list", entries.ToArray());
     }
 
     /// <summary>
-    /// Stops the running job. The rows already added stay in the buy list.
+    /// Stops the running job. The entries already priced keep what they were priced at.
     /// </summary>
     public void Cancel()
     {
@@ -137,70 +155,56 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Splits the items into the qualities they have to be priced at.
+    /// Works out which qualities of a listing the request has to come back with.
     /// </summary>
-    /// <param name="items">The items being priced.</param>
-    /// <param name="quality">The quality each item's row is holding out for, when it has one.</param>
-    /// <returns>One group an item can be asked for in a single request, with the quality to ask for.</returns>
+    /// <param name="entries">Every entry buying one item in one market, at least one of them.</param>
+    /// <returns>True for high quality only, false for normal quality only, null for both.</returns>
     /// <remarks>
-    /// A row keeps the quality it was priced at, so a cheaper listing of the other one cannot take its
-    /// place. Rows of both qualities therefore cost a request each, since Universalis filters per request.
+    /// Universalis filters per request and the whole pair shares one, so a quality can only be left out
+    /// when no entry priced off the answer would take it. An entry with no conditions on it buys
+    /// whatever is cheapest, so it wants both.
     /// </remarks>
-    private static IEnumerable<(bool? Hq, Item[] Items)> QualityGroups(Item[] items, IReadOnlyDictionary<uint, bool> quality)
+    private static bool? QualityAsked(IReadOnlyList<ListingEntry> entries)
     {
-      if (quality.Count == 0)
+      if (entries.Count == 0)
       {
-        yield return (null, items);
-        yield break;
+        return null;
       }
 
-      foreach (var group in items.GroupBy(i => quality.TryGetValue(i.RowId, out var hq) ? (bool?)hq : null))
+      if (entries.All(e => e.Conditions?.Quality == QualityFilter.HqOnly))
       {
-        yield return (group.Key, group.ToArray());
+        return true;
       }
-    }
 
-    /// <summary>
-    /// Drops the listings a scope handed back twice.
-    /// </summary>
-    /// <param name="listings">The listings a row was priced against.</param>
-    /// <returns>One listing per Universalis listing id, and everything without an id.</returns>
-    /// <remarks>A scope can ask a world and its data centre in the same breath, which returns both.</remarks>
-    private static IEnumerable<PickedListing> Distinct(IEnumerable<PickedListing> listings)
-    {
-      var seen = new HashSet<string>(StringComparer.Ordinal);
-
-      return listings.Where(l => l.ListingId.Length == 0 || seen.Add(l.ListingId));
-    }
-
-    /// <summary>
-    /// Puts a row that has lost every listing it was buying back on the cheapest one still on sale.
-    /// </summary>
-    /// <param name="row">The row to price again.</param>
-    /// <param name="fresh">Every listing of the item across the scope.</param>
-    private static void RebaseOnCheapest(SavedItem row, IReadOnlyList<PickedListing> fresh)
-    {
-      var cheapest = fresh.Count == 0 ? null : fresh.MinBy(f => f.Price);
-
-      if (cheapest == null)
+      if (entries.All(e => e.Conditions?.Quality == QualityFilter.NqOnly))
       {
-        row.Unlisted = true;
+        return false;
+      }
+
+      return null;
+    }
+
+    private void StartJob(string label, IReadOnlyList<ListingEntry> entries)
+    {
+      if (this.IsRunning || entries.Count == 0)
+      {
         return;
       }
 
-      row.Price = cheapest.Price;
-      row.Quantity = cheapest.Quantity;
-      row.Hq = cheapest.Hq;
-      row.World = cheapest.World;
-      row.Unlisted = false;
-    }
+      var catalogue = this.plugin.WorldCatalogue;
 
-    private void StartJob(string categoryName, IReadOnlyList<Item> items, IReadOnlyList<string> queryTargets, bool refresh)
-    {
-      ArgumentNullException.ThrowIfNull(items);
-      ArgumentNullException.ThrowIfNull(queryTargets);
+      // A scope whose anchor world is not in the catalogue has nowhere to ask, so its entries are left
+      // out rather than being marked as waiting for an answer that never comes.
+      var groups = entries
+        .GroupBy(e => e.Scope)
+        .Select(g => (
+          Targets: g.Key.Targets(catalogue).ToArray(),
+          Items: g.Select(e => e.SourceItem.RowId).Distinct().ToArray(),
+          Entries: g.ToArray()))
+        .Where(g => g.Targets.Length > 0)
+        .ToArray();
 
-      if (this.IsRunning || items.Count == 0 || queryTargets.Count == 0)
+      if (groups.Length == 0)
       {
         return;
       }
@@ -209,139 +213,66 @@ namespace MarketTerror.Services
       this.cancellation = new CancellationTokenSource();
 
       var token = this.cancellation.Token;
-      var queued = items.ToArray();
-      var targets = queryTargets.ToArray();
-      var picked = Array.Empty<(SavedItem Row, string[] Targets)>();
-      var quality = new Dictionary<uint, bool>();
+      var touched = new HashSet<ListingEntry>(groups.SelectMany(g => g.Entries));
 
-      if (refresh)
-      {
-        // Only the rows being priced again, so a single row refresh leaves the rest of the list alone.
-        var ids = queued.Select(i => i.RowId).ToHashSet();
+      this.plugin.ShoppingList.ClearOutcomes(touched.Contains);
+      this.plugin.ShoppingList.MarkRefreshing(touched);
 
-        // A direct listing is left out of refreshes, so its colour is left alone too.
-        this.plugin.ShoppingList.ClearOutcomes(row => !row.IsDirect && ids.Contains(row.SourceItem.RowId));
-        this.plugin.ShoppingList.MarkRefreshing(ids);
-
-        // The bulk query only ever comes back with one listing an item, which cannot say whether a
-        // particular picked listing is still there, so those rows are checked one at a time after it.
-        // A limited row joins them even with nothing picked yet, since its rule sweeps the same listings.
-        // Its scope is read here, on the framework thread, rather than from the job.
-        picked = this.plugin.ShoppingList
-          .Where(row => (row.HasPicks || row.IsLimited) && ids.Contains(row.SourceItem.RowId))
-          .Select(row => (Row: row, Targets: ListingLimitScope.TargetsFor(this.plugin, row, targets).ToArray()))
-          .ToArray();
-
-        foreach (var row in this.plugin.ShoppingList.Where(row => !row.HasPicks && !row.IsLimited && ids.Contains(row.SourceItem.RowId)))
-        {
-          quality[row.SourceItem.RowId] = row.Hq;
-        }
-      }
-
-      this.CategoryName = categoryName;
+      this.CategoryName = label;
       this.Counted = 0;
-      this.Total = queued.Length + picked.Length;
-      this.refreshing = refresh;
+      this.Total = groups.Sum(g => g.Items.Length);
       this.lastRevealUtc = DateTime.UtcNow;
 
-      this.job = Task.Run(() => this.Run(queued, targets, picked, quality, token), token);
+      this.job = Task.Run(() => this.Run(groups, token), token);
     }
 
-    private async Task Run(Item[] items, string[] targets, (SavedItem Row, string[] Targets)[] picked, IReadOnlyDictionary<uint, bool> quality, CancellationToken token)
+    private async Task Run((string[] Targets, uint[] Items, ListingEntry[] Entries)[] groups, CancellationToken token)
     {
       var firstRequest = true;
       var queries = 0;
+      var priced = 0;
       var elapsed = Stopwatch.StartNew();
 
       try
       {
-        foreach (var (hq, group) in QualityGroups(items, quality))
+        foreach (var group in groups)
         {
-          foreach (var chunk in group.Chunk(UniversalisClient.MaxItemsPerRequest))
+          foreach (var itemId in group.Items)
           {
             token.ThrowIfCancellationRequested();
 
-            var ids = chunk.Select(i => i.RowId).ToArray();
-            var cooldowns = firstRequest ? targets.Length - 1 : targets.Length;
+            var forItem = group.Entries.Where(e => e.SourceItem.RowId == itemId).ToArray();
+            var quality = QualityAsked(forItem);
+            var cooldowns = firstRequest ? group.Targets.Length - 1 : group.Targets.Length;
             var startedUtc = DateTime.UtcNow;
-            var answers = new List<(string Target, IReadOnlyDictionary<uint, MarketDataResponse> Prices)>();
+            var onSale = new List<ResolvedListing>();
 
-            // Every target is asked before anything is priced, so a row can show the cheapest of them.
-            foreach (var target in targets)
+            foreach (var target in group.Targets)
             {
               if (!firstRequest)
               {
-                await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
+                await Task.Delay(RequestDelayMilliseconds, token).ConfigureAwait(false);
               }
 
               firstRequest = false;
               queries++;
 
-              answers.Add((target, await this.Fetch(ids, target, hq, token).ConfigureAwait(false)));
-            }
-
-            var entries = new List<SavedItem>();
-
-            foreach (var item in chunk)
-            {
-              SavedItem? cheapest = null;
-
-              foreach (var (target, prices) in answers)
-              {
-                var entry = SavedItem.FromCheapestListing(
-                  item,
-                  prices.GetValueOrDefault(item.RowId),
-                  !this.plugin.Config.NoGilSalesTax,
-                  target);
-
-                if (entry != null && (cheapest == null || entry.Price < cheapest.Price))
-                {
-                  cheapest = entry;
-                }
-              }
-
-              if (cheapest != null)
-              {
-                entries.Add(cheapest);
-              }
+              onSale.AddRange(await this.FetchListings(itemId, target, quality, token).ConfigureAwait(false));
             }
 
             token.ThrowIfCancellationRequested();
+            priced++;
 
-            // How long this chunk's requests really took, so the rows are shown over the time the next one needs.
-            var requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - (cooldowns * ChunkDelayMilliseconds));
+            // How long this pair's requests really took, so its answer is revealed over the time the
+            // next one needs.
+            var requestGuess = Math.Max(200d, (DateTime.UtcNow - startedUtc).TotalMilliseconds - (cooldowns * RequestDelayMilliseconds));
+            var window = (group.Targets.Length * RequestDelayMilliseconds) + requestGuess;
 
             // The buy list is read while the window draws, so it may only be touched on the framework thread.
             await this.plugin.Framework
-              .RunOnFrameworkThread(() => this.Apply(entries, chunk, (targets.Length * ChunkDelayMilliseconds) + requestGuess))
+              .RunOnFrameworkThread(() => this.Apply(forItem, onSale, window))
               .ConfigureAwait(false);
           }
-        }
-
-        foreach (var (row, rowTargets) in picked)
-        {
-          token.ThrowIfCancellationRequested();
-
-          var fresh = new List<PickedListing>();
-          var complete = true;
-
-          foreach (var target in rowTargets)
-          {
-            await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
-            queries++;
-
-            var listings = await this.FetchListings(row.SourceItem.RowId, target, token).ConfigureAwait(false);
-
-            if (listings == null)
-            {
-              complete = false;
-              continue;
-            }
-
-            fresh.AddRange(listings);
-          }
-
-          await this.plugin.Framework.RunOnFrameworkThread(() => this.ApplyPicks(row, fresh, complete)).ConfigureAwait(false);
         }
 
         elapsed.Stop();
@@ -349,9 +280,9 @@ namespace MarketTerror.Services
         // A cancelled job keeps the previous stats, since it only priced part of what it was given.
         var stats = new QueryStats
         {
-          Items = items.Length + picked.Length,
+          Items = priced,
           Queries = queries,
-          Scope = string.Join(" and ", targets),
+          Scope = string.Join(" and ", groups.SelectMany(g => g.Targets).Distinct(StringComparer.OrdinalIgnoreCase)),
           Milliseconds = elapsed.ElapsedMilliseconds,
         };
 
@@ -359,7 +290,7 @@ namespace MarketTerror.Services
       }
       catch (OperationCanceledException)
       {
-        this.plugin.Log.Debug($"Cancelled adding {this.CategoryName} to the buy list.");
+        this.plugin.Log.Debug($"Cancelled pricing {this.CategoryName}.");
       }
     }
 
@@ -369,158 +300,58 @@ namespace MarketTerror.Services
       this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);
     }
 
-    private async Task<IReadOnlyDictionary<uint, MarketDataResponse>> Fetch(uint[] ids, string target, bool? hq, CancellationToken token)
-    {
-      try
-      {
-        return await this.plugin.UniversalisClient.GetCheapestListings(ids, target, token, hq).ConfigureAwait(false);
-      }
-      catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
-      {
-        // One bad request should not abandon the rest of the category, its items keep the price they had.
-        this.plugin.Log.Warning(ex, $"Skipped {ids.Length} items on {target} while adding {this.CategoryName} to the buy list.");
-        return new Dictionary<uint, MarketDataResponse>();
-      }
-    }
-
     /// <summary>
     /// Fetches every listing of one item on one target.
     /// </summary>
     /// <param name="itemId">The row id of the item to fetch.</param>
     /// <param name="target">The world, data centre or region to fetch from.</param>
+    /// <param name="hq">True for high quality listings only, false for normal quality only, null for both.</param>
     /// <param name="token">Cancels the fetch.</param>
-    /// <returns>The listings, or null when the request could not be made.</returns>
-    private async Task<IReadOnlyList<PickedListing>?> FetchListings(uint itemId, string target, CancellationToken token)
+    /// <returns>The listings, or none when the request could not be made.</returns>
+    /// <remarks>
+    /// A request that never landed comes back empty rather than as a failure of its own. An entry
+    /// resolved against nothing goes unlisted, which is the honest answer: the plugin no longer knows
+    /// what is on sale, and a price it can no longer stand behind is worse than none.
+    /// </remarks>
+    private async Task<IReadOnlyList<ResolvedListing>> FetchListings(uint itemId, string target, bool? hq, CancellationToken token)
     {
       try
       {
         var data = await this.plugin.UniversalisClient
-          .GetMarketData(itemId, target, PickListingCount, 0, token)
+          .GetMarketData(itemId, target, ListingsPerRequest, 0, token, hq)
           .ConfigureAwait(false);
 
         var withTax = !this.plugin.Config.NoGilSalesTax;
 
         return data.Listings
-          .Select(listing => PickedListing.FromListing(listing, withTax, data.WorldName ?? target))
+          .Select(listing => ResolvedListing.FromListing(listing, withTax, data.WorldName ?? target))
           .ToArray();
       }
       catch (Exception ex) when (ex is HttpRequestException or JsonException or InvalidOperationException)
       {
-        // The row keeps the picks it has rather than having them all called gone by a failed request.
-        this.plugin.Log.Warning(ex, $"Skipped checking the picked listings of item {itemId} on {target}.");
-        return null;
+        // One bad request should not abandon the rest of the job, so only this pair is given up on.
+        this.plugin.Log.Warning(ex, $"Skipped item {itemId} on {target} while pricing {this.CategoryName}.");
+        return Array.Empty<ResolvedListing>();
       }
     }
 
     /// <summary>
-    /// Picks a limited row's listings again from scratch, taking whatever is under its rule right now.
+    /// Resolves every entry buying one item in one market against what that market handed back.
     /// </summary>
-    /// <param name="row">The row to sweep.</param>
-    /// <param name="fresh">Every listing of the item across the row's scope.</param>
-    /// <param name="complete">True when every target answered, so the scope can be taken at its word.</param>
-    private void ApplyLimit(SavedItem row, IReadOnlyList<PickedListing> fresh, bool complete)
+    /// <param name="entries">The entries the answer is for.</param>
+    /// <param name="onSale">Every listing of their item across their market, which can be none.</param>
+    /// <param name="windowMilliseconds">How long the next answer is expected to take.</param>
+    private void Apply(IReadOnlyList<ListingEntry> entries, IReadOnlyList<ResolvedListing> onSale, double windowMilliseconds)
     {
-      // A request that never landed cannot say what is on sale, so the row keeps what it already buys.
-      if (complete)
+      // Only the resolver decides what an entry buys, so a direct entry stays on its own listing even
+      // though it is priced off the same array as everything else.
+      foreach (var entry in entries)
       {
-        row.SetSweptPicks(row.Limit!.Apply(Distinct(fresh)));
+        this.plugin.ShoppingList.ApplyMatches(entry, ListingResolver.Resolve(entry, onSale));
       }
 
-      row.Outcome = BuyOutcome.None;
-      row.Refreshing = false;
-      this.Counted++;
-
-      this.plugin.ShoppingList.Persist();
-    }
-
-    /// <summary>
-    /// Marks a picked row's listings against what is on sale now, dropping the ones that have sold out.
-    /// </summary>
-    /// <param name="row">The row to check.</param>
-    /// <param name="fresh">Every listing of the item across the scope.</param>
-    /// <param name="complete">True when every target answered, so the scope can be taken at its word.</param>
-    private void ApplyPicks(SavedItem row, IReadOnlyList<PickedListing> fresh, bool complete)
-    {
-      if (row.Limit != null)
-      {
-        this.ApplyLimit(row, fresh, complete);
-        return;
-      }
-
-      // One retainer can have two stacks that look alike, so a listing only answers for one pick.
-      var claimed = new HashSet<PickedListing>();
-      var live = new List<PickedListing>();
-
-      foreach (var pick in row.Picks)
-      {
-        var match = fresh.FirstOrDefault(f => !claimed.Contains(f) && pick.SameAs(f));
-
-        if (match == null)
-        {
-          pick.Gone = true;
-          continue;
-        }
-
-        claimed.Add(match);
-        pick.Gone = false;
-        pick.Price = match.Price;
-        pick.Outcome = BuyOutcome.None;
-        pick.Paid = null;
-        live.Add(pick);
-      }
-
-      // A request that never landed cannot say a listing has sold out, so those picks are only marked
-      // gone and the row keeps them until it is priced again.
-      if (complete)
-      {
-        row.SetPicks(live);
-      }
-
-      if (live.Count > 0)
-      {
-        row.Unlisted = false;
-      }
-      else if (complete)
-      {
-        RebaseOnCheapest(row, fresh);
-      }
-
-      row.Outcome = BuyOutcome.None;
-      row.Refreshing = false;
-      this.Counted++;
-
-      this.plugin.ShoppingList.Persist();
-    }
-
-    private void Apply(IReadOnlyList<SavedItem> entries, IReadOnlyList<Item> chunk, double windowMilliseconds)
-    {
-      if (this.refreshing)
-      {
-        this.plugin.ShoppingList.Replace(entries);
-
-        // The items the scope had nothing for keep their row, but lose the price it no longer holds.
-        var priced = entries.Select(e => e.SourceItem.RowId).ToHashSet();
-        this.plugin.ShoppingList.MarkUnlisted(chunk.Where(i => !priced.Contains(i.RowId)).Select(i => i.RowId));
-      }
-      else
-      {
-        // A row added straight from a listing is not a priced row, so it does not stand in for one.
-        var listed = this.plugin.ShoppingList.Where(s => !s.IsDirect).Select(s => s.SourceItem.RowId).ToHashSet();
-        var added = entries.Where(e => listed.Add(e.SourceItem.RowId)).ToArray();
-
-        foreach (var entry in added)
-        {
-          entry.Refreshing = true;
-        }
-
-        this.plugin.ShoppingList.AddRange(added);
-      }
-
-      // One step per queried item, so the count still reaches the total for items with no row.
-      foreach (var item in chunk)
-      {
-        this.pendingReveal.Enqueue(this.plugin.ShoppingList.Find(item.RowId));
-      }
+      // One step per market and item pair, so the count reaches the total however many entries share one.
+      this.pendingReveal.Enqueue(entries.FirstOrDefault());
 
       this.revealPerMillisecond = this.pendingReveal.Count / Math.Max(windowMilliseconds, 1d);
       this.lastRevealUtc = DateTime.UtcNow;
