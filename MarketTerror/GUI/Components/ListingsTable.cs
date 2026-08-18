@@ -21,7 +21,18 @@ namespace MarketTerror.GUI.Components
   /// </summary>
   public sealed class ListingsTable
   {
+    /// <summary>
+    /// The id of the menu the selection is acted on through. One menu serves every row, since it
+    /// always acts on the selection rather than on the row it was opened over.
+    /// </summary>
+    private const string MenuId = "listingsMenu";
+
     private readonly MarketBoardContext context;
+
+    /// <summary>
+    /// True when something has asked for the menu and it has not been opened yet.
+    /// </summary>
+    private bool menuWanted;
 
     /// <summary>
     /// The row a drag started on, or -1 when no drag is in progress.
@@ -104,8 +115,10 @@ namespace MarketTerror.GUI.Components
       ImGui.PopStyleColor();
 
       var listingsSnapshot = this.context.MarketData.MarketData?.Listings.ToArray();
-      var marketDataListings = listingsSnapshot?.OrderBy(l => l.PricePerUnit).ToList();
-      var count = marketDataListings?.Count ?? 0;
+      var marketDataListings = listingsSnapshot?.OrderBy(l => l.PricePerUnit).ToList()
+        ?? new List<MarketDataListing>();
+
+      var count = marketDataListings.Count;
 
       if (count != this.lastListingCount)
       {
@@ -113,17 +126,20 @@ namespace MarketTerror.GUI.Components
         this.lastListingCount = count;
       }
 
-      if (marketDataListings != null)
-      {
-        for (var index = 0; index < count; index++)
-        {
-          this.DrawRow(marketDataListings, index);
-        }
+      var rowHovered = false;
 
-        this.ApplyDrag(count);
+      for (var index = 0; index < count; index++)
+      {
+        rowHovered |= this.DrawRow(marketDataListings, index);
       }
 
+      this.ApplyDrag(count);
+
       ImGui.EndTable();
+
+      // Outside the table, where the menu is a plain child of the window rather than of a cell.
+      this.ClearSelectionOnClickOff(rowHovered);
+      this.DrawMenu(marketDataListings);
 
       ImGui.Separator();
     }
@@ -179,7 +195,13 @@ namespace MarketTerror.GUI.Components
       ImGui.PopStyleColor();
     }
 
-    private void DrawRow(List<MarketDataListing> listings, int index)
+    /// <summary>
+    /// Draws one listing.
+    /// </summary>
+    /// <param name="listings">The listings the table is drawing.</param>
+    /// <param name="index">The one of them this row is.</param>
+    /// <returns>True when the mouse is over the row.</returns>
+    private bool DrawRow(List<MarketDataListing> listings, int index)
     {
       var listing = listings[index];
       var worlds = this.context.Worlds;
@@ -203,10 +225,8 @@ namespace MarketTerror.GUI.Components
       // other row reporting the mouse passing over it.
       var hovered = ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
 
-      // Bound while the selectable is still the last item, so the whole row answers the right click.
-      this.DrawRowContextMenu(listings, index);
-
       this.TrackDrag(index, hovered);
+      this.TrackMenuClick(index, hovered);
 
       if (listing.Hq)
       {
@@ -255,11 +275,18 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.Text(retainerSB.ToString());
+
+      return hovered;
     }
 
-    private void DrawRowContextMenu(List<MarketDataListing> listings, int index)
+    /// <summary>
+    /// Opens the menu when a row is right clicked.
+    /// </summary>
+    /// <param name="index">The row.</param>
+    /// <param name="hovered">True when the mouse is over it.</param>
+    private void TrackMenuClick(int index, bool hovered)
     {
-      if (!ImGui.BeginPopupContextItem($"listingContextMenu{index}"))
+      if (!hovered || !ImGui.IsMouseReleased(ImGuiMouseButton.Right))
       {
         return;
       }
@@ -271,9 +298,34 @@ namespace MarketTerror.GUI.Components
         this.context.SelectedListings.Add(index);
       }
 
+      this.menuWanted = true;
+    }
+
+    /// <summary>
+    /// Draws the menu that acts on the selection, opening it first when something has asked for it.
+    /// </summary>
+    /// <param name="listings">The listings the table is drawing.</param>
+    private void DrawMenu(List<MarketDataListing> listings)
+    {
+      if (this.menuWanted)
+      {
+        this.menuWanted = false;
+
+        // The menu only offers the selection, so an empty one would open with nothing on it.
+        if (this.context.SelectedListings.Count > 0 && this.context.SelectedItem.HasValue)
+        {
+          ImGui.OpenPopup(MenuId);
+        }
+      }
+
+      if (!ImGui.BeginPopup(MenuId))
+      {
+        return;
+      }
+
       var selected = this.SelectedRows(listings);
 
-      if (this.context.SelectedItem.HasValue)
+      if (this.context.SelectedItem.HasValue && selected.Count > 0)
       {
         var label = selected.Count > 1
           ? $"Add {selected.Count} listings to the shopping list"
@@ -286,6 +338,29 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndPopup();
+    }
+
+    /// <summary>
+    /// Drops the selection when the mouse is clicked anywhere that is not one of the rows.
+    /// </summary>
+    /// <param name="rowHovered">True when the mouse was over a row this frame.</param>
+    private void ClearSelectionOnClickOff(bool rowHovered)
+    {
+      if (rowHovered || this.dragAnchor >= 0 || this.context.SelectedListings.Count == 0)
+      {
+        return;
+      }
+
+      // Its entries are not rows, so an open menu would otherwise drop the selection it acts on.
+      if (ImGui.IsPopupOpen(MenuId))
+      {
+        return;
+      }
+
+      if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+      {
+        this.ClearSelection();
+      }
     }
 
     /// <summary>
@@ -357,6 +432,9 @@ namespace MarketTerror.GUI.Components
 
       if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
       {
+        // A drag that covered ground asks what to do with what it caught; a plain click stays a
+        // plain click and travels to the board instead.
+        this.menuWanted |= last > first;
         this.dragAnchor = -1;
       }
     }
@@ -379,6 +457,7 @@ namespace MarketTerror.GUI.Components
     {
       this.context.SelectedListings.Clear();
       this.dragAnchor = -1;
+      this.menuWanted = false;
     }
 
     private void HandleClick(MarketDataListing listing)
