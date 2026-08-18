@@ -579,10 +579,10 @@ namespace MarketTerror.GUI
         return item.Hq ? HqMark : string.Empty;
       }
 
-      var nq = item.QuantityNq.ToString("N0", CultureInfo.CurrentCulture);
-      var hq = item.QuantityHq.ToString("N0", CultureInfo.CurrentCulture);
+      var nq = item.QuantityNq > 0 ? $"{item.QuantityNq.ToString("N0", CultureInfo.CurrentCulture)} NQ" : string.Empty;
+      var hq = item.QuantityHq > 0 ? $"{item.QuantityHq.ToString("N0", CultureInfo.CurrentCulture)} HQ" : string.Empty;
 
-      return $"{nq} NQ / {hq} HQ";
+      return nq.Length > 0 && hq.Length > 0 ? $"{nq} / {hq}" : nq + hq;
     }
 
     /// <summary>
