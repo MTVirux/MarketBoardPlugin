@@ -199,6 +199,28 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
+    /// Buys one of a row's picked listings, leaving the rest of the row for later.
+    /// </summary>
+    /// <param name="row">The row the listing belongs to.</param>
+    /// <param name="pick">The listing to buy.</param>
+    public void BuyPick(SavedItem row, PickedListing pick)
+    {
+      ArgumentNullException.ThrowIfNull(row);
+      ArgumentNullException.ThrowIfNull(pick);
+
+      if (this.IsRunning || pick.Gone || !this.CanBuy(row, out _))
+      {
+        return;
+      }
+
+      // Two buys without a refresh in between would otherwise report the first one's result again.
+      pick.Outcome = BuyOutcome.None;
+      pick.Paid = null;
+
+      this.Start(new[] { new BuyJob(row, pick) });
+    }
+
+    /// <summary>
     /// Buys every row that can be bought, cheapest travel first.
     /// </summary>
     /// <param name="rows">The rows to buy.</param>
@@ -240,20 +262,7 @@ namespace MarketTerror.Services
         return;
       }
 
-      this.outstanding.Clear();
-
-      foreach (var job in this.Order(jobs))
-      {
-        this.queue.Enqueue(job);
-        this.outstanding[job.Row] = this.outstanding.GetValueOrDefault(job.Row) + 1;
-      }
-
-      this.IsRunning = true;
-      this.Done = 0;
-      this.Total = this.queue.Count;
-      this.ForgetBoardItem();
-
-      this.StartNext();
+      this.Start(jobs);
     }
 
     /// <summary>
@@ -323,6 +332,28 @@ namespace MarketTerror.Services
     private static string Gil(double value)
     {
       return value.ToString("N0", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>
+    /// Queues up a run's listings and sets it going.
+    /// </summary>
+    /// <param name="jobs">The listings to buy.</param>
+    private void Start(IEnumerable<BuyJob> jobs)
+    {
+      this.outstanding.Clear();
+
+      foreach (var job in this.Order(jobs))
+      {
+        this.queue.Enqueue(job);
+        this.outstanding[job.Row] = this.outstanding.GetValueOrDefault(job.Row) + 1;
+      }
+
+      this.IsRunning = true;
+      this.Done = 0;
+      this.Total = this.queue.Count;
+      this.ForgetBoardItem();
+
+      this.StartNext();
     }
 
     private IEnumerable<BuyJob> Order(IEnumerable<BuyJob> jobs)

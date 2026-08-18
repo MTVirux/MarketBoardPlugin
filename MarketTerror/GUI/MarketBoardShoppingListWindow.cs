@@ -435,7 +435,7 @@ namespace MarketTerror.GUI
 
         if (open)
         {
-          this.DrawPickRows(item, priceWidth, qtyWidth, totalWidth, worldWidth);
+          this.DrawPickRows(item, k, priceWidth, qtyWidth, totalWidth, worldWidth);
         }
 
         k += 1;
@@ -982,14 +982,18 @@ namespace MarketTerror.GUI
     /// Draws a row under a shopping list row for each listing it has been told to buy.
     /// </summary>
     /// <param name="item">The row whose listings to draw.</param>
+    /// <param name="key">The row's place in the table, which its listings are identified by.</param>
     /// <param name="priceWidth">The width the price column was measured at.</param>
     /// <param name="qtyWidth">The width the quantity column was measured at.</param>
     /// <param name="totalWidth">The width the total column was measured at.</param>
     /// <param name="worldWidth">The width the world column was measured at.</param>
-    private void DrawPickRows(SavedItem item, float priceWidth, float qtyWidth, float totalWidth, float worldWidth)
+    private void DrawPickRows(SavedItem item, int key, float priceWidth, float qtyWidth, float totalWidth, float worldWidth)
     {
       // Where the row above puts its name, so a listing reads as hanging off it.
       var indent = ImGui.GetTreeNodeToLabelSpacing() + ImGui.GetTextLineHeight() + (ImGui.GetStyle().ItemSpacing.X * 2);
+
+      PickedListing? drop = null;
+      var index = 0;
 
       foreach (var pick in this.SortPicks(item))
       {
@@ -1005,6 +1009,16 @@ namespace MarketTerror.GUI
         ImGui.PushStyleColor(ImGuiCol.Text, dim ? this.theme.TextDim : this.theme.Text);
         ImGui.Text(pick.RetainerName.Length > 0 ? pick.RetainerName : "Unnamed retainer");
         ImGui.PopStyleColor();
+
+        var status = this.PickStatus(pick);
+
+        if (status.Text.Length > 0)
+        {
+          ImGui.SameLine();
+          ImGui.PushStyleColor(ImGuiCol.Text, status.Colour);
+          ImGui.Text(status.Text);
+          ImGui.PopStyleColor();
+        }
 
         ImGui.TableSetColumnIndex(1);
         ImGui.PushStyleColor(ImGuiCol.Text, gil);
@@ -1033,15 +1047,78 @@ namespace MarketTerror.GUI
 
         ImGui.TableSetColumnIndex(5);
 
-        var status = this.PickStatus(pick);
-
-        if (status.Text.Length > 0)
+        // A listing that has sold out from under the row can be neither bought nor travelled to.
+        if (!pick.Gone)
         {
-          ImGui.PushStyleColor(ImGuiCol.Text, status.Colour);
-          ImGui.Text(status.Text);
-          ImGui.PopStyleColor();
+          drop ??= this.DrawPickActions(item, pick, $"{key}_{index}");
         }
+
+        index += 1;
       }
+
+      if (drop != null)
+      {
+        this.Plugin.ShoppingList.SetPicks(item, item.Picks.Where(p => !ReferenceEquals(p, drop)).ToArray());
+      }
+    }
+
+    /// <summary>
+    /// Draws what can be done with one of a row's listings on its own.
+    /// </summary>
+    /// <param name="item">The row the listing belongs to.</param>
+    /// <param name="pick">The listing to draw the buttons for.</param>
+    /// <param name="id">What the buttons are identified by.</param>
+    /// <returns>The listing when it is to be taken off the row, otherwise null.</returns>
+    private PickedListing? DrawPickActions(SavedItem item, PickedListing pick, string id)
+    {
+      var buttonSize = new Vector2(ActionButtonWidth * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetTextLineHeight());
+      var idle = !this.Plugin.ShoppingListBuyer.IsRunning && !this.Plugin.ShoppingListBulkAdd.IsRunning;
+      var canBuy = this.Plugin.ShoppingListBuyer.CanBuy(item, out var buyBlockedReason) && idle;
+
+      ImGui.BeginDisabled(!canBuy);
+      ImGui.PushFont(UiBuilder.IconFont);
+      var buy = ImGui.Button($"{(char)FontAwesomeIcon.ShoppingCart}##shoplistpickbuy{id}", buttonSize);
+      ImGui.PopFont();
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip(
+        buyBlockedReason.Length > 0
+          ? buyBlockedReason
+          : $"Buy just this listing, for {this.Gil(PickPrice(pick) * pick.Quantity)}.",
+        ImGuiHoveredFlags.AllowWhenDisabled);
+
+      ImGui.SameLine();
+
+      var canTravel = this.Plugin.MarketBoardContext.CanTravel;
+
+      ImGui.BeginDisabled(pick.World.Length == 0 || !canTravel);
+      ImGui.PushFont(UiBuilder.IconFont);
+      var travel = ImGui.Button($"{(char)FontAwesomeIcon.Walking}##shoplistpickgo{id}", buttonSize);
+      ImGui.PopFont();
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip(
+        canTravel ? $"Go to the market board on {pick.World}." : "Log in to a character to travel.",
+        ImGuiHoveredFlags.AllowWhenDisabled);
+
+      ImGui.SameLine();
+
+      ImGui.BeginDisabled(!idle);
+      ImGui.PushFont(UiBuilder.IconFont);
+      var dropped = ImGui.Button($"{(char)FontAwesomeIcon.TrashAlt}##shoplistpickdel{id}", buttonSize);
+      ImGui.PopFont();
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Stop buying this listing.", ImGuiHoveredFlags.AllowWhenDisabled);
+
+      if (travel)
+      {
+        this.Plugin.MarketBoardContext.GoToMarketBoard(pick.World, item.SourceItem, true);
+      }
+
+      if (buy)
+      {
+        this.Plugin.ShoppingListBuyer.BuyPick(item, pick);
+      }
+
+      return dropped ? pick : null;
     }
 
     /// <summary>
