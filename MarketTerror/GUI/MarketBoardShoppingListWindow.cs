@@ -595,7 +595,7 @@ namespace MarketTerror.GUI
     /// <returns>The stack size as it reads in the table.</returns>
     private static string PickQtyText(PickedListing pick)
     {
-      return Count(pick.Quantity, pick.Hq);
+      return $"{Count(pick.Quantity)} {(pick.Hq ? "HQ" : "NQ")}";
     }
 
     /// <summary>
