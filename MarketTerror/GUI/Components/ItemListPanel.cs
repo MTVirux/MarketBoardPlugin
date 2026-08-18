@@ -11,6 +11,7 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
   using Lumina.Excel.Sheets;
+  using MarketTerror.Models.ShoppingList;
   using MarketTerror.Services;
 
   /// <summary>
@@ -307,7 +308,7 @@ namespace MarketTerror.GUI.Components
 
           if (ImGui.Selectable("Add to the shopping list"))
           {
-            this.context.TryAddCheapestToShoppingList(item.Value, false);
+            this.context.TryAddCheapestToShoppingList(item.Value);
           }
 
           this.context.DrawListsMenu(item.Value.RowId);
@@ -401,7 +402,7 @@ namespace MarketTerror.GUI.Components
 
               if (ImGui.Selectable("Add to the shopping list"))
               {
-                this.context.TryAddCheapestToShoppingList(item, true);
+                this.context.TryAddCheapestToShoppingList(item);
               }
 
               this.context.DrawListsMenu(item.RowId);
@@ -426,10 +427,14 @@ namespace MarketTerror.GUI.Components
       {
         // Only the open category pays for these, and a category can hold thousands of items.
         var buyList = this.context.Plugin.ShoppingList;
-        var listed = buyList.Select(s => s.SourceItem.RowId).ToHashSet();
+        var listed = buyList.Select(e => e.SourceItem.RowId).ToHashSet();
 
-        // A row added straight from a listing was never priced, so it does not stand in for one.
-        var priced = buyList.Where(s => !s.IsDirect).Select(s => s.SourceItem.RowId).ToHashSet();
+        // A direct or conditional entry buys particular listings, so it does not stand in for the
+        // item being on the list at its cheapest.
+        var priced = buyList
+          .Where(e => e.Kind == ListingKind.Lowest)
+          .Select(e => e.SourceItem.RowId)
+          .ToHashSet();
 
         var missingFromBuyList = items.Where(i => !priced.Contains(i.RowId)).ToArray();
 
@@ -504,7 +509,7 @@ namespace MarketTerror.GUI.Components
 
         if (ImGui.Selectable("Add all to the shopping list"))
         {
-          bulkAdd.Start(categoryName, missing, scope.QueryTargets);
+          bulkAdd.Start(categoryName, missing, new ListingScope(scope.SelectedWorld, scope.Scope));
         }
 
         if (busy)

@@ -11,6 +11,7 @@ namespace MarketTerror.GUI
   using Dalamud.Interface.Windowing;
   using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
+  using MarketTerror.Models;
   using MarketTerror.Services;
 
   /// <summary>
@@ -139,6 +140,16 @@ namespace MarketTerror.GUI
       this.Checkbox("Watch for hovered item", "Automatically select the item hovered in any of the in-game inventory window after 1 second.", this.Plugin.Config.WatchForHovered, (v) => this.Plugin.Config.WatchForHovered = v);
 
       this.Checkbox("Skip already unlocked items when buying", "Never buy a shopping list row for a minion, mount, orchestrion roll or card this character has already unlocked.", this.Plugin.Config.SkipUnlockedWhenBuying, (v) => this.Plugin.Config.SkipUnlockedWhenBuying = v);
+
+      var grouping = (int)this.Plugin.Config.ShoppingListGrouping;
+
+      if (ImGui.Combo("Buy list grouping", ref grouping, "Items, then scopes\0Scopes, then items\0"))
+      {
+        this.Plugin.Config.ShoppingListGrouping = (ShoppingListGrouping)grouping;
+        this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
+      }
+
+      Utilities.HoverTooltip("Whether the buy list hangs each item's markets under the item, or each market's items under the market.");
 
       this.Checkbox("Terror skin", "Apply the Market Terror colour scheme to this plugin's windows. Turn it off to use your Dalamud theme.", this.Plugin.Config.TerrorSkinEnabled, (v) => this.Plugin.Config.TerrorSkinEnabled = v);
 

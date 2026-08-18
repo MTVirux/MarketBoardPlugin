@@ -6,7 +6,6 @@ namespace MarketTerror.GUI
 {
   using System;
   using System.Collections.Generic;
-  using System.Linq;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.ManagedFontAtlas;
   using Lumina.Excel.Sheets;
@@ -418,33 +417,29 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Adds the cheapest current listing of an item to the shopping list.
+    /// Adds an entry buying the cheapest listing of an item to the shopping list.
     /// </summary>
     /// <param name="item">The item to add.</param>
-    /// <param name="fallbackToSelectedWorld">
-    /// True to fall back to the selected world's name when the listing carries none, false to fall back to an empty string.
-    /// </param>
-    public void TryAddCheapestToShoppingList(Item item, bool fallbackToSelectedWorld)
+    /// <remarks>
+    /// The entry is filed under the buy list's own scope and carries no price of its own; the next
+    /// refresh is what tells it which listing it buys.
+    /// </remarks>
+    public void TryAddCheapestToShoppingList(Item item)
     {
-      if (!this.Worlds.HasSelection)
+      var picker = this.Plugin.ShoppingListScope;
+
+      if (!picker.HasSelection)
       {
         return;
       }
 
-      var entry = SavedItem.FromCheapestListing(
-        item,
-        this.MarketData.MarketData,
-        !this.Config.NoGilSalesTax,
-        fallbackToSelectedWorld ? this.Worlds.QueryTarget : string.Empty);
+      var scope = new ListingScope(picker.SelectedWorld, picker.Scope);
 
-      if (entry != null)
-      {
-        this.Plugin.ShoppingList.Add(entry);
-      }
+      this.Plugin.ShoppingList.AddLowest(item, scope);
     }
 
     /// <summary>
-    /// Adds listings of one item to the shopping list, kept as they are instead of being priced again.
+    /// Adds listings of one item to the shopping list, kept as they are instead of being chosen again.
     /// </summary>
     /// <param name="item">The item the listings belong to.</param>
     /// <param name="listings">The listings to add.</param>
@@ -452,12 +447,23 @@ namespace MarketTerror.GUI
     {
       ArgumentNullException.ThrowIfNull(listings);
 
+      var picker = this.Plugin.ShoppingListScope;
+
+      if (!picker.HasSelection)
+      {
+        return;
+      }
+
+      var scope = new ListingScope(picker.SelectedWorld, picker.Scope);
+
       // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
       var fallbackWorld = this.Worlds.IsMultiWorld ? string.Empty : this.Worlds.QueryTarget;
       var withTax = !this.Config.NoGilSalesTax;
 
-      this.Plugin.ShoppingList.AddRange(
-        listings.Select(listing => SavedItem.FromListing(item, listing, withTax, fallbackWorld)));
+      foreach (var listing in listings)
+      {
+        this.Plugin.ShoppingList.AddDirect(item, scope, ResolvedListing.FromListing(listing, withTax, fallbackWorld));
+      }
     }
 
     /// <summary>

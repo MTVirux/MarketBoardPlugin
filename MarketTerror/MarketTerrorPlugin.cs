@@ -25,6 +25,7 @@ namespace MarketTerror
   using Lumina.Excel.Sheets;
 
   using MarketTerror.GUI;
+  using MarketTerror.GUI.ShoppingList;
   using MarketTerror.Helpers;
   using MarketTerror.Models;
   using MarketTerror.Models.ItemLists;
@@ -80,7 +81,7 @@ namespace MarketTerror
 
     private readonly MarketTerrorConfigWindow marketBoardConfigWindow;
 
-    private readonly MarketBoardShoppingListWindow marketBoardShoppingListWindow;
+    private readonly ShoppingListWindow shoppingListWindow;
 
     private readonly ThemeEditorWindow themeEditorWindow;
 
@@ -202,13 +203,13 @@ namespace MarketTerror
       this.boardManager = new BoardManager(this, this.defaultFontHandle, this.titleFontHandle, this.windowSystem);
       this.marketBoardConfigWindow = new MarketTerrorConfigWindow(this);
       this.ShoppingListBuyer = new ShoppingListBuyer(this);
-      this.marketBoardShoppingListWindow = new MarketBoardShoppingListWindow(this);
+      this.shoppingListWindow = new ShoppingListWindow(this);
       this.themeEditorWindow = new ThemeEditorWindow(this);
       this.integrationsWindow = new IntegrationsWindow(this.boardManager.MainWindow.Context);
 
       this.windowSystem.AddWindow(this.boardManager.MainWindow);
       this.windowSystem.AddWindow(this.marketBoardConfigWindow);
-      this.windowSystem.AddWindow(this.marketBoardShoppingListWindow);
+      this.windowSystem.AddWindow(this.shoppingListWindow);
       this.windowSystem.AddWindow(this.themeEditorWindow);
       this.windowSystem.AddWindow(this.integrationsWindow);
 
@@ -449,7 +450,7 @@ namespace MarketTerror
     /// </summary>
     public void ToggleShoppingList()
     {
-      this.marketBoardShoppingListWindow.ToggleShown();
+      this.shoppingListWindow.ToggleShown();
     }
 
     /// <summary>
@@ -473,7 +474,7 @@ namespace MarketTerror
         this.boardManager.SaveLayout();
         this.boardManager.Dispose();
         this.windowSystem.RemoveAllWindows();
-        this.marketBoardShoppingListWindow.Dispose();
+        this.shoppingListWindow.Dispose();
         this.defaultFontHandle.Dispose();
         this.titleFontHandle.Dispose();
 
@@ -580,6 +581,14 @@ namespace MarketTerror
         favorites.ItemIds.AddRange(this.Config.Favorites);
         this.Config.ItemLists.Add(favorites);
         this.Config.Favorites.Clear();
+      }
+
+      // The buy list stopped being a row per item and became an entry per listing rule, so there is
+      // nothing in the old shape worth reading back.
+      if (this.Config.ShoppingList.Count > 0)
+      {
+        this.Config.ShoppingList.Clear();
+        this.ChatGui.Print("MarketTerror: the buy list was reset by the rebuild of shopping lists.");
       }
 
       this.Config.Version = MarketTerrorConfig.CurrentVersion;
@@ -693,7 +702,7 @@ namespace MarketTerror
       {
         if (BuyListCommands.Contains(arguments.Trim(), StringComparer.OrdinalIgnoreCase))
         {
-          this.marketBoardShoppingListWindow.ToggleShown();
+          this.shoppingListWindow.ToggleShown();
         }
         else if (uint.TryParse(arguments, out var itemId))
         {

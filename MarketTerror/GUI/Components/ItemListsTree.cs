@@ -11,6 +11,7 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Bindings.ImGui;
   using Lumina.Excel.Sheets;
   using MarketTerror.Models.ItemLists;
+  using MarketTerror.Models.ShoppingList;
 
   /// <summary>
   /// The item lists the user has made, drawn as one collapsible node each.
@@ -150,7 +151,7 @@ namespace MarketTerror.GUI.Components
 
           if (ImGui.Selectable("Add to the shopping list"))
           {
-            this.context.TryAddCheapestToShoppingList(item.Value, false);
+            this.context.TryAddCheapestToShoppingList(item.Value);
           }
 
           this.context.DrawListsMenu(id);
@@ -434,14 +435,15 @@ namespace MarketTerror.GUI.Components
       var listed = new HashSet<uint>();
       var priced = new HashSet<uint>();
 
-      foreach (var saved in plugin.ShoppingList)
+      foreach (var entry in plugin.ShoppingList)
       {
-        listed.Add(saved.SourceItem.RowId);
+        listed.Add(entry.SourceItem.RowId);
 
-        // A row added straight from a listing was never priced, so it does not stand in for one.
-        if (!saved.IsDirect)
+        // A direct or conditional entry buys particular listings, so it does not stand in for the
+        // item being on the list at its cheapest.
+        if (entry.Kind == ListingKind.Lowest)
         {
-          priced.Add(saved.SourceItem.RowId);
+          priced.Add(entry.SourceItem.RowId);
         }
       }
 
@@ -477,7 +479,7 @@ namespace MarketTerror.GUI.Components
 
         if (ImGui.Selectable("Add all to the shopping list"))
         {
-          bulkAdd.Start(list.Name, missing, scope.QueryTargets);
+          bulkAdd.Start(list.Name, missing, new ListingScope(scope.SelectedWorld, scope.Scope));
         }
 
         ImGui.EndDisabled();
