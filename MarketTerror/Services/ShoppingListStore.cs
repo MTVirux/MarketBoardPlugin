@@ -40,6 +40,7 @@ namespace MarketTerror.Services
           {
             Unlisted = stored.Unlisted,
             IsDirect = stored.IsDirect,
+            Limit = stored.Limit?.Clone(),
           };
 
           entry.Picks.AddRange(stored.Picks.Select(p => p.ToPick()));
@@ -116,9 +117,10 @@ namespace MarketTerror.Services
       {
         var existing = this.FindRefreshable(entry.SourceItem.RowId);
 
-        if (existing == null || existing.HasPicks)
+        if (existing == null || existing.HasPicks || existing.IsLimited)
         {
-          // A picked row is priced by its picks, which the pick refresh updates on their own.
+          // A picked row is priced by its picks, which the pick refresh updates on their own, and a
+          // limited one by whatever its rule sweeps up - never by the cheapest listing in the scope.
           continue;
         }
 
@@ -277,6 +279,30 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
+    /// Replaces the standing rule that picks a row's listings, along with the listings it chose.
+    /// </summary>
+    /// <param name="item">The row to set the rule on.</param>
+    /// <param name="limit">The rule, or null to go back to picking the listings by hand.</param>
+    /// <param name="picks">The listings the rule chose, or the ones ticked by hand when there is no rule.</param>
+    public void SetLimit(SavedItem item, ListingLimit? limit, IEnumerable<PickedListing> picks)
+    {
+      ArgumentNullException.ThrowIfNull(item);
+
+      item.Limit = limit;
+
+      if (limit == null)
+      {
+        item.SetPicks(picks);
+      }
+      else
+      {
+        item.SetSweptPicks(picks);
+      }
+
+      this.Save();
+    }
+
+    /// <summary>
     /// Writes the list out after something changed a row in place.
     /// </summary>
     public void Persist()
@@ -343,7 +369,10 @@ namespace MarketTerror.Services
         // A picked row's price, world, stack size and quality are read off its picks, so these four
         // are its summary rather than a listing. Nothing reads them back while picks are on the row,
         // and taking the last pick off rebuilds them from the picks that were there.
-        var row = new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted, item.Quantity, item.Hq, item.IsDirect);
+        var row = new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted, item.Quantity, item.Hq, item.IsDirect)
+        {
+          Limit = item.Limit?.Clone(),
+        };
         row.Picks.AddRange(item.Picks.Select(p => new StoredPick(p)));
         stored.Add(row);
       }

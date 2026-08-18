@@ -20,13 +20,16 @@ namespace MarketTerror.GUI.Components
   using MarketTerror.Helpers;
   using MarketTerror.Models.ShoppingList;
   using MarketTerror.Models.Universalis;
+  using MarketTerror.Services;
 
   /// <summary>
   /// The popup that chooses which Market Board listings a shopping list row buys.
   /// </summary>
   /// <remarks>
   /// Nothing is ticked for you: the row buys the listings that are ticked here and nothing else, and
-  /// its price, stack size, total and world are read back off them.
+  /// its price, stack size, total and world are read back off them. A row can hand that job to a
+  /// listing limit instead, which ticks everything under a price for as long as it fits under a total
+  /// and does so again every time the row is priced.
   /// </remarks>
   public sealed class ListingPicker : IDisposable
   {
@@ -54,6 +57,14 @@ namespace MarketTerror.GUI.Components
 
     private CancellationTokenSource? cancellation;
 
+    /// <summary>
+    /// The rule being edited, or null while the listings are being ticked by hand. A copy, so a popup
+    /// that is cancelled leaves the row's own rule alone.
+    /// </summary>
+    private ListingLimit? draft;
+
+    private ListingLimitScope? draftScope;
+
     private bool isDisposed;
 
     /// <summary>
@@ -64,6 +75,23 @@ namespace MarketTerror.GUI.Components
     {
       this.plugin = plugin ?? throw new ArgumentNullException(nameof(plugin));
     }
+
+    /// <summary>
+    /// Gets the markets the popup fetches from, which is the shopping list's scope unless the rule
+    /// being edited has been pointed somewhere else.
+    /// </summary>
+    private IReadOnlyList<string> Targets =>
+      this.draft is { HasOwnScope: true } && this.draftScope != null
+        ? this.draftScope.QueryTargets
+        : this.plugin.ShoppingListScope.QueryTargets;
+
+    /// <summary>
+    /// Gets the label of the scope the popup fetches from.
+    /// </summary>
+    private string ScopeLabel =>
+      this.draft is { HasOwnScope: true } && this.draftScope != null
+        ? this.draftScope.SelectedDisplayName
+        : this.plugin.ShoppingListScope.SelectedDisplayName;
 
     /// <summary>
     /// Opens the popup for a row and starts fetching the listings to choose from.
@@ -77,17 +105,16 @@ namespace MarketTerror.GUI.Components
 
       this.row = item;
       this.opening = true;
-      this.loading = true;
       this.failure = string.Empty;
       this.candidates.Clear();
+
+      this.draft = item.Limit?.Clone();
+      this.draftScope = this.draft == null ? null : new ListingLimitScope(this.plugin, this.draft);
 
       // What the row already buys, so closing the popup without a fetch landing changes nothing.
       this.candidates.AddRange(item.Picks.Select(pick => new Candidate(pick, true)));
 
-      this.cancellation = new CancellationTokenSource();
-      var token = this.cancellation.Token;
-
-      _ = Task.Run(() => this.Fetch(item, token), token);
+      this.StartFetch();
     }
 
     /// <summary>
@@ -117,7 +144,7 @@ namespace MarketTerror.GUI.Components
       }
 
       var scale = ImGui.GetIO().FontGlobalScale;
-      ImGui.SetNextWindowSize(new Vector2(620 * scale, 460 * scale), ImGuiCond.Appearing);
+      ImGui.SetNextWindowSize(new Vector2(720 * scale, 480 * scale), ImGuiCond.Appearing);
 
       var open = true;
 
@@ -128,9 +155,7 @@ namespace MarketTerror.GUI.Components
         return;
       }
 
-      ImGui.PushStyleColor(ImGuiCol.Text, theme.TextDim);
-      ImGui.Text(this.plugin.ShoppingListScope.SelectedDisplayName);
-      ImGui.PopStyleColor();
+      this.DrawLimit(theme);
 
       ImGui.Separator();
 
@@ -180,6 +205,28 @@ namespace MarketTerror.GUI.Components
       this.cancellation = null;
     }
 
+    /// <summary>
+    /// Fetches the listings of the open row across the scope in force, dropping any fetch still in flight.
+    /// </summary>
+    private void StartFetch()
+    {
+      if (this.row == null)
+      {
+        return;
+      }
+
+      this.CancelFetch();
+
+      var item = this.row;
+      var targets = this.Targets.ToArray();
+
+      this.loading = true;
+      this.cancellation = new CancellationTokenSource();
+      var token = this.cancellation.Token;
+
+      _ = Task.Run(() => this.Fetch(item, targets, token), token);
+    }
+
     private void Close()
     {
       this.CancelFetch();
@@ -187,17 +234,19 @@ namespace MarketTerror.GUI.Components
       this.loading = false;
       this.candidates.Clear();
       this.failure = string.Empty;
+      this.draft = null;
+      this.draftScope = null;
     }
 
     /// <summary>
-    /// Fetches every listing of the row's item across the shopping list's scope.
+    /// Fetches every listing of the row's item across the scope in force.
     /// </summary>
     /// <param name="item">The row being picked for.</param>
+    /// <param name="targets">The worlds, data centres or regions to fetch from.</param>
     /// <param name="token">Cancels the fetch when the popup closes.</param>
     /// <returns>A task that completes once the candidates have been handed to the framework thread.</returns>
-    private async Task Fetch(SavedItem item, CancellationToken token)
+    private async Task Fetch(SavedItem item, IReadOnlyList<string> targets, CancellationToken token)
     {
-      var targets = this.plugin.ShoppingListScope.QueryTargets;
       var found = new List<(MarketDataListing Listing, string Target)>();
       var error = string.Empty;
 
@@ -265,35 +314,211 @@ namespace MarketTerror.GUI.Components
         fresh.Add(new Candidate(PickedListing.FromListing(listing, withTax, target), false));
       }
 
-      // Everything the row already buys stays on the list, ticked, whether or not it is still on sale.
-      // One retainer can have two stacks that look alike, so a candidate only answers for one pick.
-      var claimed = new HashSet<Candidate>();
-
-      foreach (var pick in item.Picks)
+      // A rule picks the row again from what is on sale now, so what it used to buy says nothing.
+      if (this.draft == null)
       {
-        var match = fresh.Find(c => !claimed.Contains(c) && pick.SameAs(c.Pick));
+        // Everything the row already buys stays on the list, ticked, whether or not it is still on sale.
+        // One retainer can have two stacks that look alike, so a candidate only answers for one pick.
+        var claimed = new HashSet<Candidate>();
 
-        if (match != null)
+        foreach (var pick in item.Picks)
         {
-          // The fresh candidate carries the listing's current price, which is the one that gets paid.
-          claimed.Add(match);
-          match.Ticked = true;
-          continue;
+          var match = fresh.Find(c => !claimed.Contains(c) && pick.SameAs(c.Pick));
+
+          if (match != null)
+          {
+            // The fresh candidate carries the listing's current price, which is the one that gets paid.
+            claimed.Add(match);
+            match.Ticked = true;
+            continue;
+          }
+
+          // A copy, so a popup that is cancelled leaves the row exactly as it found it.
+          var missing = new PickedListing(pick.Price, pick.Quantity, pick.Hq, pick.World, pick.RetainerName, pick.ListingId)
+          {
+            Gone = true,
+          };
+
+          fresh.Add(new Candidate(missing, true));
         }
-
-        // A copy, so a popup that is cancelled leaves the row exactly as it found it.
-        var missing = new PickedListing(pick.Price, pick.Quantity, pick.Hq, pick.World, pick.RetainerName, pick.ListingId)
-        {
-          Gone = true,
-        };
-
-        fresh.Add(new Candidate(missing, true));
       }
 
       this.candidates.Clear();
       this.candidates.AddRange(fresh);
       this.loading = false;
       this.failure = error;
+      this.ApplyDraft();
+    }
+
+    /// <summary>
+    /// Ticks the listings the rule being edited buys and unticks the rest, leaving the ticks alone
+    /// while the listings are being picked by hand.
+    /// </summary>
+    private void ApplyDraft()
+    {
+      if (this.draft == null)
+      {
+        return;
+      }
+
+      var chosen = this.draft.Apply(this.candidates.Select(c => c.Pick)).ToHashSet();
+
+      foreach (var candidate in this.candidates)
+      {
+        candidate.Ticked = chosen.Contains(candidate.Pick);
+      }
+    }
+
+    /// <summary>
+    /// Hands the row's listings over to a rule, or takes them back to being ticked by hand.
+    /// </summary>
+    /// <param name="limited">True to pick the listings by rule.</param>
+    private void ToggleLimit(bool limited)
+    {
+      if (limited == (this.draft != null))
+      {
+        return;
+      }
+
+      if (!limited)
+      {
+        this.draft = null;
+        this.draftScope = null;
+        return;
+      }
+
+      this.draft = this.row?.Limit?.Clone() ?? new ListingLimit();
+      this.draftScope = new ListingLimitScope(this.plugin, this.draft);
+
+      // A rule only ever picks what is on sale, so the sold out listings have nothing left to say.
+      this.candidates.RemoveAll(c => c.Pick.Gone);
+      this.ApplyDraft();
+
+      if (this.draft.HasOwnScope)
+      {
+        this.StartFetch();
+      }
+    }
+
+    /// <summary>
+    /// Points the rule at a market of its own, or back at the shopping list's.
+    /// </summary>
+    /// <param name="own">True to give the rule its own scope.</param>
+    private void SetOwnScope(bool own)
+    {
+      if (this.draft == null || this.draft.HasOwnScope == own)
+      {
+        return;
+      }
+
+      this.draft.HasOwnScope = own;
+
+      if (own && this.draft.ScopeWorld.Length == 0)
+      {
+        // Start where the shopping list is, so ticking the box alone changes nothing.
+        this.draft.Scope = this.plugin.ShoppingListScope.Scope;
+        this.draft.ScopeWorld = this.plugin.ShoppingListScope.SelectedWorld;
+      }
+
+      this.StartFetch();
+    }
+
+    /// <summary>
+    /// Draws the listing limit editor, or the scope the listings came from when there is no rule.
+    /// </summary>
+    /// <param name="theme">The theme to draw in.</param>
+    private void DrawLimit(TerrorTheme theme)
+    {
+      var limited = this.draft != null;
+
+      if (ImGui.Checkbox("Limit listings", ref limited))
+      {
+        this.ToggleLimit(limited);
+      }
+
+      Utilities.HoverTooltip(
+        "Buy every listing at or under a price, cheapest first, for as long as they fit under a total."
+        + "\nThe row is picked again from scratch every time it is priced.");
+
+      ImGui.SameLine();
+
+      if (this.draft == null)
+      {
+        ImGui.PushStyleColor(ImGuiCol.Text, theme.TextDim);
+        ImGui.Text(this.ScopeLabel);
+        ImGui.PopStyleColor();
+        return;
+      }
+
+      var scale = ImGui.GetIO().FontGlobalScale;
+      var width = 110 * scale;
+      var unit = (int)Math.Clamp(this.draft.MaxUnitPrice, 0, int.MaxValue);
+      var total = (int)Math.Clamp(this.draft.MaxTotal, 0, int.MaxValue);
+
+      ImGui.Text("under");
+      ImGui.SameLine();
+      ImGui.SetNextItemWidth(width);
+
+      if (ImGui.InputInt("##limitUnit", ref unit, 0, 0))
+      {
+        this.draft.MaxUnitPrice = Math.Max(0, unit);
+        this.ApplyDraft();
+      }
+
+      Utilities.HoverTooltip("The most that may be paid per unit. 0 for no limit on the price.");
+
+      ImGui.SameLine();
+      ImGui.Text("a unit, up to");
+      ImGui.SameLine();
+      ImGui.SetNextItemWidth(width);
+
+      if (ImGui.InputInt("##limitTotal", ref total, 0, 0))
+      {
+        this.draft.MaxTotal = Math.Max(0, total);
+        this.ApplyDraft();
+      }
+
+      Utilities.HoverTooltip("The most that may be spent on this row in all. 0 for no limit on the total.");
+
+      ImGui.SameLine();
+      ImGui.Text("gil in all");
+
+      this.DrawLimitScope(theme, scale);
+    }
+
+    /// <summary>
+    /// Draws the market the rule sweeps, which is the shopping list's until it is given one of its own.
+    /// </summary>
+    /// <param name="theme">The theme to draw in.</param>
+    /// <param name="scale">The font scale the popup is drawn at.</param>
+    private void DrawLimitScope(TerrorTheme theme, float scale)
+    {
+      var own = this.draft!.HasOwnScope;
+
+      if (ImGui.Checkbox("Own scope", ref own))
+      {
+        this.SetOwnScope(own);
+      }
+
+      Utilities.HoverTooltip("Sweep a market of this row's own rather than the one the shopping list is set to.");
+
+      ImGui.SameLine();
+
+      if (!own || this.draftScope == null)
+      {
+        ImGui.PushStyleColor(ImGuiCol.Text, theme.TextDim);
+        ImGui.Text(this.ScopeLabel);
+        ImGui.PopStyleColor();
+        return;
+      }
+
+      var label = this.draftScope.SelectedDisplayName;
+      var comboWidth = Math.Max(
+        140 * scale,
+        ImGui.CalcTextSize(label).X + ImGui.GetFrameHeight() + (ImGui.GetStyle().FramePadding.X * 2));
+
+      ImGui.SetNextItemWidth(Math.Min(comboWidth, Math.Max(120 * scale, ImGui.GetContentRegionAvail().X)));
+      ScopePicker.Draw("##limitScope", this.draftScope, this.StartFetch);
     }
 
     private void DrawTable(TerrorTheme theme, float footerHeight)
@@ -346,9 +571,19 @@ namespace MarketTerror.GUI.Components
 
       var ticked = candidate.Ticked;
 
-      if (ImGui.Checkbox($"##pick{index}", ref ticked))
+      // The rule owns the ticks while one is on, so they only say what it chose.
+      ImGui.BeginDisabled(this.draft != null);
+
+      if (ImGui.Checkbox($"##pick{index}", ref ticked) && this.draft == null)
       {
         candidate.Ticked = ticked;
+      }
+
+      ImGui.EndDisabled();
+
+      if (this.draft != null)
+      {
+        Utilities.HoverTooltip("The listing limit picks this row. Untick it above to choose by hand.", ImGuiHoveredFlags.AllowWhenDisabled);
       }
 
       ImGui.TableSetColumnIndex(1);
@@ -399,9 +634,13 @@ namespace MarketTerror.GUI.Components
       var units = ticked.Sum(c => c.Pick.Quantity);
       var gil = ticked.Sum(c => c.Pick.Total);
 
-      var summary = ticked.Length == 0
-        ? "Nothing selected - saving takes every listing off this row."
-        : $"Selected: {units.ToString("N0", CultureInfo.CurrentCulture)} units over {ticked.Length} listings - {gil.ToString("N0", CultureInfo.CurrentCulture)} gil";
+      var summary = ticked.Length switch
+      {
+        0 when this.draft is { IsSet: false } => "Set a price or a total for the limit to pick anything.",
+        0 when this.draft != null => "Nothing in the scope is under the limit - saving leaves this row with nothing to buy.",
+        0 => "Nothing selected - saving takes every listing off this row.",
+        _ => $"Selected: {units.ToString("N0", CultureInfo.CurrentCulture)} units over {ticked.Length} listings - {gil.ToString("N0", CultureInfo.CurrentCulture)} gil",
+      };
 
       ImGui.PushStyleColor(ImGuiCol.Text, ticked.Length == 0 ? theme.TextDim : theme.GilText);
       ImGui.Text(summary);
@@ -418,7 +657,7 @@ namespace MarketTerror.GUI.Components
 
       if (ImGui.Button("Save"))
       {
-        this.plugin.ShoppingList.SetPicks(item, ticked.Select(c => c.Pick));
+        this.plugin.ShoppingList.SetLimit(item, this.draft, ticked.Select(c => c.Pick));
         this.Close();
         ImGui.CloseCurrentPopup();
       }
@@ -435,7 +674,7 @@ namespace MarketTerror.GUI.Components
 
       ImGui.SameLine();
 
-      ImGui.BeginDisabled(ticked.Length == 0);
+      ImGui.BeginDisabled(ticked.Length == 0 || this.draft != null);
 
       if (ImGui.Button("Clear all"))
       {
@@ -446,7 +685,11 @@ namespace MarketTerror.GUI.Components
       }
 
       ImGui.EndDisabled();
-      Utilities.HoverTooltip("Untick every listing. Save afterwards to take them off the row.", ImGuiHoveredFlags.AllowWhenDisabled);
+      Utilities.HoverTooltip(
+        this.draft != null
+          ? "The listing limit picks this row, so there is nothing to untick."
+          : "Untick every listing. Save afterwards to take them off the row.",
+        ImGuiHoveredFlags.AllowWhenDisabled);
 
       if (this.loading && this.candidates.Count > 0)
       {

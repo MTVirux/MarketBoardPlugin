@@ -297,6 +297,15 @@ namespace MarketTerror.Services
       this.built = false;
     }
 
+    /// <summary>
+    /// Writes the selection out after it moved.
+    /// </summary>
+    protected virtual void Save()
+    {
+      this.InvalidateOptions();
+      this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
+    }
+
     private static IEnumerable<ScopeOption> BuildOptions(WorldCatalogue catalogue, WorldEntry anchor, string region, string marked)
     {
       // Oceania already reaches itself at plain region scope, so there is nothing to add on.
@@ -410,12 +419,6 @@ namespace MarketTerror.Services
       this.Save();
 
       return entry;
-    }
-
-    private void Save()
-    {
-      this.InvalidateOptions();
-      this.Plugin.PluginInterface.SavePluginConfig(this.Plugin.Config);
     }
   }
 }

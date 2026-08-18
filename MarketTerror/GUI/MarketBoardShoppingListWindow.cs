@@ -367,9 +367,10 @@ namespace MarketTerror.GUI
 
         // Picks are kept honest by the scope refresh, which a direct listing opts out of.
         ImGui.BeginDisabled(item.IsDirect || !idle || !this.Plugin.ShoppingListScope.HasSelection);
-        ImGui.PushStyleColor(ImGuiCol.Text, item.HasPicks ? this.theme.BuyBargain : this.theme.Text);
+        ImGui.PushStyleColor(ImGuiCol.Text, item.HasPicks || item.IsLimited ? this.theme.BuyBargain : this.theme.Text);
         ImGui.PushFont(UiBuilder.IconFont);
-        var pick = ImGui.Button($"{(char)FontAwesomeIcon.ListUl}##shoplistpick" + k, buttonSize);
+        var pickIcon = item.IsLimited ? FontAwesomeIcon.Filter : FontAwesomeIcon.ListUl;
+        var pick = ImGui.Button($"{(char)pickIcon}##shoplistpick" + k, buttonSize);
         ImGui.PopFont();
         ImGui.PopStyleColor();
         ImGui.EndDisabled();
@@ -587,6 +588,24 @@ namespace MarketTerror.GUI
       var listings = total == 1 ? "1 listing" : $"{total} listings";
 
       return live == total ? listings : $"{listings}, {total - live} gone";
+    }
+
+    /// <summary>
+    /// Says what a row's listing limit buys.
+    /// </summary>
+    /// <param name="limit">The rule the row carries.</param>
+    /// <returns>The sentence a tooltip opens with.</returns>
+    private static string LimitText(ListingLimit limit)
+    {
+      var price = limit.MaxUnitPrice > 0
+        ? $"every listing under {limit.MaxUnitPrice.ToString("N0", CultureInfo.CurrentCulture)} a unit"
+        : "the cheapest listings";
+
+      var total = limit.MaxTotal > 0
+        ? $", up to {limit.MaxTotal.ToString("N0", CultureInfo.CurrentCulture)} gil in all."
+        : ".";
+
+      return $"Buys {price}{total}";
     }
 
     /// <summary>
@@ -1174,7 +1193,11 @@ namespace MarketTerror.GUI
       var dropped = ImGui.Button($"{(char)FontAwesomeIcon.TrashAlt}##shoplistpickdel{id}", buttonSize);
       ImGui.PopFont();
       ImGui.EndDisabled();
-      Utilities.HoverTooltip("Stop buying this listing.", ImGuiHoveredFlags.AllowWhenDisabled);
+      Utilities.HoverTooltip(
+        item.IsLimited
+          ? "Stop buying this listing until the row is priced again and the limit picks it up."
+          : "Stop buying this listing.",
+        ImGuiHoveredFlags.AllowWhenDisabled);
 
       if (travel)
       {
@@ -1262,6 +1285,11 @@ namespace MarketTerror.GUI
       if (!this.Plugin.ShoppingListScope.HasSelection)
       {
         return "Pick a scope first so the listings to choose from can be fetched.";
+      }
+
+      if (item.Limit != null)
+      {
+        return $"{LimitText(item.Limit)} {PickCountText(item)} under it right now.";
       }
 
       return item.HasPicks

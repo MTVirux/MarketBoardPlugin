@@ -161,6 +161,19 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
+    /// Drops the listings a scope handed back twice.
+    /// </summary>
+    /// <param name="listings">The listings a row was priced against.</param>
+    /// <returns>One listing per Universalis listing id, and everything without an id.</returns>
+    /// <remarks>A scope can ask a world and its data centre in the same breath, which returns both.</remarks>
+    private static IEnumerable<PickedListing> Distinct(IEnumerable<PickedListing> listings)
+    {
+      var seen = new HashSet<string>(StringComparer.Ordinal);
+
+      return listings.Where(l => l.ListingId.Length == 0 || seen.Add(l.ListingId));
+    }
+
+    /// <summary>
     /// Puts a row that has lost every listing it was buying back on the cheapest one still on sale.
     /// </summary>
     /// <param name="row">The row to price again.</param>
@@ -198,7 +211,7 @@ namespace MarketTerror.Services
       var token = this.cancellation.Token;
       var queued = items.ToArray();
       var targets = queryTargets.ToArray();
-      var picked = Array.Empty<SavedItem>();
+      var picked = Array.Empty<(SavedItem Row, string[] Targets)>();
       var quality = new Dictionary<uint, bool>();
 
       if (refresh)
@@ -212,9 +225,14 @@ namespace MarketTerror.Services
 
         // The bulk query only ever comes back with one listing an item, which cannot say whether a
         // particular picked listing is still there, so those rows are checked one at a time after it.
-        picked = this.plugin.ShoppingList.Where(row => row.HasPicks && ids.Contains(row.SourceItem.RowId)).ToArray();
+        // A limited row joins them even with nothing picked yet, since its rule sweeps the same listings.
+        // Its scope is read here, on the framework thread, rather than from the job.
+        picked = this.plugin.ShoppingList
+          .Where(row => (row.HasPicks || row.IsLimited) && ids.Contains(row.SourceItem.RowId))
+          .Select(row => (Row: row, Targets: ListingLimitScope.TargetsFor(this.plugin, row, targets).ToArray()))
+          .ToArray();
 
-        foreach (var row in this.plugin.ShoppingList.Where(row => !row.HasPicks && ids.Contains(row.SourceItem.RowId)))
+        foreach (var row in this.plugin.ShoppingList.Where(row => !row.HasPicks && !row.IsLimited && ids.Contains(row.SourceItem.RowId)))
         {
           quality[row.SourceItem.RowId] = row.Hq;
         }
@@ -229,7 +247,7 @@ namespace MarketTerror.Services
       this.job = Task.Run(() => this.Run(queued, targets, picked, quality, token), token);
     }
 
-    private async Task Run(Item[] items, string[] targets, SavedItem[] picked, IReadOnlyDictionary<uint, bool> quality, CancellationToken token)
+    private async Task Run(Item[] items, string[] targets, (SavedItem Row, string[] Targets)[] picked, IReadOnlyDictionary<uint, bool> quality, CancellationToken token)
     {
       var firstRequest = true;
       var queries = 0;
@@ -300,14 +318,14 @@ namespace MarketTerror.Services
           }
         }
 
-        foreach (var row in picked)
+        foreach (var (row, rowTargets) in picked)
         {
           token.ThrowIfCancellationRequested();
 
           var fresh = new List<PickedListing>();
           var complete = true;
 
-          foreach (var target in targets)
+          foreach (var target in rowTargets)
           {
             await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
             queries++;
@@ -395,6 +413,27 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
+    /// Picks a limited row's listings again from scratch, taking whatever is under its rule right now.
+    /// </summary>
+    /// <param name="row">The row to sweep.</param>
+    /// <param name="fresh">Every listing of the item across the row's scope.</param>
+    /// <param name="complete">True when every target answered, so the scope can be taken at its word.</param>
+    private void ApplyLimit(SavedItem row, IReadOnlyList<PickedListing> fresh, bool complete)
+    {
+      // A request that never landed cannot say what is on sale, so the row keeps what it already buys.
+      if (complete)
+      {
+        row.SetSweptPicks(row.Limit!.Apply(Distinct(fresh)));
+      }
+
+      row.Outcome = BuyOutcome.None;
+      row.Refreshing = false;
+      this.Counted++;
+
+      this.plugin.ShoppingList.Persist();
+    }
+
+    /// <summary>
     /// Marks a picked row's listings against what is on sale now, dropping the ones that have sold out.
     /// </summary>
     /// <param name="row">The row to check.</param>
@@ -402,6 +441,12 @@ namespace MarketTerror.Services
     /// <param name="complete">True when every target answered, so the scope can be taken at its word.</param>
     private void ApplyPicks(SavedItem row, IReadOnlyList<PickedListing> fresh, bool complete)
     {
+      if (row.Limit != null)
+      {
+        this.ApplyLimit(row, fresh, complete);
+        return;
+      }
+
       // One retainer can have two stacks that look alike, so a listing only answers for one pick.
       var claimed = new HashSet<PickedListing>();
       var live = new List<PickedListing>();
