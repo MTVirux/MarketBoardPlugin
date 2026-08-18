@@ -160,6 +160,28 @@ namespace MarketTerror.Services
       }
     }
 
+    /// <summary>
+    /// Puts a row that has lost every listing it was buying back on the cheapest one still on sale.
+    /// </summary>
+    /// <param name="row">The row to price again.</param>
+    /// <param name="fresh">Every listing of the item across the scope.</param>
+    private static void RebaseOnCheapest(SavedItem row, IReadOnlyList<PickedListing> fresh)
+    {
+      var cheapest = fresh.Count == 0 ? null : fresh.MinBy(f => f.Price);
+
+      if (cheapest == null)
+      {
+        row.Unlisted = true;
+        return;
+      }
+
+      row.Price = cheapest.Price;
+      row.Quantity = cheapest.Quantity;
+      row.Hq = cheapest.Hq;
+      row.World = cheapest.World;
+      row.Unlisted = false;
+    }
+
     private void StartJob(string categoryName, IReadOnlyList<Item> items, IReadOnlyList<string> queryTargets, bool refresh)
     {
       ArgumentNullException.ThrowIfNull(items);
@@ -283,16 +305,25 @@ namespace MarketTerror.Services
           token.ThrowIfCancellationRequested();
 
           var fresh = new List<PickedListing>();
+          var complete = true;
 
           foreach (var target in targets)
           {
             await Task.Delay(ChunkDelayMilliseconds, token).ConfigureAwait(false);
             queries++;
 
-            fresh.AddRange(await this.FetchListings(row.SourceItem.RowId, target, token).ConfigureAwait(false));
+            var listings = await this.FetchListings(row.SourceItem.RowId, target, token).ConfigureAwait(false);
+
+            if (listings == null)
+            {
+              complete = false;
+              continue;
+            }
+
+            fresh.AddRange(listings);
           }
 
-          await this.plugin.Framework.RunOnFrameworkThread(() => this.ApplyPicks(row, fresh)).ConfigureAwait(false);
+          await this.plugin.Framework.RunOnFrameworkThread(() => this.ApplyPicks(row, fresh, complete)).ConfigureAwait(false);
         }
 
         elapsed.Stop();
@@ -340,8 +371,8 @@ namespace MarketTerror.Services
     /// <param name="itemId">The row id of the item to fetch.</param>
     /// <param name="target">The world, data centre or region to fetch from.</param>
     /// <param name="token">Cancels the fetch.</param>
-    /// <returns>The listings, or an empty list when the request could not be made.</returns>
-    private async Task<IReadOnlyList<PickedListing>> FetchListings(uint itemId, string target, CancellationToken token)
+    /// <returns>The listings, or null when the request could not be made.</returns>
+    private async Task<IReadOnlyList<PickedListing>?> FetchListings(uint itemId, string target, CancellationToken token)
     {
       try
       {
@@ -359,20 +390,21 @@ namespace MarketTerror.Services
       {
         // The row keeps the picks it has rather than having them all called gone by a failed request.
         this.plugin.Log.Warning(ex, $"Skipped checking the picked listings of item {itemId} on {target}.");
-        return Array.Empty<PickedListing>();
+        return null;
       }
     }
 
     /// <summary>
-    /// Marks a picked row's listings against what is on sale now.
+    /// Marks a picked row's listings against what is on sale now, dropping the ones that have sold out.
     /// </summary>
     /// <param name="row">The row to check.</param>
     /// <param name="fresh">Every listing of the item across the scope.</param>
-    private void ApplyPicks(SavedItem row, IReadOnlyList<PickedListing> fresh)
+    /// <param name="complete">True when every target answered, so the scope can be taken at its word.</param>
+    private void ApplyPicks(SavedItem row, IReadOnlyList<PickedListing> fresh, bool complete)
     {
       // One retainer can have two stacks that look alike, so a listing only answers for one pick.
       var claimed = new HashSet<PickedListing>();
-      var live = 0;
+      var live = new List<PickedListing>();
 
       foreach (var pick in row.Picks)
       {
@@ -389,12 +421,23 @@ namespace MarketTerror.Services
         pick.Price = match.Price;
         pick.Outcome = BuyOutcome.None;
         pick.Paid = null;
-        live++;
+        live.Add(pick);
       }
 
-      if (live > 0)
+      // A request that never landed cannot say a listing has sold out, so those picks are only marked
+      // gone and the row keeps them until it is priced again.
+      if (complete)
+      {
+        row.SetPicks(live);
+      }
+
+      if (live.Count > 0)
       {
         row.Unlisted = false;
+      }
+      else if (complete)
+      {
+        RebaseOnCheapest(row, fresh);
       }
 
       row.Outcome = BuyOutcome.None;
