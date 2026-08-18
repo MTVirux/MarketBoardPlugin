@@ -123,7 +123,7 @@ namespace MarketTerror.Helpers
 
       if (this.IsRunning)
       {
-        finished(BuyResult.Failed("another purchase is still running"));
+        finished(BuyResult.Failed("another purchase was still running, so this one never started"));
         return;
       }
 
@@ -152,7 +152,7 @@ namespace MarketTerror.Helpers
     {
       if (this.IsRunning)
       {
-        this.Finish(BuyResult.Failed("cancelled"));
+        this.Finish(BuyResult.Failed("the run was cancelled part way through this purchase"));
       }
     }
 
@@ -285,10 +285,10 @@ namespace MarketTerror.Helpers
           this.Finish(BuyResult.Failed(this.state switch
           {
             State.WaitingListings => Interlocked.Read(ref this.lastOfferingsTick) < this.startTick - EarlyArrivalMs
-              ? "the board never sent its listings"
-              : "the listings never settled",
-            State.WaitingConfirm => "the confirmation never appeared",
-            _ => "the purchase was never confirmed by the server",
+              ? "the board never sent its listings for this item, so there was nothing to buy off"
+              : "the board's listings were still coming in when the buy gave up waiting for them",
+            State.WaitingConfirm => "the board never asked to confirm the purchase after the listing was clicked",
+            _ => "the purchase was confirmed but the server never said it went through",
           }));
 
           return;
@@ -312,7 +312,7 @@ namespace MarketTerror.Helpers
       catch (Exception ex)
       {
         this.log.Error(ex, "The Market Board purchase state machine threw");
-        this.Finish(BuyResult.Failed("the purchase failed unexpectedly"));
+        this.Finish(BuyResult.Failed($"the purchase hit an unexpected error: {ex.Message}"));
       }
     }
 
@@ -449,7 +449,7 @@ namespace MarketTerror.Helpers
 
       if (index >= addon->Results->GetItemCount())
       {
-        this.Finish(BuyResult.Failed("the listing was not on the board's list"));
+        this.Finish(BuyResult.Failed($"the listing was in the search results but not among the {addon->Results->GetItemCount()} rows the board had drawn"));
         return;
       }
 
@@ -511,7 +511,9 @@ namespace MarketTerror.Helpers
       {
         this.log.Warning($"Declined a Market Board confirmation for \"{buy.ItemName}\": asked {asked:F0}, limit {buy.TotalLimit:F0}, prompt \"{prompt}\"");
         addon->AtkUnitBase.FireCallbackInt(NoButton);
-        this.Finish(BuyResult.Failed("the confirmation did not match the listing"));
+        this.Finish(BuyResult.Failed(namesItem
+          ? $"the board asked for {asked:N0} gil, more than the {buy.TotalLimit:N0} this listing may cost"
+          : $"the board asked to confirm something other than {buy.ItemName}"));
         return;
       }
 
@@ -537,7 +539,7 @@ namespace MarketTerror.Helpers
       {
         this.log.Warning($"Gave up on a Market Board purchase of \"{this.request!.ItemName}\": still being asked \"{prompt}\"");
         addon->AtkUnitBase.FireCallbackInt(NoButton);
-        this.Finish(BuyResult.Failed("the board kept asking questions"));
+        this.Finish(BuyResult.Failed($"the board kept asking questions instead of the price, the last being \"{prompt}\""));
         return;
       }
 
@@ -569,14 +571,26 @@ namespace MarketTerror.Helpers
     private unsafe string DescribeCheapest(InfoProxyItemSearch* proxy, bool withTax)
     {
       var buy = this.request!;
-      var cheapest = double.MaxValue;
+      var quality = buy.Hq ? "HQ" : "NQ";
+      var limit = buy.MaxUnitPrice.ToString("N0", CultureInfo.CurrentCulture);
+
+      var cheapestMatch = double.MaxValue;
+      var cheapestAnySize = double.MaxValue;
+      var taken = 0;
+      var wrongQuality = 0;
 
       for (var i = 0; i < (int)proxy->ListingCount; i++)
       {
         ref var listing = ref proxy->Listings[i];
 
-        if (listing.ItemId % HqItemIdOffset != buy.ItemId || listing.IsHqItem != buy.Hq || listing.Quantity == 0)
+        if (listing.ItemId % HqItemIdOffset != buy.ItemId || listing.Quantity == 0)
         {
+          continue;
+        }
+
+        if (listing.IsHqItem != buy.Hq)
+        {
+          wrongQuality++;
           continue;
         }
 
@@ -584,12 +598,46 @@ namespace MarketTerror.Helpers
           ? listing.UnitPrice + ((double)listing.TotalTax / listing.Quantity)
           : listing.UnitPrice;
 
-        cheapest = Math.Min(cheapest, unitPrice);
+        cheapestAnySize = Math.Min(cheapestAnySize, unitPrice);
+
+        if (listing.Quantity != buy.Quantity)
+        {
+          continue;
+        }
+
+        // A listing this run has already bought is off the board as far as the game is concerned.
+        if (this.boughtListings.Contains(listing.ListingId))
+        {
+          taken++;
+          continue;
+        }
+
+        cheapestMatch = Math.Min(cheapestMatch, unitPrice);
       }
 
-      return cheapest < double.MaxValue
-        ? $"cheapest {cheapest.ToString("N0", CultureInfo.CurrentCulture)}"
-        : "no matching listing";
+      if (cheapestMatch < double.MaxValue)
+      {
+        var found = cheapestMatch.ToString("N0", CultureInfo.CurrentCulture);
+        return $"the cheapest {quality} stack of {buy.Quantity} on the board was {found} per unit, over the {limit} this row will pay";
+      }
+
+      if (taken > 0)
+      {
+        return $"the only {quality} stack{(taken == 1 ? string.Empty : "s")} of {buy.Quantity} left had already been bought earlier in this run";
+      }
+
+      if (cheapestAnySize < double.MaxValue)
+      {
+        var other = cheapestAnySize.ToString("N0", CultureInfo.CurrentCulture);
+        return $"nobody was selling a {quality} stack of exactly {buy.Quantity}, only other stack sizes from {other} per unit";
+      }
+
+      if (wrongQuality > 0)
+      {
+        return $"every one of the {wrongQuality} listings on the board was {(buy.Hq ? "NQ" : "HQ")}, and this row wants {quality}";
+      }
+
+      return $"the board had no listing of {buy.ItemName} left at all";
     }
 
     private void Finish(BuyResult result)

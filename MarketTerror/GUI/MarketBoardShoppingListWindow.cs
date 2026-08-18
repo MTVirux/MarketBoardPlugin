@@ -297,6 +297,7 @@ namespace MarketTerror.GUI
         ImGui.PushStyleColor(ImGuiCol.Text, nameColor);
         ImGui.Text(item.IsDirect ? $"{DirectPrefix} {name}" : name);
         ImGui.PopStyleColor();
+        Utilities.HoverTooltip(FailTooltip(item));
 
         if (ImGui.BeginPopupContextItem($"shoplistName{k}"))
         {
@@ -537,6 +538,30 @@ namespace MarketTerror.GUI
     private static bool WasBought(SavedItem item)
     {
       return item.Outcome is BuyOutcome.Bought or BuyOutcome.BoughtCheaper;
+    }
+
+    /// <summary>
+    /// Spells out why a row bought nothing, for the tooltip on its name.
+    /// </summary>
+    /// <param name="item">The row to explain.</param>
+    /// <returns>The tooltip, or an empty string when the row has nothing to explain.</returns>
+    private static string FailTooltip(SavedItem item)
+    {
+      // A row of picks only keeps a reason of its own when every listing gave the same one.
+      var reasons = item.FailReason.Length > 0
+        ? new[] { item.FailReason }
+        : item.Picks
+          .Where(p => p.Outcome == BuyOutcome.Failed && p.FailReason.Length > 0)
+          .GroupBy(p => p.FailReason, StringComparer.Ordinal)
+          .Select(g => g.Count() == 1 ? g.Key : $"{g.Count()} listings: {g.Key}")
+          .ToArray();
+
+      return reasons.Length switch
+      {
+        0 => string.Empty,
+        1 => $"Not bought: {reasons[0]}",
+        _ => "Not bought:\n  " + string.Join("\n  ", reasons),
+      };
     }
 
     /// <summary>
@@ -1027,6 +1052,7 @@ namespace MarketTerror.GUI
           ImGui.PushStyleColor(ImGuiCol.Text, status.Colour);
           ImGui.Text(status.Text);
           ImGui.PopStyleColor();
+          Utilities.HoverTooltip(pick.FailReason);
         }
 
         ImGui.TableSetColumnIndex(1);

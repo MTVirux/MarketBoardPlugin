@@ -215,6 +215,7 @@ namespace MarketTerror.Services
 
       // Two buys without a refresh in between would otherwise report the first one's result again.
       pick.Outcome = BuyOutcome.None;
+      pick.FailReason = string.Empty;
       pick.Paid = null;
 
       this.Start(new[] { new BuyJob(row, pick) });
@@ -239,22 +240,28 @@ namespace MarketTerror.Services
       }
 
       var jobs = new List<BuyJob>();
-      var skipped = 0;
+      var skipped = new List<(string Name, string Reason)>();
 
       foreach (var row in rows)
       {
-        if (!this.CanBuy(row, out _))
+        if (!this.CanBuy(row, out var why))
         {
-          skipped++;
+          skipped.Add((row.SourceItem.Name.ExtractText(), why));
           continue;
         }
 
         jobs.AddRange(Jobs(row));
       }
 
-      if (skipped > 0)
+      if (skipped.Count > 0)
       {
-        this.plugin.ChatGui.Print($"Skipped {skipped} shopping list rows that cannot be bought yet.");
+        this.plugin.ChatGui.Print($"Skipped {skipped.Count} shopping list rows that cannot be bought yet:");
+
+        foreach (var group in skipped.GroupBy(entry => entry.Reason, StringComparer.Ordinal))
+        {
+          var who = group.Count() == 1 ? group.First().Name : $"{group.Count()} rows";
+          this.plugin.ChatGui.Print($"  {who}: {group.Key}");
+        }
       }
 
       if (jobs.Count == 0)
@@ -319,6 +326,7 @@ namespace MarketTerror.Services
       foreach (var pick in row.Picks)
       {
         pick.Outcome = BuyOutcome.None;
+        pick.FailReason = string.Empty;
         pick.Paid = null;
       }
 
@@ -327,6 +335,23 @@ namespace MarketTerror.Services
         .OrderBy(pick => pick.Price)
         .Select(pick => new BuyJob(row, pick))
         .ToArray();
+    }
+
+    private static string Quality(bool hq)
+    {
+      return hq ? "HQ" : "NQ";
+    }
+
+    /// <summary>
+    /// Names a listing by the retainer selling it and the world it is on.
+    /// </summary>
+    /// <param name="pick">The listing to name.</param>
+    /// <returns>The text a chat line calls it.</returns>
+    private static string Where(PickedListing pick)
+    {
+      return pick.RetainerName.Length > 0
+        ? $"{pick.RetainerName} on {pick.World}"
+        : $"the listing on {pick.World}";
     }
 
     private static string Gil(double value)
@@ -545,7 +570,7 @@ namespace MarketTerror.Services
     {
       if (!opened)
       {
-        this.Report(job, BuyResult.Failed("the Market Board listings never opened"));
+        this.Report(job, BuyResult.Failed($"the Market Board never opened its listings on {job.World}"));
         return;
       }
 
@@ -578,11 +603,13 @@ namespace MarketTerror.Services
       if (job.Pick == null)
       {
         job.Row.Outcome = outcome;
+        job.Row.FailReason = result.Success ? string.Empty : result.Reason;
         this.PrintOne(job, result);
       }
       else
       {
         job.Pick.Outcome = outcome;
+        job.Pick.FailReason = result.Success ? string.Empty : result.Reason;
         job.Pick.Paid = result.Success ? result.UnitPrice : null;
         job.Row.RollUpOutcome();
       }
@@ -619,7 +646,7 @@ namespace MarketTerror.Services
       }
       else
       {
-        this.plugin.ChatGui.Print($"{name}: {result.Reason} (limit: {Gil(job.Price)}) - not bought");
+        this.plugin.ChatGui.Print($"Did not buy {name} x{job.Quantity} {Quality(job.Hq)} on {job.World}: {result.Reason}");
       }
     }
 
@@ -633,9 +660,17 @@ namespace MarketTerror.Services
       var tried = row.Picks.Where(p => p.Outcome != BuyOutcome.None).ToArray();
       var bought = tried.Where(p => p.Paid.HasValue).ToArray();
 
+      if (bought.Length == 0 && tried.Length == 1)
+      {
+        var only = tried[0];
+        this.plugin.ChatGui.Print($"Did not buy {name} x{only.Quantity} {Quality(only.Hq)} from {Where(only)}: {only.FailReason}");
+        return;
+      }
+
       if (bought.Length == 0)
       {
-        this.plugin.ChatGui.Print($"{name}: none of the {tried.Length} picked listings could be bought");
+        this.plugin.ChatGui.Print($"Did not buy {name}: none of its {tried.Length} picked listings could be bought");
+        this.PrintReasons(tried);
         return;
       }
 
@@ -646,6 +681,25 @@ namespace MarketTerror.Services
         : $"{bought.Length} of {tried.Length} listings";
 
       this.plugin.ChatGui.Print($"Bought {name} x{units} for {Gil(spent)} gil over {listings}");
+      this.PrintReasons(tried);
+    }
+
+    /// <summary>
+    /// Says in chat why the listings of a row that were not bought were left behind, one line a reason.
+    /// </summary>
+    /// <param name="tried">Every listing of the row a buy was attempted on.</param>
+    private void PrintReasons(IEnumerable<PickedListing> tried)
+    {
+      var failed = tried.Where(p => !p.Paid.HasValue && p.FailReason.Length > 0);
+
+      foreach (var group in failed.GroupBy(p => p.FailReason, StringComparer.Ordinal))
+      {
+        var who = group.Count() == 1
+          ? Where(group.First())
+          : $"{group.Count()} listings";
+
+        this.plugin.ChatGui.Print($"  {who}: {group.Key}");
+      }
     }
 
     /// <summary>

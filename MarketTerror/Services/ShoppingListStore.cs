@@ -225,6 +225,14 @@ namespace MarketTerror.Services
       foreach (var row in this.items.Where(match))
       {
         row.Outcome = BuyOutcome.None;
+        row.FailReason = string.Empty;
+
+        foreach (var pick in row.Picks)
+        {
+          pick.Outcome = BuyOutcome.None;
+          pick.FailReason = string.Empty;
+          pick.Paid = null;
+        }
       }
     }
 

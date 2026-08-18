@@ -67,6 +67,13 @@ namespace MarketTerror.Models.ShoppingList
     public BuyOutcome Outcome { get; set; }
 
     /// <summary>
+    /// Gets or sets why the last buy attempt on this pick bought nothing, or an empty string when
+    /// it has not been tried or it went through.
+    /// </summary>
+    /// <remarks>Not saved to the configuration; it only lasts until the row is priced again.</remarks>
+    public string FailReason { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets what was really paid per unit, or null when the pick has not been bought.
     /// </summary>
     /// <remarks>Not saved to the configuration; it only lasts until the row is priced again.</remarks>

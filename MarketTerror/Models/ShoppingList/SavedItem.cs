@@ -157,6 +157,13 @@ namespace MarketTerror.Models.ShoppingList
     public BuyOutcome Outcome { get; set; }
 
     /// <summary>
+    ///  Gets or sets why the last buy attempt on this row bought nothing, or an empty string when it
+    ///  has not been tried or it went through.
+    /// </summary>
+    /// <remarks>Not saved to the configuration; it only lasts until the row is priced again.</remarks>
+    public string FailReason { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets a value indicating whether the entry is waiting for a new price.
     /// </summary>
     public bool Refreshing { get; set; }
@@ -260,6 +267,7 @@ namespace MarketTerror.Models.ShoppingList
       this.Picks.Clear();
       this.Picks.AddRange(replacement);
       this.Outcome = BuyOutcome.None;
+      this.FailReason = string.Empty;
 
       if (this.HasPicks)
       {
@@ -294,6 +302,15 @@ namespace MarketTerror.Models.ShoppingList
         _ when bought.Any(p => p.Outcome == BuyOutcome.BoughtCheaper) => BuyOutcome.BoughtCheaper,
         _ => BuyOutcome.Bought,
       };
+
+      // Every pick carries its own reason, so the row only repeats one when they all say the same thing.
+      var reasons = tried
+        .Where(p => p.FailReason.Length > 0)
+        .Select(p => p.FailReason)
+        .Distinct(StringComparer.Ordinal)
+        .ToArray();
+
+      this.FailReason = reasons.Length == 1 ? reasons[0] : string.Empty;
     }
   }
 }
