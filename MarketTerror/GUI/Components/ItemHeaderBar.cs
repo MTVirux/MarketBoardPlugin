@@ -10,6 +10,7 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Interface.Textures;
   using Dalamud.Utility;
   using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+  using Lumina.Excel.Sheets;
   using MarketTerror.Helpers;
 
   /// <summary>
@@ -122,7 +123,7 @@ namespace MarketTerror.GUI.Components
 
       ImGui.EndGroup();
 
-      this.DrawContextMenu(item.RowId);
+      this.DrawContextMenu(item);
     }
 
     private static unsafe void SearchInGame(uint itemId)
@@ -135,12 +136,14 @@ namespace MarketTerror.GUI.Components
       }
     }
 
-    private void DrawContextMenu(uint itemId)
+    private void DrawContextMenu(Item item)
     {
       if (!ImGui.BeginPopup(ContextMenuId))
       {
         return;
       }
+
+      var itemId = item.RowId;
 
       if (ImGui.Selectable("Open in Universalis"))
       {
@@ -155,6 +158,11 @@ namespace MarketTerror.GUI.Components
       if (ImGui.Selectable("Search in-game"))
       {
         SearchInGame(itemId);
+      }
+
+      if (ImGui.Selectable("Add to the shopping list"))
+      {
+        this.context.TryAddCheapestToShoppingList(item);
       }
 
       this.context.DrawListsMenu(itemId);
