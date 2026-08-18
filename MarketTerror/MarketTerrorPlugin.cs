@@ -454,6 +454,14 @@ namespace MarketTerror
     }
 
     /// <summary>
+    /// Brings the shopping list window up, whether or not it was hidden.
+    /// </summary>
+    public void ShowShoppingList()
+    {
+      this.shoppingListWindow.Show();
+    }
+
+    /// <summary>
     /// Protected implementation of Dispose pattern.
     /// </summary>
     /// <param name="disposing">A value indicating whether we are disposing.</param>

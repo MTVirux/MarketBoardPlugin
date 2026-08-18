@@ -121,6 +121,19 @@ namespace MarketTerror.GUI.ShoppingList
       this.forceShown = !this.hidden;
     }
 
+    /// <summary>
+    /// Brings the window up, whether or not it was hidden.
+    /// </summary>
+    /// <remarks>
+    /// What put an entry on the list is not always a change in how many there are, so this is how a
+    /// click that landed on an entry already there still shows it.
+    /// </remarks>
+    public void Show()
+    {
+      this.hidden = false;
+      this.forceShown = true;
+    }
+
     /// <inheritdoc/>
     public void Dispose()
     {

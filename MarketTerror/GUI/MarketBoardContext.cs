@@ -433,9 +433,14 @@ namespace MarketTerror.GUI
         return;
       }
 
-      var scope = new ListingScope(picker.SelectedWorld, picker.Scope);
+      this.Plugin.ShoppingList.AddLowest(item, picker.ToListingScope(), out var added);
 
-      this.Plugin.ShoppingList.AddLowest(item, scope);
+      if (!added)
+      {
+        // Nothing was added, so nothing would bring the window back on its own. Showing it is what
+        // points at the entry that was already there instead of the click going nowhere.
+        this.Plugin.ShowShoppingList();
+      }
     }
 
     /// <summary>
@@ -443,6 +448,7 @@ namespace MarketTerror.GUI
     /// </summary>
     /// <param name="item">The item the listings belong to.</param>
     /// <param name="listings">The listings to add.</param>
+    /// <remarks>A listing on a mannequin is passed over, since no kind of entry ever buys one.</remarks>
     public void AddListingsToShoppingList(Item item, IEnumerable<MarketDataListing> listings)
     {
       ArgumentNullException.ThrowIfNull(listings);
@@ -454,7 +460,7 @@ namespace MarketTerror.GUI
         return;
       }
 
-      var scope = new ListingScope(picker.SelectedWorld, picker.Scope);
+      var scope = picker.ToListingScope();
 
       // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
       var fallbackWorld = this.Worlds.IsMultiWorld ? string.Empty : this.Worlds.QueryTarget;
@@ -462,7 +468,14 @@ namespace MarketTerror.GUI
 
       foreach (var listing in listings)
       {
-        this.Plugin.ShoppingList.AddDirect(item, scope, ResolvedListing.FromListing(listing, withTax, fallbackWorld));
+        var resolved = ResolvedListing.FromListing(listing, withTax, fallbackWorld);
+
+        if (resolved.OnMannequin)
+        {
+          continue;
+        }
+
+        this.Plugin.ShoppingList.AddDirect(item, scope, resolved);
       }
     }
 

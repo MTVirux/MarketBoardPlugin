@@ -11,6 +11,7 @@ namespace MarketTerror.Services
   using MarketTerror.Extensions;
   using MarketTerror.Helpers;
   using MarketTerror.Models;
+  using MarketTerror.Models.ShoppingList;
 
   /// <summary>
   /// A world to price around and how wide to reach from it, as the two pickers a window shows.
@@ -287,6 +288,38 @@ namespace MarketTerror.Services
       {
         this.Save();
       }
+    }
+
+    /// <summary>
+    /// Names the market the selection stands for, as something an entry can be filed under.
+    /// </summary>
+    /// <returns>
+    /// The scope, whose own <see cref="ListingScope.Targets"/> name the same markets
+    /// <see cref="QueryTargets"/> does.
+    /// </returns>
+    /// <remarks>
+    /// A stored scope reads its region off its own anchor world, so an anchor sitting on Oceania is
+    /// pulled back to the character's home world for the region entries - otherwise the entry would
+    /// price Oceania while the picker was naming the home region.
+    /// </remarks>
+    public ListingScope ToListingScope()
+    {
+      var level = this.Scope;
+      var anchor = this.SelectedEntry;
+
+      if (anchor == null)
+      {
+        return new ListingScope(string.Empty, level);
+      }
+
+      var regionWide = level is MarketScope.Region or MarketScope.RegionWithOceania;
+
+      if (regionWide && !string.Equals(this.RegionFor(anchor), anchor.Region, StringComparison.Ordinal))
+      {
+        anchor = this.Plugin.WorldCatalogue.Find(this.HomeWorld) ?? anchor;
+      }
+
+      return new ListingScope(anchor.Name, level);
     }
 
     /// <summary>

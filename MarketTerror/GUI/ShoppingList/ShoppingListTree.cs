@@ -76,8 +76,8 @@ namespace MarketTerror.GUI.ShoppingList
     /// </summary>
     /// <remarks>
     /// Groups are open until they are closed, so a list that has just been added to shows what is on
-    /// it rather than a row that has to be opened first. Keying them by label rather than by node is
-    /// what keeps them open across the rebuild every change to the list causes.
+    /// it rather than a row that has to be opened first. Keying them by what a group groups rather
+    /// than by node is what keeps them open across the rebuild every change to the list causes.
     /// </remarks>
     private readonly HashSet<string> collapsed = new HashSet<string>(StringComparer.Ordinal);
 
@@ -171,7 +171,7 @@ namespace MarketTerror.GUI.ShoppingList
 
       foreach (var node in this.SortedNodes(nodes))
       {
-        this.DrawNode(node, Key(string.Empty, node.Label), 0, request);
+        this.DrawNode(node, Key(string.Empty, NodeKey(node)), 0, request);
       }
 
       ImGui.EndTable();
@@ -204,11 +204,29 @@ namespace MarketTerror.GUI.ShoppingList
     /// identified by.
     /// </summary>
     /// <param name="parent">The key of the row above, or an empty string at the top level.</param>
-    /// <param name="label">What the row reads as.</param>
+    /// <param name="name">What the row is called among the rows beside it.</param>
     /// <returns>The key.</returns>
-    private static string Key(string parent, string label)
+    private static string Key(string parent, string name)
     {
-      return parent.Length == 0 ? label : parent + "/" + label;
+      return parent.Length == 0 ? name : parent + "/" + name;
+    }
+
+    /// <summary>
+    /// Names a group by what it groups rather than by what it reads as, since two markets with
+    /// different anchors are named the same and two items can share a name.
+    /// </summary>
+    /// <param name="node">The group to name.</param>
+    /// <returns>The name, which no other group beside it shares.</returns>
+    private static string NodeKey(ShoppingListNode node)
+    {
+      if (node.Scope != null)
+      {
+        return FormattableString.Invariant($"s{(int)node.Scope.Level}@{node.Scope.AnchorWorld}");
+      }
+
+      return node.Item.HasValue
+        ? FormattableString.Invariant($"i{node.Item.Value.RowId}")
+        : node.Label;
     }
 
     /// <summary>
@@ -666,7 +684,7 @@ namespace MarketTerror.GUI.ShoppingList
 
       foreach (var child in this.SortedNodes(node.Children))
       {
-        this.DrawNode(child, Key(key, child.Label), depth + 1, request);
+        this.DrawNode(child, Key(key, NodeKey(child)), depth + 1, request);
       }
 
       var index = 0;
@@ -1393,9 +1411,7 @@ namespace MarketTerror.GUI.ShoppingList
     /// <returns>The market a new entry would be filed under.</returns>
     private ListingScope CurrentScope()
     {
-      var scope = this.plugin.ShoppingListScope;
-
-      return new ListingScope(scope.SelectedWorld, scope.Scope);
+      return this.plugin.ShoppingListScope.ToListingScope();
     }
 
     /// <summary>

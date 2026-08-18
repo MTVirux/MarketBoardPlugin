@@ -79,8 +79,9 @@ namespace MarketTerror.Services
     /// </summary>
     /// <param name="item">The item to buy.</param>
     /// <param name="scope">The market to buy it in.</param>
+    /// <param name="added">False when the entry handed back was already on the list.</param>
     /// <returns>The entry.</returns>
-    public ListingEntry AddLowest(Item item, ListingScope scope)
+    public ListingEntry AddLowest(Item item, ListingScope scope, out bool added)
     {
       ArgumentNullException.ThrowIfNull(scope);
 
@@ -88,8 +89,11 @@ namespace MarketTerror.Services
 
       if (existing != null)
       {
+        added = false;
         return existing;
       }
+
+      added = true;
 
       var entry = new ListingEntry(item, scope, ListingKind.Lowest);
       this.items.Add(entry);
@@ -261,12 +265,20 @@ namespace MarketTerror.Services
         // Asking for fewer listings only ever takes listings away, so the entry chooses again out of
         // the ones it already holds instead of waiting on a fetch. Cheapest first, the way a refresh
         // would order them, and the sold out ones go first since they buy nothing.
-        entry.SetMatches(entry.Matches
+        var kept = entry.Matches
           .OrderBy(m => m.Gone)
           .ThenBy(m => m.Price)
           .ThenBy(m => m.Total)
           .Take(wanted)
-          .ToArray());
+          .ToArray();
+
+        // Trimming is not a repricing, so the listings that stay keep whatever a buy run wrote on
+        // them and the entry only says again what the ones left under it say.
+        entry.Matches.Clear();
+        entry.Matches.AddRange(kept);
+        entry.Outcome = BuyOutcome.None;
+        entry.FailReason = string.Empty;
+        entry.RollUpOutcome();
       }
 
       this.Save();
