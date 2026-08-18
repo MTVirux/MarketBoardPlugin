@@ -523,7 +523,7 @@ namespace MarketTerror.GUI.ShoppingList
     {
       foreach (var node in nodes)
       {
-        var key = Key(parentKey, node.Label);
+        var key = Key(parentKey, NodeKey(node));
 
         yield return forRow(RollUp.Of(node));
 
