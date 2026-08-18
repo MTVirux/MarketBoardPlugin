@@ -991,7 +991,7 @@ namespace MarketTerror.GUI
       // Where the row above puts its name, so a listing reads as hanging off it.
       var indent = ImGui.GetTreeNodeToLabelSpacing() + ImGui.GetTextLineHeight() + (ImGui.GetStyle().ItemSpacing.X * 2);
 
-      foreach (var pick in item.Picks.OrderBy(p => p.Price))
+      foreach (var pick in this.SortPicks(item))
       {
         var price = PickPrice(pick);
         var bargain = pick.Paid.HasValue && pick.Paid.Value < pick.Price;
@@ -1086,7 +1086,7 @@ namespace MarketTerror.GUI
 
       ImGui.BeginTooltip();
 
-      foreach (var pick in item.Picks.OrderBy(p => p.Price))
+      foreach (var pick in this.SortPicks(item))
       {
         var price = pick.Price.ToString("N0", CultureInfo.CurrentCulture);
 
@@ -1373,6 +1373,44 @@ namespace MarketTerror.GUI
             : items.OrderByDescending(i => i.World, StringComparer.CurrentCultureIgnoreCase);
         default:
           return items;
+      }
+    }
+
+    /// <summary>
+    /// Puts a row's picked listings in the order the table is sorted in.
+    /// </summary>
+    /// <param name="item">The row whose listings to sort.</param>
+    /// <returns>The listings, in the order they read under the row.</returns>
+    private IEnumerable<PickedListing> SortPicks(SavedItem item)
+    {
+      var picks = item.Picks;
+
+      switch (this.sortColumn)
+      {
+        case 0:
+          return this.sortAscending
+            ? picks.OrderBy(p => p.RetainerName, StringComparer.CurrentCultureIgnoreCase)
+            : picks.OrderByDescending(p => p.RetainerName, StringComparer.CurrentCultureIgnoreCase);
+        case 1:
+          return this.sortAscending
+            ? picks.OrderBy(PickPrice)
+            : picks.OrderByDescending(PickPrice);
+        case 2:
+          return this.sortAscending
+            ? picks.OrderBy(p => p.Quantity)
+            : picks.OrderByDescending(p => p.Quantity);
+        case 3:
+          return this.sortAscending
+            ? picks.OrderBy(p => PickPrice(p) * p.Quantity)
+            : picks.OrderByDescending(p => PickPrice(p) * p.Quantity);
+        case 4:
+          return this.sortAscending
+            ? picks.OrderBy(p => p.World, StringComparer.CurrentCultureIgnoreCase)
+            : picks.OrderByDescending(p => p.World, StringComparer.CurrentCultureIgnoreCase);
+
+        // Unsorted, so the cheapest listing leads: the one a buy run gets to first.
+        default:
+          return picks.OrderBy(p => p.Price);
       }
     }
 
