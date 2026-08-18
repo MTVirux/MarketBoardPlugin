@@ -105,6 +105,21 @@ namespace MarketTerror.GUI
 
       this.Checkbox("Buy from the shopping list", "Let the shopping list buy an item when the Market Board still has the listing it was priced from, at or below that price.", this.Plugin.Config.ShoppingListBuyEnabled, (v) => this.Plugin.Config.ShoppingListBuyEnabled = v);
 
+      ImGui.Indent();
+      if (!this.Plugin.Config.ShoppingListBuyEnabled)
+      {
+        ImGui.BeginDisabled();
+      }
+
+      this.Checkbox("Refresh listings after buying", "Once an item has been bought, open its listings and sales history again so both are uploaded without the listing that has just gone.", this.Plugin.Config.RefreshListingsAfterBuy, (v) => this.Plugin.Config.RefreshListingsAfterBuy = v);
+
+      if (!this.Plugin.Config.ShoppingListBuyEnabled)
+      {
+        ImGui.EndDisabled();
+      }
+
+      ImGui.Unindent();
+
       if (!this.Plugin.Config.AutoSearchOnMarketBoard)
       {
         ImGui.EndDisabled();

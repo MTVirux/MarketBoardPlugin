@@ -199,6 +199,11 @@ namespace MarketTerror
     public bool ShoppingListBuyEnabled { get; set; } = true;
 
     /// <summary>
+    /// Gets or sets a value indicating whether an item's listings and sales history are opened again once buying it is done, so both are uploaded without the bought listing.
+    /// </summary>
+    public bool RefreshListingsAfterBuy { get; set; } = true;
+
+    /// <summary>
     /// Gets or sets a value indicating whether buying skips items this character has already unlocked.
     /// </summary>
     public bool SkipUnlockedWhenBuying { get; set; } = true;
