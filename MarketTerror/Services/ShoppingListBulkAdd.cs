@@ -164,9 +164,9 @@ namespace MarketTerror.Services
     /// when no entry priced off the answer would take it. An entry with no conditions on it buys
     /// whatever is cheapest, so it wants both.
     /// </remarks>
-    private static bool? QualityAsked(IReadOnlyList<ListingEntry> entries)
+    private static bool? QualityAsked(ListingEntry[] entries)
     {
-      if (entries.Count == 0)
+      if (entries.Length == 0)
       {
         return null;
       }
@@ -184,9 +184,9 @@ namespace MarketTerror.Services
       return null;
     }
 
-    private void StartJob(string label, IReadOnlyList<ListingEntry> entries)
+    private void StartJob(string label, ListingEntry[] entries)
     {
-      if (this.IsRunning || entries.Count == 0)
+      if (this.IsRunning || entries.Length == 0)
       {
         return;
       }
@@ -341,7 +341,7 @@ namespace MarketTerror.Services
     /// <param name="entries">The entries the answer is for.</param>
     /// <param name="onSale">Every listing of their item across their market, which can be none.</param>
     /// <param name="windowMilliseconds">How long the next answer is expected to take.</param>
-    private void Apply(IReadOnlyList<ListingEntry> entries, IReadOnlyList<ResolvedListing> onSale, double windowMilliseconds)
+    private void Apply(ListingEntry[] entries, IReadOnlyList<ResolvedListing> onSale, double windowMilliseconds)
     {
       // Only the resolver decides what an entry buys, so a direct entry stays on its own listing even
       // though it is priced off the same array as everything else.
@@ -351,7 +351,7 @@ namespace MarketTerror.Services
       }
 
       // One step per market and item pair, so the count reaches the total however many entries share one.
-      this.pendingReveal.Enqueue(entries.FirstOrDefault());
+      this.pendingReveal.Enqueue(entries.Length > 0 ? entries[0] : null);
 
       this.revealPerMillisecond = this.pendingReveal.Count / Math.Max(windowMilliseconds, 1d);
       this.lastRevealUtc = DateTime.UtcNow;

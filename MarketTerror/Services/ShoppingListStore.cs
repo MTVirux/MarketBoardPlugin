@@ -305,11 +305,17 @@ namespace MarketTerror.Services
     /// Marks the given entries as waiting for a new price, so the table can say so until one lands.
     /// </summary>
     /// <param name="entries">The entries being priced again.</param>
+    /// <remarks>
+    /// Only entries still on the list are marked, since <see cref="ClearRefreshing"/> walks the list
+    /// and would never take the flag back off one that had been removed in the meantime.
+    /// </remarks>
     public void MarkRefreshing(IEnumerable<ListingEntry> entries)
     {
       ArgumentNullException.ThrowIfNull(entries);
 
-      foreach (var entry in entries)
+      var asked = new HashSet<ListingEntry>(entries);
+
+      foreach (var entry in this.items.Where(asked.Contains))
       {
         entry.Refreshing = true;
       }

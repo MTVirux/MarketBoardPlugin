@@ -49,7 +49,7 @@ namespace MarketTerror.GUI.ShoppingList
     /// <summary>
     /// How many icon buttons a row can show.
     /// </summary>
-    private const int ActionButtonCount = 5;
+    private const int ActionButtonCount = 6;
 
     private const string PriceHeader = "Price";
 
@@ -954,10 +954,36 @@ namespace MarketTerror.GUI.ShoppingList
 
       this.DrawKindActions(entry, key, request, buttonSize, busy);
 
+      // An entry whose listings sit on more than one world has nowhere single to walk to, so the
+      // button is there but dead rather than picking a world on the entry's behalf.
+      var worlds = entry.Worlds;
+      var canTravel = this.plugin.MarketBoardContext.CanTravel;
+
+      ImGui.BeginDisabled(worlds.Count != 1 || !canTravel);
+      ImGui.PushFont(UiBuilder.IconFont);
+      var travel = ImGui.Button($"{(char)FontAwesomeIcon.Walking}##shoplistgo{key}", buttonSize);
+      ImGui.PopFont();
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip(
+        (canTravel, worlds.Count) switch
+        {
+          (false, _) => "Log in to a character to travel.",
+          (_, 1) => $"Go to the market board on {worlds[0]}.",
+          _ => "This entry has no one world to travel to.",
+        },
+        ImGuiHoveredFlags.AllowWhenDisabled);
+
+      ImGui.SameLine();
+
       ImGui.PushFont(UiBuilder.IconFont);
       var remove = ImGui.Button($"{(char)FontAwesomeIcon.TrashAlt}##shoplistdel{key}", buttonSize);
       ImGui.PopFont();
       Utilities.HoverTooltip("Take this entry off the list.");
+
+      if (travel)
+      {
+        this.plugin.MarketBoardContext.GoToMarketBoard(worlds[0], entry.SourceItem, true);
+      }
 
       if (refresh)
       {

@@ -87,7 +87,7 @@ namespace MarketTerror.GUI.ShoppingList
     /// <param name="entries">The entries for one item.</param>
     /// <param name="children">The groups to hang under it.</param>
     /// <returns>The node.</returns>
-    private static ShoppingListNode ItemNode(IReadOnlyList<ListingEntry> entries, IReadOnlyList<ShoppingListNode> children)
+    private static ShoppingListNode ItemNode(ListingEntry[] entries, IReadOnlyList<ShoppingListNode> children)
     {
       var item = entries[0].SourceItem;
 
@@ -99,7 +99,7 @@ namespace MarketTerror.GUI.ShoppingList
     /// </summary>
     /// <param name="entries">The entries for one item.</param>
     /// <returns>The node.</returns>
-    private static ShoppingListNode ItemLeaf(IReadOnlyList<ListingEntry> entries)
+    private static ShoppingListNode ItemLeaf(ListingEntry[] entries)
     {
       var item = entries[0].SourceItem;
 
@@ -113,7 +113,7 @@ namespace MarketTerror.GUI.ShoppingList
     /// <param name="catalogue">The world catalogue, used to name the scope.</param>
     /// <param name="children">The groups to hang under it.</param>
     /// <returns>The node.</returns>
-    private static ShoppingListNode ScopeNode(IReadOnlyList<ListingEntry> entries, WorldCatalogue catalogue, IReadOnlyList<ShoppingListNode> children)
+    private static ShoppingListNode ScopeNode(ListingEntry[] entries, WorldCatalogue catalogue, IReadOnlyList<ShoppingListNode> children)
     {
       var scope = entries[0].Scope;
 
@@ -126,7 +126,7 @@ namespace MarketTerror.GUI.ShoppingList
     /// <param name="entries">The entries of one scope.</param>
     /// <param name="catalogue">The world catalogue, used to name the scope.</param>
     /// <returns>The node.</returns>
-    private static ShoppingListNode ScopeLeaf(IReadOnlyList<ListingEntry> entries, WorldCatalogue catalogue)
+    private static ShoppingListNode ScopeLeaf(ListingEntry[] entries, WorldCatalogue catalogue)
     {
       var scope = entries[0].Scope;
 
