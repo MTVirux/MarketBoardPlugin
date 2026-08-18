@@ -521,6 +521,15 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// Works out how big the buttons on one of a row's listings are.
+    /// </summary>
+    /// <returns>The size, in pixels.</returns>
+    private static Vector2 PickButtonSize()
+    {
+      return new Vector2(ActionButtonWidth * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetTextLineHeight());
+    }
+
+    /// <summary>
     /// Checks whether a row was bought by the last buy run.
     /// </summary>
     /// <param name="item">The row to check.</param>
@@ -627,7 +636,7 @@ namespace MarketTerror.GUI
     /// <returns>The world as it reads in the table.</returns>
     private static string WorldText(SavedItem item)
     {
-      return item.Unlisted ? NoValue : item.World;
+      return item.Unlisted || item.World.Length == 0 ? NoValue : item.World;
     }
 
     /// <summary>
@@ -1047,8 +1056,15 @@ namespace MarketTerror.GUI
 
         ImGui.TableSetColumnIndex(5);
 
-        // A listing that has sold out from under the row can be neither bought nor travelled to.
-        if (!pick.Gone)
+        // A listing that has sold out from under the row can only be dismissed.
+        if (pick.Gone)
+        {
+          if (this.DrawGoneAction($"{key}_{index}"))
+          {
+            drop ??= pick;
+          }
+        }
+        else
         {
           drop ??= this.DrawPickActions(item, pick, $"{key}_{index}");
         }
@@ -1063,6 +1079,32 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// Draws the button that takes a listing that has sold out off the row.
+    /// </summary>
+    /// <param name="id">What the button is identified by.</param>
+    /// <returns>True when the listing is to be taken off the row.</returns>
+    private bool DrawGoneAction(string id)
+    {
+      var buttonSize = PickButtonSize();
+      var idle = !this.Plugin.ShoppingListBuyer.IsRunning && !this.Plugin.ShoppingListBulkAdd.IsRunning;
+
+      // Kept under the bin the listings that are still on sale have, since it does the same thing.
+      ImGui.Dummy(buttonSize);
+      ImGui.SameLine();
+      ImGui.Dummy(buttonSize);
+      ImGui.SameLine();
+
+      ImGui.BeginDisabled(!idle);
+      ImGui.PushFont(UiBuilder.IconFont);
+      var dismissed = ImGui.Button($"{(char)FontAwesomeIcon.Check}##shoplistpickgone{id}", buttonSize);
+      ImGui.PopFont();
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip("Take this sold out listing off the row.", ImGuiHoveredFlags.AllowWhenDisabled);
+
+      return dismissed;
+    }
+
+    /// <summary>
     /// Draws what can be done with one of a row's listings on its own.
     /// </summary>
     /// <param name="item">The row the listing belongs to.</param>
@@ -1071,7 +1113,7 @@ namespace MarketTerror.GUI
     /// <returns>The listing when it is to be taken off the row, otherwise null.</returns>
     private PickedListing? DrawPickActions(SavedItem item, PickedListing pick, string id)
     {
-      var buttonSize = new Vector2(ActionButtonWidth * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetTextLineHeight());
+      var buttonSize = PickButtonSize();
       var idle = !this.Plugin.ShoppingListBuyer.IsRunning && !this.Plugin.ShoppingListBulkAdd.IsRunning;
       var canBuy = this.Plugin.ShoppingListBuyer.CanBuy(item, out var buyBlockedReason) && idle;
 

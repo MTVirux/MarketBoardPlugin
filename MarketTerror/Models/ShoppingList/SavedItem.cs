@@ -17,7 +17,8 @@ namespace MarketTerror.Models.ShoppingList
   /// <remarks>
   /// A row stands for one listing until listings are picked for it, and for the whole basket of picks
   /// after that. The price, stack size, total and world are read off the picks in that case, so the
-  /// rest of the plugin can keep asking the row the same four questions either way.
+  /// rest of the plugin can keep asking the row the same four questions either way. Only the picks
+  /// still on sale are counted, so a sold out one adds nothing to the row's stack size or total.
   /// </remarks>
   public class SavedItem
   {
@@ -69,7 +70,7 @@ namespace MarketTerror.Models.ShoppingList
     /// </summary>
     public double Price
     {
-      get => this.HasPicks ? this.Aggregated.Min(p => p.Price) : this.SinglePrice;
+      get => this.HasPicks ? this.LivePicks.Select(p => p.Price).DefaultIfEmpty(0).Min() : this.SinglePrice;
       set => this.SinglePrice = value;
     }
 
@@ -88,6 +89,11 @@ namespace MarketTerror.Models.ShoppingList
 
         var worlds = this.Worlds;
 
+        if (worlds.Count == 0)
+        {
+          return string.Empty;
+        }
+
         return worlds.Count == 1 ? worlds[0] : worlds.Count + ManyWorldsSuffix;
       }
 
@@ -98,7 +104,7 @@ namespace MarketTerror.Models.ShoppingList
     /// Gets the distinct worlds this row's picks sit on, closest name first.
     /// </summary>
     public IReadOnlyList<string> Worlds =>
-      this.Aggregated
+      this.LivePicks
         .Select(p => p.World)
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .OrderBy(w => w, StringComparer.CurrentCultureIgnoreCase)
@@ -110,7 +116,7 @@ namespace MarketTerror.Models.ShoppingList
     /// <remarks>Rows saved before buying existed have no stack size, and cannot be bought until refreshed.</remarks>
     public long Quantity
     {
-      get => this.HasPicks ? this.Aggregated.Sum(p => p.Quantity) : this.SingleQuantity;
+      get => this.HasPicks ? this.LivePicks.Sum(p => p.Quantity) : this.SingleQuantity;
       set => this.SingleQuantity = value;
     }
 
@@ -120,7 +126,7 @@ namespace MarketTerror.Models.ShoppingList
     /// <remarks>A row of picks only counts as high quality when every one of them is.</remarks>
     public bool Hq
     {
-      get => this.HasPicks ? this.Aggregated.All(p => p.Hq) : this.SingleHq;
+      get => this.HasPicks ? this.LivePicks.Any() && this.LivePicks.All(p => p.Hq) : this.SingleHq;
       set => this.SingleHq = value;
     }
 
@@ -128,7 +134,7 @@ namespace MarketTerror.Models.ShoppingList
     ///  Gets how many of the row's items come from high quality listings.
     /// </summary>
     public long QuantityHq =>
-      this.HasPicks ? this.Aggregated.Where(p => p.Hq).Sum(p => p.Quantity) : (this.Hq ? this.Quantity : 0);
+      this.HasPicks ? this.LivePicks.Where(p => p.Hq).Sum(p => p.Quantity) : (this.Hq ? this.Quantity : 0);
 
     /// <summary>
     ///  Gets how many of the row's items come from normal quality listings.
@@ -142,7 +148,7 @@ namespace MarketTerror.Models.ShoppingList
     ///  Picks differ in price, so this is the sum of their totals rather than the row's price times
     ///  its stack size.
     /// </remarks>
-    public double Total => this.HasPicks ? this.Aggregated.Sum(p => p.Total) : this.Price * this.Quantity;
+    public double Total => this.HasPicks ? this.LivePicks.Sum(p => p.Total) : this.Price * this.Quantity;
 
     /// <summary>
     ///  Gets or sets how the last buy attempt on this row ended.
@@ -165,15 +171,6 @@ namespace MarketTerror.Models.ShoppingList
     /// </summary>
     /// <remarks>Such an entry keeps the listing it was added from, so every refresh leaves it alone.</remarks>
     public bool IsDirect { get; set; }
-
-    /// <summary>
-    /// Gets the picks the row's figures are read off.
-    /// </summary>
-    /// <remarks>
-    /// The picks that are still there, so a sold out one stops counting towards the total. A row whose
-    /// picks have all gone keeps showing what it was asked to buy rather than dropping to nothing.
-    /// </remarks>
-    private IEnumerable<PickedListing> Aggregated => this.Picks.Exists(p => !p.Gone) ? this.LivePicks : this.Picks;
 
     /// <summary>Gets or sets the price of the one listing a row without picks stands for.</summary>
     private double SinglePrice { get; set; }
