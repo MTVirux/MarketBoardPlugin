@@ -26,6 +26,8 @@ namespace MarketTerror.Services
 
     private readonly MarketBoardPurchase purchase;
 
+    private readonly MarketBoardRefresh refresh;
+
     private readonly Queue<BuyJob> queue = new Queue<BuyJob>();
 
     /// <summary>
@@ -34,6 +36,16 @@ namespace MarketTerror.Services
     private readonly Dictionary<SavedItem, int> outstanding = new Dictionary<SavedItem, int>();
 
     private string boardWorld = string.Empty;
+
+    /// <summary>
+    /// The item the board is showing, and whether anything of it has been bought there, so a
+    /// refresh only runs once the run is finished with that item on that world.
+    /// </summary>
+    private string boardItemName = string.Empty;
+
+    private uint boardItemId;
+
+    private bool boughtOnBoard;
 
     private bool isDisposed;
 
@@ -51,6 +63,13 @@ namespace MarketTerror.Services
         this.plugin.MarketBoard,
         this.plugin.Log,
         () => !this.plugin.Config.NoGilSalesTax);
+
+      this.refresh = new MarketBoardRefresh(
+        this.plugin.Framework,
+        this.plugin.GameGui,
+        this.plugin.MarketBoard,
+        this.plugin.Log,
+        this.plugin.AutoSearch);
     }
 
     /// <summary>
@@ -204,7 +223,7 @@ namespace MarketTerror.Services
       this.IsRunning = true;
       this.Done = 0;
       this.Total = this.queue.Count;
-      this.boardWorld = string.Empty;
+      this.ForgetBoardItem();
 
       this.StartNext();
     }
@@ -216,6 +235,7 @@ namespace MarketTerror.Services
     {
       this.queue.Clear();
       this.plugin.AutoSearch.Disarm();
+      this.refresh.Cancel();
       this.purchase.Cancel();
 
       // Neither of those fires a continuation when nothing is in flight, so settle the run here.
@@ -236,6 +256,7 @@ namespace MarketTerror.Services
       this.queue.Clear();
       this.outstanding.Clear();
       this.purchase.Dispose();
+      this.refresh.Dispose();
       this.isDisposed = true;
     }
 
@@ -325,12 +346,17 @@ namespace MarketTerror.Services
 
     private void StartNext()
     {
+      if (this.TryRefreshBoardItem())
+      {
+        return;
+      }
+
       if (this.queue.Count == 0)
       {
         this.purchase.CloseBoard();
         this.IsRunning = false;
         this.CurrentItemName = string.Empty;
-        this.boardWorld = string.Empty;
+        this.ForgetBoardItem();
         this.outstanding.Clear();
         return;
       }
@@ -344,6 +370,53 @@ namespace MarketTerror.Services
 
       this.CurrentItemName = this.Describe(job);
       this.plugin.MarketBoardContext.GoToMarketBoardForBuy(job.World, job.Row.SourceItem, opened => this.OnSearchFinished(job, opened));
+    }
+
+    /// <summary>
+    /// Opens the listings and sales history of the item the board is showing, once the run has bought
+    /// everything it wanted of it on that world.
+    /// </summary>
+    /// <returns>True when a refresh was started, which calls back into <see cref="StartNext"/> when it ends.</returns>
+    /// <remarks>
+    /// Buying takes the listing off the board without anything asking for the board again, so a
+    /// Universalis uploader would otherwise keep serving the listing that has just been bought.
+    /// </remarks>
+    private bool TryRefreshBoardItem()
+    {
+      if (!this.boughtOnBoard || !this.plugin.Config.RefreshListingsAfterBuy)
+      {
+        return false;
+      }
+
+      // More of the same item still to buy on the same world: that buy opens the listings again anyway.
+      if (this.queue.Count > 0)
+      {
+        var next = this.queue.Peek();
+
+        if (next.Row.SourceItem.RowId == this.boardItemId
+          && string.Equals(next.World, this.boardWorld, StringComparison.OrdinalIgnoreCase))
+        {
+          return false;
+        }
+      }
+
+      var name = this.boardItemName;
+      var id = this.boardItemId;
+
+      this.boughtOnBoard = false;
+      this.refresh.Start(name, id, this.StartNext);
+      return true;
+    }
+
+    /// <summary>
+    /// Forgets which item the board is showing, so nothing is refreshed once it has been closed.
+    /// </summary>
+    private void ForgetBoardItem()
+    {
+      this.boardWorld = string.Empty;
+      this.boardItemName = string.Empty;
+      this.boardItemId = 0;
+      this.boughtOnBoard = false;
     }
 
     /// <summary>
@@ -381,6 +454,8 @@ namespace MarketTerror.Services
       }
 
       this.boardWorld = job.World;
+      this.boardItemId = job.Row.SourceItem.RowId;
+      this.boardItemName = job.Row.SourceItem.Name.ExtractText();
 
       this.purchase.Start(
         new BuyRequest(job.Row.SourceItem.RowId, job.Row.SourceItem.Name.ExtractText(), job.Hq, job.Quantity, job.Price),
@@ -392,6 +467,8 @@ namespace MarketTerror.Services
       var outcome = result.Success
         ? (result.UnitPrice < job.Price ? BuyOutcome.BoughtCheaper : BuyOutcome.Bought)
         : BuyOutcome.Failed;
+
+      this.boughtOnBoard |= result.Success;
 
       if (job.Pick == null)
       {
