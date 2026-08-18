@@ -17,7 +17,8 @@ namespace MarketTerror.Services
   /// </summary>
   /// <remarks>
   /// The world picker overrides what the scope picker is anchored to: the scope entries always name
-  /// the picked world's data centre and region, and list that data centre's worlds underneath.
+  /// the picked world's data centre, list that data centre's worlds underneath, and reach across its
+  /// region - or the character's home region, when the picked world is on Oceania.
   /// </remarks>
   public abstract class MarketScopeSelection
   {
@@ -25,9 +26,13 @@ namespace MarketTerror.Services
 
     private string currentWorld = string.Empty;
 
+    private string homeWorld = string.Empty;
+
     private string builtAnchor = string.Empty;
 
     private string builtMarker = string.Empty;
+
+    private string builtRegion = string.Empty;
 
     private bool built;
 
@@ -209,6 +214,26 @@ namespace MarketTerror.Services
     protected MarketTerrorPlugin Plugin { get; }
 
     /// <summary>
+    /// Gets the world the character was made on, which the region entries are named after while
+    /// the anchor sits on Oceania.
+    /// </summary>
+    /// <remarks>The last one seen is kept while nobody is logged in, the same way <see cref="DefaultWorld"/> is.</remarks>
+    private string HomeWorld
+    {
+      get
+      {
+        var world = PlayerWorld.HomeName(this.Plugin.PlayerState);
+
+        if (world.Length > 0)
+        {
+          this.homeWorld = world;
+        }
+
+        return this.homeWorld;
+      }
+    }
+
+    /// <summary>
     /// Anchors the scopes on another world.
     /// </summary>
     /// <param name="worldName">The world name.</param>
@@ -272,15 +297,15 @@ namespace MarketTerror.Services
       this.built = false;
     }
 
-    private static IEnumerable<ScopeOption> BuildOptions(WorldCatalogue catalogue, WorldEntry anchor, string marked)
+    private static IEnumerable<ScopeOption> BuildOptions(WorldCatalogue catalogue, WorldEntry anchor, string region, string marked)
     {
-      // An Oceania world already reaches Oceania at plain region scope, so there is nothing to add on.
-      if (anchor.Region != WorldRegions.Oceania)
+      // Oceania already reaches itself at plain region scope, so there is nothing to add on.
+      if (region != WorldRegions.Oceania)
       {
-        yield return new ScopeOption(MarketScope.RegionWithOceania, new[] { anchor.Region, WorldRegions.Oceania });
+        yield return new ScopeOption(MarketScope.RegionWithOceania, new[] { region, WorldRegions.Oceania });
       }
 
-      yield return new ScopeOption(MarketScope.Region, new[] { anchor.Region });
+      yield return new ScopeOption(MarketScope.Region, new[] { region });
       yield return new ScopeOption(MarketScope.DataCentre, new[] { anchor.DataCentre });
 
       foreach (var world in catalogue.InDataCentre(anchor.DataCentre))
@@ -298,10 +323,12 @@ namespace MarketTerror.Services
       var anchor = this.SelectedEntry;
       var anchorName = anchor?.Name ?? string.Empty;
       var marker = this.DefaultWorld;
+      var region = anchor != null ? this.RegionFor(anchor) : string.Empty;
 
       if (this.built &&
           string.Equals(this.builtAnchor, anchorName, StringComparison.Ordinal) &&
-          string.Equals(this.builtMarker, marker, StringComparison.Ordinal))
+          string.Equals(this.builtMarker, marker, StringComparison.Ordinal) &&
+          string.Equals(this.builtRegion, region, StringComparison.Ordinal))
       {
         return;
       }
@@ -309,14 +336,32 @@ namespace MarketTerror.Services
       this.built = true;
       this.builtAnchor = anchorName;
       this.builtMarker = marker;
+      this.builtRegion = region;
       this.options.Clear();
 
       if (anchor != null)
       {
-        this.options.AddRange(BuildOptions(this.Plugin.WorldCatalogue, anchor, marker));
+        this.options.AddRange(BuildOptions(this.Plugin.WorldCatalogue, anchor, region, marker));
       }
 
       this.selectedIndex = this.RestoreSelection(anchor);
+    }
+
+    /// <summary>
+    /// Names the region the entries reach across. Oceania is the one data centre that can be
+    /// visited from another region, so a visitor standing on it keeps their own region in the
+    /// picker while the data centre and world entries stay on Oceania.
+    /// </summary>
+    /// <param name="anchor">The world the scopes are anchored to.</param>
+    /// <returns>The region name.</returns>
+    private string RegionFor(WorldEntry anchor)
+    {
+      if (anchor.Region != WorldRegions.Oceania)
+      {
+        return anchor.Region;
+      }
+
+      return this.Plugin.WorldCatalogue.Find(this.HomeWorld)?.Region ?? anchor.Region;
     }
 
     private int RestoreSelection(WorldEntry? anchor)
@@ -328,7 +373,7 @@ namespace MarketTerror.Services
 
       var stored = this.StoredScope;
 
-      // An Oceania character is not offered the "+ Oceania" entry, so it settles for the plain region.
+      // Nothing is offered the "+ Oceania" entry once Oceania is the region, so it settles for the plain one.
       if (stored == MarketScope.RegionWithOceania && !this.options.Any(o => o.Scope == stored))
       {
         stored = MarketScope.Region;

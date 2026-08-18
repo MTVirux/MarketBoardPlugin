@@ -29,5 +29,21 @@ namespace MarketTerror.Helpers
 
       return playerState.CurrentWorld.ValueNullable?.Name.ExtractText() ?? string.Empty;
     }
+
+    /// <summary>
+    /// Reads the name of the world the character was made on.
+    /// </summary>
+    /// <param name="playerState">The player state.</param>
+    /// <returns>The world name, or an empty string when it is not known.</returns>
+    /// <remarks>Read as a nullable for the same reason <see cref="CurrentName"/> is.</remarks>
+    public static string HomeName(IPlayerState playerState)
+    {
+      if (!playerState.IsLoaded)
+      {
+        return string.Empty;
+      }
+
+      return playerState.HomeWorld.ValueNullable?.Name.ExtractText() ?? string.Empty;
+    }
   }
 }
