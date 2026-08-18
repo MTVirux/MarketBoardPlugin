@@ -89,6 +89,13 @@ namespace MarketTerror.Services
         return false;
       }
 
+      // A run that is already going travels through the main menu, so only the start is guarded.
+      if (!this.plugin.ClientState.IsLoggedIn)
+      {
+        reason = "No character is logged in.";
+        return false;
+      }
+
       if (row.Refreshing)
       {
         reason = "This row is being priced again.";
@@ -153,6 +160,11 @@ namespace MarketTerror.Services
       ArgumentNullException.ThrowIfNull(rows);
 
       if (this.IsRunning)
+      {
+        return;
+      }
+
+      if (!this.plugin.ClientState.IsLoggedIn)
       {
         return;
       }

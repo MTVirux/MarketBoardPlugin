@@ -715,8 +715,9 @@ namespace MarketTerror.GUI
       ImGui.SameLine();
 
       var buyer = this.Plugin.ShoppingListBuyer;
+      var loggedIn = this.Plugin.ClientState.IsLoggedIn;
 
-      ImGui.BeginDisabled(busy || buyer.IsRunning || !this.Plugin.Config.ShoppingListBuyEnabled);
+      ImGui.BeginDisabled(busy || buyer.IsRunning || !this.Plugin.Config.ShoppingListBuyEnabled || !loggedIn);
 
       if (ImGui.Button("Buy all"))
       {
@@ -724,7 +725,11 @@ namespace MarketTerror.GUI
       }
 
       ImGui.EndDisabled();
-      Utilities.HoverTooltip("Buy every row still listed at or below its price, closest worlds first.");
+      Utilities.HoverTooltip(
+        loggedIn
+          ? "Buy every row still listed at or below its price, closest worlds first."
+          : "Log in to a character to buy.",
+        ImGuiHoveredFlags.AllowWhenDisabled);
 
       ImGui.SameLine();
 
