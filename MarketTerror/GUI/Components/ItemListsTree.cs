@@ -11,6 +11,7 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Bindings.ImGui;
   using Lumina.Excel.Sheets;
   using MarketTerror.Models.ItemLists;
+  using MarketTerror.Models.ShoppingList;
 
   /// <summary>
   /// The item lists the user has made, drawn as one collapsible node each.
@@ -150,7 +151,7 @@ namespace MarketTerror.GUI.Components
 
           if (ImGui.Selectable("Add to the shopping list"))
           {
-            this.context.TryAddCheapestToShoppingList(item.Value, false);
+            this.context.TryAddCheapestToShoppingList(item.Value);
           }
 
           this.context.DrawListsMenu(id);
@@ -428,20 +429,30 @@ namespace MarketTerror.GUI.Components
     {
       var plugin = this.context.Plugin;
       var bulkAdd = plugin.ShoppingListBulkAdd;
-      var scope = plugin.ShoppingListScope;
+      var picker = plugin.ShoppingListScope;
       var sheet = plugin.DataManager.Excel.GetSheet<Item>();
+
+      // The menu only ever acts on the market the buy list is pointing at, so what is already on the
+      // list somewhere else is none of its business.
+      var scope = picker.ToListingScope();
 
       var listed = new HashSet<uint>();
       var priced = new HashSet<uint>();
 
-      foreach (var saved in plugin.ShoppingList)
+      foreach (var entry in plugin.ShoppingList)
       {
-        listed.Add(saved.SourceItem.RowId);
-
-        // A row added straight from a listing was never priced, so it does not stand in for one.
-        if (!saved.IsDirect)
+        if (!entry.Scope.Equals(scope))
         {
-          priced.Add(saved.SourceItem.RowId);
+          continue;
+        }
+
+        listed.Add(entry.SourceItem.RowId);
+
+        // A direct or conditional entry buys particular listings, so it does not stand in for the
+        // item being on the list at its cheapest.
+        if (entry.Kind == ListingKind.Lowest)
+        {
+          priced.Add(entry.SourceItem.RowId);
         }
       }
 
@@ -471,13 +482,13 @@ namespace MarketTerror.GUI.Components
       if (missing.Count > 0)
       {
         // The prices come from Universalis a chunk at a time, so only one job can run at once.
-        var busy = bulkAdd.IsRunning || !scope.HasSelection;
+        var busy = bulkAdd.IsRunning || !picker.HasSelection;
 
         ImGui.BeginDisabled(busy);
 
         if (ImGui.Selectable("Add all to the shopping list"))
         {
-          bulkAdd.Start(list.Name, missing, scope.QueryTargets);
+          bulkAdd.Start(list.Name, missing, scope);
         }
 
         ImGui.EndDisabled();
@@ -487,7 +498,8 @@ namespace MarketTerror.GUI.Components
       {
         var ids = new HashSet<uint>(list.ItemIds);
 
-        plugin.ShoppingList.RemoveAll(s => ids.Contains(s.SourceItem.RowId));
+        // Only this market's entries go, since that is the only one the entry above adds into.
+        plugin.ShoppingList.RemoveAll(s => ids.Contains(s.SourceItem.RowId) && s.Scope.Equals(scope));
       }
     }
   }

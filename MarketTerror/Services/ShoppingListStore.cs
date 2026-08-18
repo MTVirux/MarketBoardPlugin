@@ -14,11 +14,15 @@ namespace MarketTerror.Services
   /// <summary>
   /// The shopping list, held in memory and mirrored into the configuration so it survives a reload.
   /// </summary>
-  public sealed class ShoppingListStore : IReadOnlyList<SavedItem>
+  /// <remarks>
+  /// The same item can sit on the list several times over, once per market it is being shopped for in
+  /// and once per way of choosing that market's listings, so nothing here is keyed by item id alone.
+  /// </remarks>
+  public sealed class ShoppingListStore : IReadOnlyList<ListingEntry>
   {
     private readonly MarketTerrorPlugin plugin;
 
-    private readonly List<SavedItem> items = new List<SavedItem>();
+    private readonly List<ListingEntry> items = new List<ListingEntry>();
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ShoppingListStore"/> class, filled with the saved entries.
@@ -34,18 +38,22 @@ namespace MarketTerror.Services
       {
         var item = sheet.GetRowOrDefault(stored.ItemId);
 
-        if (item.HasValue)
+        if (!item.HasValue)
         {
-          var entry = new SavedItem(item.Value, stored.Price, stored.World, stored.Quantity, stored.Hq)
-          {
-            Unlisted = stored.Unlisted,
-            IsDirect = stored.IsDirect,
-            Limit = stored.Limit?.Clone(),
-          };
-
-          entry.Picks.AddRange(stored.Picks.Select(p => p.ToPick()));
-          this.items.Add(entry);
+          // Dropping the entries whose item cannot be looked up is what clears out whatever an older
+          // configuration left behind.
+          continue;
         }
+
+        var entry = new ListingEntry(item.Value, new ListingScope(stored.AnchorWorld, stored.Level), stored.Kind)
+        {
+          Count = Math.Max(1, stored.Count),
+          Target = stored.Target?.ToListing(),
+          Conditions = stored.Conditions?.Clone(),
+        };
+
+        entry.Matches.AddRange(stored.Matches.Select(m => m.ToListing()));
+        this.items.Add(entry);
       }
     }
 
@@ -57,44 +65,122 @@ namespace MarketTerror.Services
     /// <inheritdoc/>
     public int Count => this.items.Count;
 
+    /// <summary>
+    /// Gets the markets the list is shopping in, each named once.
+    /// </summary>
+    public IReadOnlyList<ListingScope> Scopes => this.items.Select(e => e.Scope).Distinct().ToArray();
+
     /// <inheritdoc/>
-    public SavedItem this[int index] => this.items[index];
+    public ListingEntry this[int index] => this.items[index];
 
     /// <summary>
-    /// Adds an entry to the shopping list.
+    /// Adds an entry that buys the cheapest listing of an item in a scope, or hands back the one
+    /// already there.
     /// </summary>
-    /// <param name="item">The entry to add.</param>
-    public void Add(SavedItem item)
+    /// <param name="item">The item to buy.</param>
+    /// <param name="scope">The market to buy it in.</param>
+    /// <param name="added">False when the entry handed back was already on the list.</param>
+    /// <returns>The entry.</returns>
+    public ListingEntry AddLowest(Item item, ListingScope scope, out bool added)
     {
-      this.items.Add(item);
+      ArgumentNullException.ThrowIfNull(scope);
+
+      var existing = this.FindLowest(item.RowId, scope);
+
+      if (existing != null)
+      {
+        added = false;
+        return existing;
+      }
+
+      added = true;
+
+      var entry = new ListingEntry(item, scope, ListingKind.Lowest);
+      this.items.Add(entry);
       this.Save();
+
+      return entry;
     }
 
     /// <summary>
-    /// Adds several entries to the shopping list at once.
+    /// Adds a cheapest listing entry for each of several items in one scope, leaving alone the items
+    /// that already have one there.
     /// </summary>
-    /// <param name="entries">The entries to add.</param>
-    public void AddRange(IEnumerable<SavedItem> entries)
+    /// <param name="items">The items to buy.</param>
+    /// <param name="scope">The market to buy them in.</param>
+    public void AddLowestRange(IEnumerable<Item> items, ListingScope scope)
     {
-      ArgumentNullException.ThrowIfNull(entries);
+      ArgumentNullException.ThrowIfNull(items);
+      ArgumentNullException.ThrowIfNull(scope);
 
-      var added = this.items.Count;
-      this.items.AddRange(entries);
+      var added = false;
 
-      if (this.items.Count != added)
+      foreach (var item in items)
+      {
+        if (this.FindLowest(item.RowId, scope) != null)
+        {
+          continue;
+        }
+
+        this.items.Add(new ListingEntry(item, scope, ListingKind.Lowest));
+        added = true;
+      }
+
+      if (added)
       {
         this.Save();
       }
     }
 
     /// <summary>
+    /// Adds an entry that buys one particular listing.
+    /// </summary>
+    /// <param name="item">The item to buy.</param>
+    /// <param name="scope">The market the listing was seen in.</param>
+    /// <param name="listing">The listing to buy.</param>
+    /// <returns>The entry.</returns>
+    public ListingEntry AddDirect(Item item, ListingScope scope, ResolvedListing listing)
+    {
+      ArgumentNullException.ThrowIfNull(scope);
+      ArgumentNullException.ThrowIfNull(listing);
+
+      var entry = new ListingEntry(item, scope, ListingKind.Direct) { Target = listing };
+      entry.Matches.Add(listing);
+
+      this.items.Add(entry);
+      this.Save();
+
+      return entry;
+    }
+
+    /// <summary>
+    /// Adds an entry that buys every listing in a scope a rule holds for.
+    /// </summary>
+    /// <param name="item">The item to buy.</param>
+    /// <param name="scope">The market to buy it in.</param>
+    /// <param name="conditions">The rule to buy by, which is copied so the editor's draft is not the stored one.</param>
+    /// <returns>The entry, buying nothing until a refresh tells it what the rule caught.</returns>
+    public ListingEntry AddConditional(Item item, ListingScope scope, ListingConditions conditions)
+    {
+      ArgumentNullException.ThrowIfNull(scope);
+      ArgumentNullException.ThrowIfNull(conditions);
+
+      var entry = new ListingEntry(item, scope, ListingKind.Conditional) { Conditions = conditions.Clone() };
+
+      this.items.Add(entry);
+      this.Save();
+
+      return entry;
+    }
+
+    /// <summary>
     /// Removes an entry from the shopping list.
     /// </summary>
-    /// <param name="item">The entry to remove.</param>
+    /// <param name="entry">The entry to remove.</param>
     /// <returns>True when the entry was on the list.</returns>
-    public bool Remove(SavedItem item)
+    public bool Remove(ListingEntry entry)
     {
-      if (!this.items.Remove(item))
+      if (!this.items.Remove(entry))
       {
         return false;
       }
@@ -104,210 +190,20 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Updates the price and world of the entries whose item is already on the list.
+    /// Removes every entry matching a condition.
     /// </summary>
-    /// <param name="entries">The freshly priced entries.</param>
-    public void Replace(IEnumerable<SavedItem> entries)
+    /// <param name="match">The condition an entry has to match to be removed.</param>
+    /// <returns>The number of entries removed.</returns>
+    public int RemoveAll(Predicate<ListingEntry> match)
     {
-      ArgumentNullException.ThrowIfNull(entries);
+      var removed = this.items.RemoveAll(match);
 
-      var changed = false;
-
-      foreach (var entry in entries)
-      {
-        var existing = this.FindRefreshable(entry.SourceItem.RowId);
-
-        if (existing == null || existing.HasPicks || existing.IsLimited)
-        {
-          // A picked row is priced by its picks, which the pick refresh updates on their own, and a
-          // limited one by whatever its rule sweeps up - never by the cheapest listing in the scope.
-          continue;
-        }
-
-        existing.Price = entry.Price;
-        existing.World = entry.World;
-        existing.Quantity = entry.Quantity;
-        existing.Hq = entry.Hq;
-        existing.Outcome = BuyOutcome.None;
-        existing.Unlisted = false;
-        changed = true;
-      }
-
-      if (changed)
+      if (removed > 0)
       {
         this.Save();
       }
-    }
 
-    /// <summary>
-    /// Drops the price and world of the entries whose item found no listings, so their row shows dashes
-    /// instead of a price from a scope that is no longer the selected one.
-    /// </summary>
-    /// <param name="itemIds">The row ids of the items with nothing on sale.</param>
-    public void MarkUnlisted(IEnumerable<uint> itemIds)
-    {
-      ArgumentNullException.ThrowIfNull(itemIds);
-
-      var changed = false;
-
-      foreach (var id in itemIds)
-      {
-        var existing = this.FindRefreshable(id);
-
-        if (existing == null || existing.Unlisted)
-        {
-          continue;
-        }
-
-        existing.Outcome = BuyOutcome.None;
-        existing.Unlisted = true;
-        changed = true;
-
-        if (existing.HasPicks)
-        {
-          // Nothing of this item is on sale in the scope, so none of the picked listings can still be.
-          foreach (var pick in existing.Picks)
-          {
-            pick.Gone = true;
-          }
-
-          continue;
-        }
-
-        // The quality stays, since it is what the row goes looking for the next time it is priced.
-        existing.Price = 0;
-        existing.Quantity = 0;
-        existing.World = string.Empty;
-      }
-
-      if (changed)
-      {
-        this.Save();
-      }
-    }
-
-    /// <summary>
-    /// Marks the given entries as waiting for a new price, so the table can say so until one lands.
-    /// </summary>
-    /// <param name="itemIds">The row ids of the items being priced again.</param>
-    public void MarkRefreshing(IEnumerable<uint> itemIds)
-    {
-      ArgumentNullException.ThrowIfNull(itemIds);
-
-      foreach (var id in itemIds)
-      {
-        var existing = this.FindRefreshable(id);
-
-        if (existing != null)
-        {
-          existing.Refreshing = true;
-        }
-      }
-    }
-
-    /// <summary>
-    /// Clears the waiting flag set by <see cref="MarkRefreshing"/> from every entry.
-    /// </summary>
-    public void ClearRefreshing()
-    {
-      foreach (var item in this.items)
-      {
-        item.Refreshing = false;
-      }
-    }
-
-    /// <summary>
-    /// Forgets the buy outcome of every row the test matches, so they go back to being uncoloured.
-    /// </summary>
-    /// <param name="match">The test a row has to pass to lose its outcome.</param>
-    public void ClearOutcomes(Func<SavedItem, bool> match)
-    {
-      ArgumentNullException.ThrowIfNull(match);
-
-      foreach (var row in this.items.Where(match))
-      {
-        row.Outcome = BuyOutcome.None;
-        row.FailReason = string.Empty;
-
-        foreach (var pick in row.Picks)
-        {
-          pick.Outcome = BuyOutcome.None;
-          pick.FailReason = string.Empty;
-          pick.Paid = null;
-        }
-      }
-    }
-
-    /// <summary>
-    /// Gets the entry a pricing job is allowed to touch for an item.
-    /// </summary>
-    /// <param name="itemId">The row id of the item to look for.</param>
-    /// <returns>The entry, or null when the item has no ordinary row on the list.</returns>
-    public SavedItem? Find(uint itemId)
-    {
-      return this.FindRefreshable(itemId);
-    }
-
-    /// <summary>
-    /// Turns a row added straight from a listing into an ordinary one, so refreshes price it again.
-    /// </summary>
-    /// <param name="item">The row to convert.</param>
-    public void ConvertToItemListing(SavedItem item)
-    {
-      ArgumentNullException.ThrowIfNull(item);
-
-      if (!item.IsDirect)
-      {
-        return;
-      }
-
-      item.IsDirect = false;
-      this.Save();
-    }
-
-    /// <summary>
-    /// Replaces the listings a row has been told to buy, and writes the list out.
-    /// </summary>
-    /// <param name="item">The row to set the picks on.</param>
-    /// <param name="picks">The picks, or an empty list to go back to standing for one listing.</param>
-    public void SetPicks(SavedItem item, IEnumerable<PickedListing> picks)
-    {
-      ArgumentNullException.ThrowIfNull(item);
-
-      item.SetPicks(picks);
-      this.Save();
-    }
-
-    /// <summary>
-    /// Replaces the standing rule that picks a row's listings, along with the listings it chose.
-    /// </summary>
-    /// <param name="item">The row to set the rule on.</param>
-    /// <param name="limit">The rule, or null to go back to picking the listings by hand.</param>
-    /// <param name="picks">The listings the rule chose, or the ones ticked by hand when there is no rule.</param>
-    public void SetLimit(SavedItem item, ListingLimit? limit, IEnumerable<PickedListing> picks)
-    {
-      ArgumentNullException.ThrowIfNull(item);
-
-      item.Limit = limit;
-
-      if (limit == null)
-      {
-        item.SetPicks(picks);
-      }
-      else
-      {
-        item.SetSweptPicks(picks);
-      }
-
-      this.Save();
-    }
-
-    /// <summary>
-    /// Writes the list out after something changed a row in place.
-    /// </summary>
-    public void Persist()
-    {
-      this.Save();
+      return removed;
     }
 
     /// <summary>
@@ -325,37 +221,164 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Removes every entry matching a condition.
+    /// Gets the entry that buys an item's cheapest listings in a scope.
     /// </summary>
-    /// <param name="match">The condition an entry has to match to be removed.</param>
-    /// <returns>The number of entries removed.</returns>
-    public int RemoveAll(Predicate<SavedItem> match)
+    /// <param name="itemId">The row id of the item to look for.</param>
+    /// <param name="scope">The market to look in.</param>
+    /// <returns>The entry, or null when that item and scope have none.</returns>
+    public ListingEntry? FindLowest(uint itemId, ListingScope scope)
     {
-      var removed = this.items.RemoveAll(match);
+      return this.items.Find(e =>
+        e.Kind == ListingKind.Lowest && e.SourceItem.RowId == itemId && e.Scope.Equals(scope));
+    }
 
-      if (removed > 0)
+    /// <summary>
+    /// Gets every entry shopping in one market.
+    /// </summary>
+    /// <param name="scope">The market to look in.</param>
+    /// <returns>The entries, in the order they were added.</returns>
+    public IEnumerable<ListingEntry> InScope(ListingScope scope)
+    {
+      return this.items.Where(e => e.Scope.Equals(scope));
+    }
+
+    /// <summary>
+    /// Sets how many of its market's cheapest listings an entry takes.
+    /// </summary>
+    /// <param name="entry">The entry to set the count on.</param>
+    /// <param name="count">The number of listings, held to at least one.</param>
+    public void SetCount(ListingEntry entry, int count)
+    {
+      ArgumentNullException.ThrowIfNull(entry);
+
+      var wanted = Math.Max(1, count);
+
+      if (entry.Count == wanted)
       {
-        this.Save();
+        return;
       }
 
-      return removed;
+      entry.Count = wanted;
+
+      if (entry.Matches.Count > wanted)
+      {
+        // Asking for fewer listings only ever takes listings away, so the entry chooses again out of
+        // the ones it already holds instead of waiting on a fetch. Cheapest first, the way a refresh
+        // would order them, and the sold out ones go first since they buy nothing.
+        var kept = entry.Matches
+          .OrderBy(m => m.Gone)
+          .ThenBy(m => m.Price)
+          .ThenBy(m => m.Total)
+          .Take(wanted)
+          .ToArray();
+
+        // Trimming is not a repricing, so the listings that stay keep whatever a buy run wrote on
+        // them and the entry only says again what the ones left under it say.
+        entry.Matches.Clear();
+        entry.Matches.AddRange(kept);
+        entry.Outcome = BuyOutcome.None;
+        entry.FailReason = string.Empty;
+        entry.RollUpOutcome();
+      }
+
+      this.Save();
+    }
+
+    /// <summary>
+    /// Replaces the rule a conditional entry buys by.
+    /// </summary>
+    /// <param name="entry">The entry to set the rule on.</param>
+    /// <param name="conditions">The rule, which is copied so the editor's draft is not the stored one.</param>
+    public void SetConditions(ListingEntry entry, ListingConditions conditions)
+    {
+      ArgumentNullException.ThrowIfNull(entry);
+      ArgumentNullException.ThrowIfNull(conditions);
+
+      entry.Conditions = conditions.Clone();
+      this.Save();
+    }
+
+    /// <summary>
+    /// Replaces the listings an entry resolves to, and writes the list out.
+    /// </summary>
+    /// <param name="entry">The entry that was priced.</param>
+    /// <param name="matches">The listings it now buys, which can be none.</param>
+    public void ApplyMatches(ListingEntry entry, IReadOnlyList<ResolvedListing> matches)
+    {
+      ArgumentNullException.ThrowIfNull(entry);
+      ArgumentNullException.ThrowIfNull(matches);
+
+      entry.SetMatches(matches);
+      entry.Refreshing = false;
+      this.Save();
+    }
+
+    /// <summary>
+    /// Marks the given entries as waiting for a new price, so the table can say so until one lands.
+    /// </summary>
+    /// <param name="entries">The entries being priced again.</param>
+    /// <remarks>
+    /// Only entries still on the list are marked, since <see cref="ClearRefreshing"/> walks the list
+    /// and would never take the flag back off one that had been removed in the meantime.
+    /// </remarks>
+    public void MarkRefreshing(IEnumerable<ListingEntry> entries)
+    {
+      ArgumentNullException.ThrowIfNull(entries);
+
+      var asked = new HashSet<ListingEntry>(entries);
+
+      foreach (var entry in this.items.Where(asked.Contains))
+      {
+        entry.Refreshing = true;
+      }
+    }
+
+    /// <summary>
+    /// Clears the waiting flag set by <see cref="MarkRefreshing"/> from every entry.
+    /// </summary>
+    public void ClearRefreshing()
+    {
+      foreach (var entry in this.items)
+      {
+        entry.Refreshing = false;
+      }
+    }
+
+    /// <summary>
+    /// Forgets the buy outcome of every entry the test matches, so they go back to being uncoloured.
+    /// </summary>
+    /// <param name="match">The test an entry has to pass to lose its outcome.</param>
+    public void ClearOutcomes(Func<ListingEntry, bool> match)
+    {
+      ArgumentNullException.ThrowIfNull(match);
+
+      foreach (var entry in this.items.Where(match))
+      {
+        entry.Outcome = BuyOutcome.None;
+        entry.FailReason = string.Empty;
+
+        foreach (var listing in entry.Matches)
+        {
+          listing.Outcome = BuyOutcome.None;
+          listing.FailReason = string.Empty;
+          listing.Paid = null;
+        }
+      }
+    }
+
+    /// <summary>
+    /// Writes the list out after something changed an entry in place.
+    /// </summary>
+    public void Persist()
+    {
+      this.Save();
     }
 
     /// <inheritdoc/>
-    public IEnumerator<SavedItem> GetEnumerator() => this.items.GetEnumerator();
+    public IEnumerator<ListingEntry> GetEnumerator() => this.items.GetEnumerator();
 
     /// <inheritdoc/>
     IEnumerator IEnumerable.GetEnumerator() => this.GetEnumerator();
-
-    /// <summary>
-    /// Gets the entry for an item, skipping the rows added straight from a listing.
-    /// </summary>
-    /// <param name="itemId">The row id of the item to look for.</param>
-    /// <returns>The entry, or null when the item has no ordinary row on the list.</returns>
-    private SavedItem? FindRefreshable(uint itemId)
-    {
-      return this.items.Find(i => i.SourceItem.RowId == itemId && !i.IsDirect);
-    }
 
     private void Save()
     {
@@ -364,17 +387,9 @@ namespace MarketTerror.Services
       var stored = this.plugin.Config.ShoppingList;
       stored.Clear();
 
-      foreach (var item in this.items)
+      foreach (var entry in this.items)
       {
-        // A picked row's price, world, stack size and quality are read off its picks, so these four
-        // are its summary rather than a listing. Nothing reads them back while picks are on the row,
-        // and taking the last pick off rebuilds them from the picks that were there.
-        var row = new StoredItem(item.SourceItem.RowId, item.Price, item.World, item.Unlisted, item.Quantity, item.Hq, item.IsDirect)
-        {
-          Limit = item.Limit?.Clone(),
-        };
-        row.Picks.AddRange(item.Picks.Select(p => new StoredPick(p)));
-        stored.Add(row);
+        stored.Add(new StoredEntry(entry));
       }
 
       this.plugin.PluginInterface.SavePluginConfig(this.plugin.Config);

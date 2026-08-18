@@ -11,6 +11,7 @@ namespace MarketTerror.GUI.Components
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface;
   using Lumina.Excel.Sheets;
+  using MarketTerror.Models.ShoppingList;
   using MarketTerror.Services;
 
   /// <summary>
@@ -307,7 +308,7 @@ namespace MarketTerror.GUI.Components
 
           if (ImGui.Selectable("Add to the shopping list"))
           {
-            this.context.TryAddCheapestToShoppingList(item.Value, false);
+            this.context.TryAddCheapestToShoppingList(item.Value);
           }
 
           this.context.DrawListsMenu(item.Value.RowId);
@@ -401,7 +402,7 @@ namespace MarketTerror.GUI.Components
 
               if (ImGui.Selectable("Add to the shopping list"))
               {
-                this.context.TryAddCheapestToShoppingList(item, true);
+                this.context.TryAddCheapestToShoppingList(item);
               }
 
               this.context.DrawListsMenu(item.RowId);
@@ -424,16 +425,24 @@ namespace MarketTerror.GUI.Components
 
       if (ImGui.BeginPopupContextItem(popupId))
       {
-        // Only the open category pays for these, and a category can hold thousands of items.
-        var buyList = this.context.Plugin.ShoppingList;
-        var listed = buyList.Select(s => s.SourceItem.RowId).ToHashSet();
+        // The menu only ever acts on the market the buy list is pointing at, so what is already on
+        // the list somewhere else is none of its business.
+        var scope = this.context.Plugin.ShoppingListScope.ToListingScope();
 
-        // A row added straight from a listing was never priced, so it does not stand in for one.
-        var priced = buyList.Where(s => !s.IsDirect).Select(s => s.SourceItem.RowId).ToHashSet();
+        // Only the open category pays for these, and a category can hold thousands of items.
+        var inScope = this.context.Plugin.ShoppingList.Where(e => e.Scope.Equals(scope)).ToArray();
+        var listed = inScope.Select(e => e.SourceItem.RowId).ToHashSet();
+
+        // A direct or conditional entry buys particular listings, so it does not stand in for the
+        // item being on the list at its cheapest.
+        var priced = inScope
+          .Where(e => e.Kind == ListingKind.Lowest)
+          .Select(e => e.SourceItem.RowId)
+          .ToHashSet();
 
         var missingFromBuyList = items.Where(i => !priced.Contains(i.RowId)).ToArray();
 
-        this.DrawCategoryBuyListEntries(categoryName, items, missingFromBuyList, items.Any(i => listed.Contains(i.RowId)));
+        this.DrawCategoryBuyListEntries(categoryName, items, missingFromBuyList, items.Any(i => listed.Contains(i.RowId)), scope);
         this.DrawCategoryListEntries(items);
 
         ImGui.EndPopup();
@@ -484,18 +493,16 @@ namespace MarketTerror.GUI.Components
       }
     }
 
-    private void DrawCategoryBuyListEntries(string categoryName, List<Item> items, Item[] missing, bool anyListed)
+    private void DrawCategoryBuyListEntries(string categoryName, List<Item> items, Item[] missing, bool anyListed, ListingScope scope)
     {
       var bulkAdd = this.context.Plugin.ShoppingListBulkAdd;
       var buyList = this.context.Plugin.ShoppingList;
-
-      // The buy list window's own scope, so adding and refreshing price against the same place.
-      var scope = this.context.Plugin.ShoppingListScope;
+      var picker = this.context.Plugin.ShoppingListScope;
 
       if (missing.Length > 0)
       {
         // The prices come from Universalis a chunk at a time, so only one category can be added at once.
-        var busy = bulkAdd.IsRunning || !scope.HasSelection;
+        var busy = bulkAdd.IsRunning || !picker.HasSelection;
 
         if (busy)
         {
@@ -504,7 +511,7 @@ namespace MarketTerror.GUI.Components
 
         if (ImGui.Selectable("Add all to the shopping list"))
         {
-          bulkAdd.Start(categoryName, missing, scope.QueryTargets);
+          bulkAdd.Start(categoryName, missing, scope);
         }
 
         if (busy)
@@ -517,7 +524,8 @@ namespace MarketTerror.GUI.Components
       {
         var ids = items.Select(i => i.RowId).ToHashSet();
 
-        buyList.RemoveAll(s => ids.Contains(s.SourceItem.RowId));
+        // Only this market's entries go, since that is the only one the entry above adds into.
+        buyList.RemoveAll(s => ids.Contains(s.SourceItem.RowId) && s.Scope.Equals(scope));
       }
     }
   }
