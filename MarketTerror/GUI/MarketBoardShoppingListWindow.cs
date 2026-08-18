@@ -47,8 +47,6 @@ namespace MarketTerror.GUI
     /// </summary>
     private const int ActionButtonCount = 5;
 
-    private const string HqHeader = "HQ";
-
     private const string PriceHeader = "Price";
 
     private const string QtyHeader = "Qty";
@@ -68,7 +66,7 @@ namespace MarketTerror.GUI
     private static readonly Vector2 MinWindowSize = new Vector2(560, 150);
 
     /// <summary>
-    /// What the high quality column draws for a row that only buys high quality.
+    /// What the quantity column puts after a stack that is high quality.
     /// </summary>
     private static readonly string HqMark = SeIconChar.HighQuality.AsString();
 
@@ -242,13 +240,12 @@ namespace MarketTerror.GUI
         footerHeight += ImGui.GetFrameHeightWithSpacing();
       }
 
-      if (!ImGui.BeginTable("shoppingList", 7, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
+      if (!ImGui.BeginTable("shoppingList", 6, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, -footerHeight)))
       {
         return;
       }
 
       ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
-      ImGui.TableSetupColumn(HqHeader, ImGuiTableColumnFlags.WidthFixed);
       ImGui.TableSetupColumn(PriceHeader, ImGuiTableColumnFlags.WidthFixed);
       ImGui.TableSetupColumn(QtyHeader, ImGuiTableColumnFlags.WidthFixed);
       ImGui.TableSetupColumn(TotalHeader, ImGuiTableColumnFlags.WidthFixed);
@@ -266,9 +263,8 @@ namespace MarketTerror.GUI
       this.UpdateSort();
 
       // The listings shown under an open row are measured with it, so the columns fit them too.
-      var hqWidth = ColumnWidth(HqHeader, this.ColumnValues(HqText, p => p.Hq ? HqMark : string.Empty));
       var priceWidth = ColumnWidth(PriceHeader, this.ColumnValues(_ => string.Empty, p => this.Gil(PickPrice(p))));
-      var qtyWidth = ColumnWidth(QtyHeader, this.ColumnValues(QtyText, p => Count(p.Quantity)));
+      var qtyWidth = ColumnWidth(QtyHeader, this.ColumnValues(QtyText, PickQtyText));
       var totalWidth = ColumnWidth(TotalHeader, this.ColumnValues(this.TotalText, p => this.Gil(PickPrice(p) * p.Quantity)));
       var worldWidth = ColumnWidth(WorldHeader, this.ColumnValues(WorldText, p => p.World));
 
@@ -319,46 +315,26 @@ namespace MarketTerror.GUI
           ImGui.EndPopup();
         }
 
-        ImGui.TableSetColumnIndex(1);
-
-        var quality = HqText(item);
-
-        if (quality.Length > 0)
-        {
-          ImGui.PushStyleColor(ImGuiCol.Text, item.HasPicks ? this.theme.TextDim : this.theme.TextBright);
-          Centered(quality, hqWidth);
-          ImGui.PopStyleColor();
-
-          if (item.HasPicks)
-          {
-            this.PickTooltip(item);
-          }
-          else
-          {
-            Utilities.HoverTooltip("This row only buys high quality.");
-          }
-        }
-
         // The price column belongs to the listings under a row; the row itself sums them up.
-        ImGui.TableSetColumnIndex(3);
+        ImGui.TableSetColumnIndex(2);
         ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
         RightAligned(QtyText(item), qtyWidth);
         ImGui.PopStyleColor();
         this.PickTooltip(item);
 
-        ImGui.TableSetColumnIndex(4);
+        ImGui.TableSetColumnIndex(3);
         ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
         RightAligned(this.TotalText(item), totalWidth);
         ImGui.PopStyleColor();
         this.PickTooltip(item);
 
-        ImGui.TableSetColumnIndex(5);
+        ImGui.TableSetColumnIndex(4);
         RightAligned(WorldText(item), worldWidth);
         this.PickTooltip(item);
 
         var buttonSize = new Vector2(ActionButtonWidth * ImGui.GetIO().FontGlobalScale, 1.5f * ImGui.GetItemRectSize().Y);
 
-        ImGui.TableSetColumnIndex(6);
+        ImGui.TableSetColumnIndex(5);
 
         var idle = !this.Plugin.ShoppingListBuyer.IsRunning && !this.Plugin.ShoppingListBulkAdd.IsRunning;
 
@@ -459,7 +435,7 @@ namespace MarketTerror.GUI
 
         if (open)
         {
-          this.DrawPickRows(item, hqWidth, priceWidth, qtyWidth, totalWidth, worldWidth);
+          this.DrawPickRows(item, priceWidth, qtyWidth, totalWidth, worldWidth);
         }
 
         k += 1;
@@ -580,33 +556,37 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Formats the quality of what a row buys: the split of its picks, or the mark on a single
-    /// listing that is high quality.
-    /// </summary>
-    /// <param name="item">The row to format.</param>
-    /// <returns>The quality as it reads in the table, or an empty string when there is nothing to say.</returns>
-    private static string HqText(SavedItem item)
-    {
-      // A row without picks stands for one listing, which is either all high quality or none of it.
-      if (!item.HasPicks)
-      {
-        return item.Hq ? HqMark : string.Empty;
-      }
-
-      var nq = item.QuantityNq > 0 ? $"{item.QuantityNq.ToString("N0", CultureInfo.CurrentCulture)} NQ" : string.Empty;
-      var hq = item.QuantityHq > 0 ? $"{item.QuantityHq.ToString("N0", CultureInfo.CurrentCulture)} HQ" : string.Empty;
-
-      return nq.Length > 0 && hq.Length > 0 ? $"{nq} / {hq}" : nq + hq;
-    }
-
-    /// <summary>
-    /// Formats how many of a row's item the listing behind it holds.
+    /// Formats how many of a row's item the listings behind it hold, and of what quality.
     /// </summary>
     /// <param name="item">The row to format.</param>
     /// <returns>The quantity as it reads in the table.</returns>
     private static string QtyText(SavedItem item)
     {
-      return item.Unlisted || item.Quantity <= 0 ? NoValue : Count(item.Quantity);
+      if (item.Unlisted || item.Quantity <= 0)
+      {
+        return NoValue;
+      }
+
+      // A row without picks stands for one listing, which is either all high quality or none of it.
+      if (!item.HasPicks)
+      {
+        return Count(item.Quantity, item.Hq);
+      }
+
+      var nq = item.QuantityNq > 0 ? $"{Count(item.QuantityNq)} NQ" : string.Empty;
+      var hq = item.QuantityHq > 0 ? $"{Count(item.QuantityHq)} HQ" : string.Empty;
+
+      return nq.Length > 0 && hq.Length > 0 ? $"{nq} / {hq}" : nq + hq;
+    }
+
+    /// <summary>
+    /// Formats the stack size of one picked listing.
+    /// </summary>
+    /// <param name="pick">The picked listing to format.</param>
+    /// <returns>The stack size as it reads in the table.</returns>
+    private static string PickQtyText(PickedListing pick)
+    {
+      return Count(pick.Quantity, pick.Hq);
     }
 
     /// <summary>
@@ -617,6 +597,17 @@ namespace MarketTerror.GUI
     private static string Count(long quantity)
     {
       return quantity.ToString("N0", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>
+    /// Formats a stack size, marking it when it is high quality.
+    /// </summary>
+    /// <param name="quantity">The stack size to format.</param>
+    /// <param name="hq">True when the stack is high quality.</param>
+    /// <returns>The stack size as it reads in the table.</returns>
+    private static string Count(long quantity, bool hq)
+    {
+      return hq ? $"{Count(quantity)} {HqMark}" : Count(quantity);
     }
 
     /// <summary>
@@ -656,24 +647,6 @@ namespace MarketTerror.GUI
       }
 
       return widest;
-    }
-
-    /// <summary>
-    /// Draws text in the middle of its column, under the heading.
-    /// </summary>
-    /// <param name="text">The text to draw.</param>
-    /// <param name="width">The width the column was measured at.</param>
-    private static void Centered(string text, float width)
-    {
-      var edge = Math.Min(ImGui.GetContentRegionAvail().X, width);
-      var padding = (edge - ImGui.CalcTextSize(text).X) / 2.0f;
-
-      if (padding > 0)
-      {
-        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + padding);
-      }
-
-      ImGui.Text(text);
     }
 
     /// <summary>
@@ -1009,12 +982,11 @@ namespace MarketTerror.GUI
     /// Draws a row under a shopping list row for each listing it has been told to buy.
     /// </summary>
     /// <param name="item">The row whose listings to draw.</param>
-    /// <param name="hqWidth">The width the quality column was measured at.</param>
     /// <param name="priceWidth">The width the price column was measured at.</param>
     /// <param name="qtyWidth">The width the quantity column was measured at.</param>
     /// <param name="totalWidth">The width the total column was measured at.</param>
     /// <param name="worldWidth">The width the world column was measured at.</param>
-    private void DrawPickRows(SavedItem item, float hqWidth, float priceWidth, float qtyWidth, float totalWidth, float worldWidth)
+    private void DrawPickRows(SavedItem item, float priceWidth, float qtyWidth, float totalWidth, float worldWidth)
     {
       // Where the row above puts its name, so a listing reads as hanging off it.
       var indent = ImGui.GetTreeNodeToLabelSpacing() + ImGui.GetTextLineHeight() + (ImGui.GetStyle().ItemSpacing.X * 2);
@@ -1035,15 +1007,6 @@ namespace MarketTerror.GUI
         ImGui.PopStyleColor();
 
         ImGui.TableSetColumnIndex(1);
-
-        if (pick.Hq)
-        {
-          ImGui.PushStyleColor(ImGuiCol.Text, dim ? this.theme.TextDim : this.theme.TextBright);
-          Centered(HqMark, hqWidth);
-          ImGui.PopStyleColor();
-        }
-
-        ImGui.TableSetColumnIndex(2);
         ImGui.PushStyleColor(ImGuiCol.Text, gil);
         RightAligned(this.Gil(price), priceWidth);
         ImGui.PopStyleColor();
@@ -1053,22 +1016,22 @@ namespace MarketTerror.GUI
           Utilities.HoverTooltip($"Picked at {this.Gil(pick.Price)}, bought at {this.Gil(price)}.");
         }
 
-        ImGui.TableSetColumnIndex(3);
-        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
-        RightAligned(Count(pick.Quantity), qtyWidth);
+        ImGui.TableSetColumnIndex(2);
+        ImGui.PushStyleColor(ImGuiCol.Text, dim ? this.theme.TextDim : this.theme.TextBright);
+        RightAligned(PickQtyText(pick), qtyWidth);
         ImGui.PopStyleColor();
 
-        ImGui.TableSetColumnIndex(4);
+        ImGui.TableSetColumnIndex(3);
         ImGui.PushStyleColor(ImGuiCol.Text, gil);
         RightAligned(this.Gil(price * pick.Quantity), totalWidth);
         ImGui.PopStyleColor();
 
-        ImGui.TableSetColumnIndex(5);
+        ImGui.TableSetColumnIndex(4);
         ImGui.PushStyleColor(ImGuiCol.Text, dim ? this.theme.TextDim : this.theme.Text);
         RightAligned(pick.World, worldWidth);
         ImGui.PopStyleColor();
 
-        ImGui.TableSetColumnIndex(6);
+        ImGui.TableSetColumnIndex(5);
 
         var status = this.PickStatus(pick);
 
@@ -1394,21 +1357,17 @@ namespace MarketTerror.GUI
             : items.OrderByDescending(i => i.SourceItem.Name.ExtractText(), StringComparer.CurrentCultureIgnoreCase);
         case 1:
           return this.sortAscending
-            ? items.OrderBy(i => i.Hq)
-            : items.OrderByDescending(i => i.Hq);
-        case 2:
-          return this.sortAscending
             ? items.OrderBy(i => i.Price)
             : items.OrderByDescending(i => i.Price);
-        case 3:
+        case 2:
           return this.sortAscending
             ? items.OrderBy(i => i.Quantity)
             : items.OrderByDescending(i => i.Quantity);
-        case 4:
+        case 3:
           return this.sortAscending
             ? items.OrderBy(i => i.Total)
             : items.OrderByDescending(i => i.Total);
-        case 5:
+        case 4:
           return this.sortAscending
             ? items.OrderBy(i => i.World, StringComparer.CurrentCultureIgnoreCase)
             : items.OrderByDescending(i => i.World, StringComparer.CurrentCultureIgnoreCase);
