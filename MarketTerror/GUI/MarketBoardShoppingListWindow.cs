@@ -788,7 +788,7 @@ namespace MarketTerror.GUI
 
         if (ImGui.Button("Reset successful"))
         {
-          list.ClearOutcomes(list.Where(WasBought).Select(i => i.SourceItem.RowId).ToArray());
+          list.ClearOutcomes(WasBought);
         }
 
         Utilities.HoverTooltip("Take the colour off the rows that were bought, leaving them on the list.");
@@ -818,7 +818,7 @@ namespace MarketTerror.GUI
 
         if (ImGui.Button("Reset failed"))
         {
-          list.ClearOutcomes(list.Where(BuyFailed).Select(i => i.SourceItem.RowId).ToArray());
+          list.ClearOutcomes(BuyFailed);
         }
 
         Utilities.HoverTooltip("Take the colour off the rows that did not buy.");

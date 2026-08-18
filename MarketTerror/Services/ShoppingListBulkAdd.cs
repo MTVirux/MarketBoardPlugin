@@ -183,7 +183,9 @@ namespace MarketTerror.Services
       {
         // Only the rows being priced again, so a single row refresh leaves the rest of the list alone.
         var ids = queued.Select(i => i.RowId).ToHashSet();
-        this.plugin.ShoppingList.ClearOutcomes(ids);
+
+        // A direct listing is left out of refreshes, so its colour is left alone too.
+        this.plugin.ShoppingList.ClearOutcomes(row => !row.IsDirect && ids.Contains(row.SourceItem.RowId));
         this.plugin.ShoppingList.MarkRefreshing(ids);
 
         // The bulk query only ever comes back with one listing an item, which cannot say whether a

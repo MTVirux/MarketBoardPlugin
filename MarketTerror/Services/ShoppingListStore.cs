@@ -215,21 +215,16 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Forgets the buy outcome of the given entries, so a new pricing job starts from uncoloured rows.
+    /// Forgets the buy outcome of every row the test matches, so they go back to being uncoloured.
     /// </summary>
-    /// <param name="itemIds">The row ids of the items being priced again.</param>
-    public void ClearOutcomes(IEnumerable<uint> itemIds)
+    /// <param name="match">The test a row has to pass to lose its outcome.</param>
+    public void ClearOutcomes(Func<SavedItem, bool> match)
     {
-      ArgumentNullException.ThrowIfNull(itemIds);
+      ArgumentNullException.ThrowIfNull(match);
 
-      foreach (var id in itemIds)
+      foreach (var row in this.items.Where(match))
       {
-        var existing = this.FindRefreshable(id);
-
-        if (existing != null)
-        {
-          existing.Outcome = BuyOutcome.None;
-        }
+        row.Outcome = BuyOutcome.None;
       }
     }
 
