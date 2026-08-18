@@ -99,7 +99,10 @@ namespace MarketTerror.GUI.Components
         return;
       }
 
-      var open = ImGui.TreeNode($"{list.Name} ({list.ItemIds.Count})##list{list.Id}");
+      // The node keeps its own indent off, so the items below can be lined up by hand.
+      var open = ImGui.TreeNodeEx(
+        $"{list.Name} ({list.ItemIds.Count})##list{list.Id}",
+        ImGuiTreeNodeFlags.NoTreePushOnOpen);
 
       // Both bind to the node while it is still the last item, so a closed list keeps them.
       // The drag goes first: an open menu draws its own items, which would take the binding.
@@ -111,7 +114,9 @@ namespace MarketTerror.GUI.Components
         return;
       }
 
-      ImGui.Unindent(ImGui.GetTreeNodeToLabelSpacing());
+      // A selectable draws its name right where the cursor is, so push the items in to where
+      // the list's own name starts.
+      ImGui.Indent(ImGui.GetTreeNodeToLabelSpacing());
 
       var sheet = this.context.Plugin.DataManager.Excel.GetSheet<Item>();
 
@@ -160,8 +165,7 @@ namespace MarketTerror.GUI.Components
         }
       }
 
-      ImGui.Indent(ImGui.GetTreeNodeToLabelSpacing());
-      ImGui.TreePop();
+      ImGui.Unindent(ImGui.GetTreeNodeToLabelSpacing());
     }
 
     /// <summary>
