@@ -5,6 +5,7 @@
 namespace MarketTerror.Helpers
 {
   using System;
+  using System.Collections.Generic;
   using System.Diagnostics.CodeAnalysis;
   using System.Globalization;
   using System.Threading;
@@ -34,6 +35,7 @@ namespace MarketTerror.Helpers
     private const long ListingsTimeoutMs = 15000;
     private const long ReusedListingsTimeoutMs = 3000;
     private const long ListingsSettleMs = 500;
+    private const long ReusedSettleMs = 500;
     private const long EarlyArrivalMs = 3000;
     private const long ConfirmTimeoutMs = 10000;
     private const long ResultTimeoutMs = 15000;
@@ -47,6 +49,12 @@ namespace MarketTerror.Helpers
     private readonly IMarketBoard marketBoard;
     private readonly IPluginLog log;
     private readonly Func<bool> includesSalesTax;
+
+    /// <summary>
+    /// The listings bought off the window that is up, so a window the game leaves as it was cannot
+    /// offer the same listing twice.
+    /// </summary>
+    private readonly HashSet<ulong> boughtListings = new HashSet<ulong>();
 
     private State state = State.Idle;
     private bool reusedListings;
@@ -117,6 +125,12 @@ namespace MarketTerror.Helpers
       {
         finished(BuyResult.Failed("another purchase is still running"));
         return;
+      }
+
+      if (!reusingListings)
+      {
+        // Listings opened afresh come from the server, so nothing already bought can be among them.
+        this.boughtListings.Clear();
       }
 
       this.request = buyRequest;
@@ -344,14 +358,22 @@ namespace MarketTerror.Helpers
     /// </remarks>
     private unsafe bool AreListingsReady(InfoProxyItemSearch* proxy, BuyRequest buy)
     {
+      var now = Environment.TickCount64;
       var arrived = Interlocked.Read(ref this.lastOfferingsTick);
 
-      // A window that was left up carries the listings the last purchase came off, and one of them
-      // has just been bought, so only a page that lands after this buy starts may be picked from.
-      return arrived >= (this.reusedListings ? this.startTick : this.startTick - EarlyArrivalMs)
-        && Environment.TickCount64 - arrived >= ListingsSettleMs
-        && proxy->ListingCount > 0
-        && proxy->SearchItemId % HqItemIdOffset == buy.ItemId;
+      if (proxy->ListingCount == 0 || proxy->SearchItemId % HqItemIdOffset != buy.ItemId)
+      {
+        return false;
+      }
+
+      // A window that was left up is already showing this item's listings, so they are what the buy
+      // works off. The wait is only there to let a page the game asked for itself land first.
+      if (this.reusedListings)
+      {
+        return now - this.startTick >= ReusedSettleMs && now - arrived >= ListingsSettleMs;
+      }
+
+      return arrived >= this.startTick - EarlyArrivalMs && now - arrived >= ListingsSettleMs;
     }
 
     private unsafe void TrySelectListing()
@@ -359,6 +381,12 @@ namespace MarketTerror.Helpers
       nint addonPtr = this.gameGui.GetAddonByName(ResultAddonName);
       if (addonPtr == nint.Zero)
       {
+        // The window this buy was going to come off has gone, so there is nothing to wait for.
+        if (this.reusedListings)
+        {
+          this.Finish(BuyResult.StaleListings());
+        }
+
         return;
       }
 
@@ -391,7 +419,8 @@ namespace MarketTerror.Helpers
         if (listing.ItemId % HqItemIdOffset != buy.ItemId
           || listing.IsHqItem != buy.Hq
           || listing.Quantity != buy.Quantity
-          || listing.Quantity == 0)
+          || listing.Quantity == 0
+          || this.boughtListings.Contains(listing.ListingId))
         {
           continue;
         }
@@ -411,7 +440,10 @@ namespace MarketTerror.Helpers
       if (index < 0)
       {
         this.log.Debug($"None of the {proxy->ListingCount} listings on the board are \"{buy.ItemName}\" x{buy.Quantity} {(buy.Hq ? "HQ" : "NQ")} at {buy.MaxUnitPrice:F0} or less per unit");
-        this.Finish(BuyResult.Failed(this.DescribeCheapest(proxy, withTax)));
+
+        // The window may just be showing a list the game never refreshed, so say so rather than
+        // give up: the caller opens the listings again and the search is done over.
+        this.Finish(this.reusedListings ? BuyResult.StaleListings() : BuyResult.Failed(this.DescribeCheapest(proxy, withTax)));
         return;
       }
 
@@ -530,6 +562,7 @@ namespace MarketTerror.Helpers
         return;
       }
 
+      this.boughtListings.Add(this.targetListingId);
       this.Finish(BuyResult.Bought(this.targetUnitPrice));
     }
 
