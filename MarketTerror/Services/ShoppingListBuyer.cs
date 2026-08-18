@@ -101,6 +101,26 @@ namespace MarketTerror.Services
     public int Total { get; private set; }
 
     /// <summary>
+    /// Gets the row being bought right now, or null when no run is going.
+    /// </summary>
+    public SavedItem? CurrentRow { get; private set; }
+
+    /// <summary>
+    /// Gets the picked listing being bought right now, or null when the row stands for one listing.
+    /// </summary>
+    public PickedListing? CurrentPick { get; private set; }
+
+    /// <summary>
+    /// Checks whether a run has still to get to a picked listing.
+    /// </summary>
+    /// <param name="pick">The picked listing to look for.</param>
+    /// <returns>True when the listing is waiting in the queue, the one in flight included.</returns>
+    public bool IsQueued(PickedListing pick)
+    {
+      return this.IsRunning && this.queue.Any(job => ReferenceEquals(job.Pick, pick));
+    }
+
+    /// <summary>
     /// Checks whether a row can be bought, and says why when it cannot.
     /// </summary>
     /// <param name="row">The row to check.</param>
@@ -371,6 +391,8 @@ namespace MarketTerror.Services
         this.purchase.CloseBoard();
         this.IsRunning = false;
         this.CurrentItemName = string.Empty;
+        this.CurrentRow = null;
+        this.CurrentPick = null;
         this.ForgetBoardItem();
         this.outstanding.Clear();
         return;
@@ -384,6 +406,8 @@ namespace MarketTerror.Services
       }
 
       this.CurrentItemName = this.Describe(job);
+      this.CurrentRow = job.Row;
+      this.CurrentPick = job.Pick;
 
       var sameBoardItem = this.boardItemId == job.Row.SourceItem.RowId
         && string.Equals(this.boardWorld, job.World, StringComparison.OrdinalIgnoreCase);

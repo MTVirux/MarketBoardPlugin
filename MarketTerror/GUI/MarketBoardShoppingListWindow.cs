@@ -80,6 +80,16 @@ namespace MarketTerror.GUI
 
     private readonly ListingPicker picker;
 
+    /// <summary>
+    /// The rows showing the listings they have been told to buy under them.
+    /// </summary>
+    private readonly HashSet<SavedItem> expanded = new HashSet<SavedItem>();
+
+    /// <summary>
+    /// The row a buy run was last seen on, so each one is only opened once as the run walks the list.
+    /// </summary>
+    private SavedItem? followed;
+
     private IDisposable? themeScope;
 
     private bool isDisposed;
@@ -199,6 +209,7 @@ namespace MarketTerror.GUI
 
       this.DrawBulkAddProgress();
       this.DrawBuyProgress();
+      this.FollowBuyRun();
 
       if (this.Plugin.ShoppingList.Count == 0)
       {
@@ -254,11 +265,12 @@ namespace MarketTerror.GUI
 
       this.UpdateSort();
 
-      var hqWidth = ColumnWidth(HqHeader, this.sortedItems.Select(HqText));
-      var priceWidth = ColumnWidth(PriceHeader, this.sortedItems.Select(this.PriceText));
-      var qtyWidth = ColumnWidth(QtyHeader, this.sortedItems.Select(QtyText));
-      var totalWidth = ColumnWidth(TotalHeader, this.sortedItems.Select(this.TotalText));
-      var worldWidth = ColumnWidth(WorldHeader, this.sortedItems.Select(WorldText));
+      // The listings shown under an open row are measured with it, so the columns fit them too.
+      var hqWidth = ColumnWidth(HqHeader, this.ColumnValues(HqText, p => p.Hq ? HqMark : string.Empty));
+      var priceWidth = ColumnWidth(PriceHeader, this.ColumnValues(_ => string.Empty, p => this.Gil(PickPrice(p))));
+      var qtyWidth = ColumnWidth(QtyHeader, this.ColumnValues(QtyText, p => Count(p.Quantity)));
+      var totalWidth = ColumnWidth(TotalHeader, this.ColumnValues(this.TotalText, p => this.Gil(PickPrice(p) * p.Quantity)));
+      var worldWidth = ColumnWidth(WorldHeader, this.ColumnValues(WorldText, p => p.World));
 
       List<SavedItem> todel = new List<SavedItem>();
       SavedItem? convert = null;
@@ -269,6 +281,8 @@ namespace MarketTerror.GUI
         ImGui.TableNextRow();
 
         ImGui.TableSetColumnIndex(0);
+
+        var open = this.DrawExpander(item, k);
 
         this.DrawItemIcon(item);
 
@@ -325,12 +339,7 @@ namespace MarketTerror.GUI
           }
         }
 
-        ImGui.TableSetColumnIndex(2);
-        ImGui.PushStyleColor(ImGuiCol.Text, item.Refreshing || item.Unlisted ? this.theme.TextDim : this.theme.GilText);
-        RightAligned(this.PriceText(item), priceWidth);
-        ImGui.PopStyleColor();
-        this.PickTooltip(item);
-
+        // The price column belongs to the listings under a row; the row itself sums them up.
         ImGui.TableSetColumnIndex(3);
         ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
         RightAligned(QtyText(item), qtyWidth);
@@ -446,6 +455,11 @@ namespace MarketTerror.GUI
             new[] { item.SourceItem },
             this.Plugin.ShoppingListScope.QueryTargets,
             item.SourceItem.Name.ExtractText());
+        }
+
+        if (open)
+        {
+          this.DrawPickRows(item, hqWidth, priceWidth, qtyWidth, totalWidth, worldWidth);
         }
 
         k += 1;
@@ -592,9 +606,27 @@ namespace MarketTerror.GUI
     /// <returns>The quantity as it reads in the table.</returns>
     private static string QtyText(SavedItem item)
     {
-      return item.Unlisted || item.Quantity <= 0
-        ? NoValue
-        : item.Quantity.ToString("N0", CultureInfo.CurrentCulture);
+      return item.Unlisted || item.Quantity <= 0 ? NoValue : Count(item.Quantity);
+    }
+
+    /// <summary>
+    /// Formats a stack size the way the table shows it.
+    /// </summary>
+    /// <param name="quantity">The stack size to format.</param>
+    /// <returns>The stack size as it reads in the table.</returns>
+    private static string Count(long quantity)
+    {
+      return quantity.ToString("N0", CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>
+    /// Reads the price per unit a picked listing counts at.
+    /// </summary>
+    /// <param name="pick">The picked listing to price.</param>
+    /// <returns>What was paid for it once it has been bought, and what it is asked at before that.</returns>
+    private static double PickPrice(PickedListing pick)
+    {
+      return pick.Paid ?? pick.Price;
     }
 
     /// <summary>
@@ -885,12 +917,206 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
+    /// Opens the row a buy run has reached, so its listings can be watched as they are bought.
+    /// </summary>
+    private void FollowBuyRun()
+    {
+      var row = this.Plugin.ShoppingListBuyer.CurrentRow;
+
+      if (ReferenceEquals(row, this.followed))
+      {
+        return;
+      }
+
+      this.followed = row;
+
+      if (row != null && row.HasPicks)
+      {
+        this.expanded.Add(row);
+      }
+    }
+
+    /// <summary>
+    /// Walks the values a column draws: one per row, and one per listing under the rows that are open.
+    /// </summary>
+    /// <param name="forRow">Reads the value a row draws.</param>
+    /// <param name="forPick">Reads the value one of a row's listings draws.</param>
+    /// <returns>Every value the column has to be wide enough for.</returns>
+    private IEnumerable<string> ColumnValues(Func<SavedItem, string> forRow, Func<PickedListing, string> forPick)
+    {
+      foreach (var item in this.sortedItems)
+      {
+        yield return forRow(item);
+
+        if (!this.expanded.Contains(item))
+        {
+          continue;
+        }
+
+        foreach (var pick in item.Picks)
+        {
+          yield return forPick(pick);
+        }
+      }
+    }
+
+    /// <summary>
+    /// Draws the twisty that shows the listings a row buys, leaving the cursor where its icon goes.
+    /// </summary>
+    /// <param name="item">The row to draw the twisty for.</param>
+    /// <param name="key">The row's place in the table, which the twisty is identified by.</param>
+    /// <returns>True when the row's listings are shown under it.</returns>
+    private bool DrawExpander(SavedItem item, int key)
+    {
+      if (!item.HasPicks)
+      {
+        // A row standing for one listing has nothing to open, but its icon still lines up.
+        ImGui.Dummy(new Vector2(ImGui.GetTreeNodeToLabelSpacing(), ImGui.GetTextLineHeight()));
+        ImGui.SameLine();
+
+        return false;
+      }
+
+      var open = this.expanded.Contains(item);
+
+      // The window keeps track of which rows are open itself, so sorting them about leaves them open.
+      ImGui.SetNextItemOpen(open);
+
+      if (ImGui.TreeNodeEx($"##shoplistpicks{key}", ImGuiTreeNodeFlags.NoTreePushOnOpen) != open)
+      {
+        open = !open;
+
+        if (open)
+        {
+          this.expanded.Add(item);
+        }
+        else
+        {
+          this.expanded.Remove(item);
+        }
+      }
+
+      Utilities.HoverTooltip(open
+        ? "Hide the listings this row buys."
+        : $"Show the listings this row buys. {PickCountText(item)} chosen.");
+
+      ImGui.SameLine();
+
+      return open;
+    }
+
+    /// <summary>
+    /// Draws a row under a shopping list row for each listing it has been told to buy.
+    /// </summary>
+    /// <param name="item">The row whose listings to draw.</param>
+    /// <param name="hqWidth">The width the quality column was measured at.</param>
+    /// <param name="priceWidth">The width the price column was measured at.</param>
+    /// <param name="qtyWidth">The width the quantity column was measured at.</param>
+    /// <param name="totalWidth">The width the total column was measured at.</param>
+    /// <param name="worldWidth">The width the world column was measured at.</param>
+    private void DrawPickRows(SavedItem item, float hqWidth, float priceWidth, float qtyWidth, float totalWidth, float worldWidth)
+    {
+      // Where the row above puts its name, so a listing reads as hanging off it.
+      var indent = ImGui.GetTreeNodeToLabelSpacing() + ImGui.GetTextLineHeight() + (ImGui.GetStyle().ItemSpacing.X * 2);
+
+      foreach (var pick in item.Picks.OrderBy(p => p.Price))
+      {
+        var price = PickPrice(pick);
+        var bargain = pick.Paid.HasValue && pick.Paid.Value < pick.Price;
+        var dim = pick.Gone || pick.Outcome == BuyOutcome.Failed;
+        var gil = dim ? this.theme.TextDim : bargain ? this.theme.BuyBargain : this.theme.GilText;
+
+        ImGui.TableNextRow();
+
+        ImGui.TableSetColumnIndex(0);
+        ImGui.SetCursorPosX(ImGui.GetCursorPosX() + indent);
+        ImGui.PushStyleColor(ImGuiCol.Text, dim ? this.theme.TextDim : this.theme.Text);
+        ImGui.Text(pick.RetainerName.Length > 0 ? pick.RetainerName : "Unnamed retainer");
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(1);
+
+        if (pick.Hq)
+        {
+          ImGui.PushStyleColor(ImGuiCol.Text, dim ? this.theme.TextDim : this.theme.TextBright);
+          Centered(HqMark, hqWidth);
+          ImGui.PopStyleColor();
+        }
+
+        ImGui.TableSetColumnIndex(2);
+        ImGui.PushStyleColor(ImGuiCol.Text, gil);
+        RightAligned(this.Gil(price), priceWidth);
+        ImGui.PopStyleColor();
+
+        if (bargain)
+        {
+          Utilities.HoverTooltip($"Picked at {this.Gil(pick.Price)}, bought at {this.Gil(price)}.");
+        }
+
+        ImGui.TableSetColumnIndex(3);
+        ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextDim);
+        RightAligned(Count(pick.Quantity), qtyWidth);
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(4);
+        ImGui.PushStyleColor(ImGuiCol.Text, gil);
+        RightAligned(this.Gil(price * pick.Quantity), totalWidth);
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(5);
+        ImGui.PushStyleColor(ImGuiCol.Text, dim ? this.theme.TextDim : this.theme.Text);
+        RightAligned(pick.World, worldWidth);
+        ImGui.PopStyleColor();
+
+        ImGui.TableSetColumnIndex(6);
+
+        var status = this.PickStatus(pick);
+
+        if (status.Text.Length > 0)
+        {
+          ImGui.PushStyleColor(ImGuiCol.Text, status.Colour);
+          ImGui.Text(status.Text);
+          ImGui.PopStyleColor();
+        }
+      }
+    }
+
+    /// <summary>
+    /// Says where a picked listing has got to, from waiting its turn in a buy run to what it cost.
+    /// </summary>
+    /// <param name="pick">The picked listing to report on.</param>
+    /// <returns>The text to draw and the colour to draw it in.</returns>
+    private (string Text, uint Colour) PickStatus(PickedListing pick)
+    {
+      var buyer = this.Plugin.ShoppingListBuyer;
+
+      if (ReferenceEquals(buyer.CurrentPick, pick))
+      {
+        return ("Buying...", this.theme.Accent);
+      }
+
+      if (buyer.IsQueued(pick))
+      {
+        return ("Queued", this.theme.TextDim);
+      }
+
+      return pick.Outcome switch
+      {
+        BuyOutcome.Bought => ("Bought", this.theme.BuySuccess),
+        BuyOutcome.BoughtCheaper => ("Bought cheaper", this.theme.BuyBargain),
+        BuyOutcome.Failed => ("Not bought", this.theme.BuyFailed),
+        _ => pick.Gone ? ("Gone", this.theme.TextDim) : (string.Empty, this.theme.TextDim),
+      };
+    }
+
+    /// <summary>
     /// Spells out a row's picked listings while the cursor is over one of its figures.
     /// </summary>
     /// <param name="item">The row being hovered.</param>
     private void PickTooltip(SavedItem item)
     {
-      if (!item.HasPicks || !ImGui.IsItemHovered())
+      // An open row already has all of this under it.
+      if (!item.HasPicks || this.expanded.Contains(item) || !ImGui.IsItemHovered())
       {
         return;
       }
@@ -965,9 +1191,19 @@ namespace MarketTerror.GUI
         return NoValue;
       }
 
+      return this.Gil(item.Price);
+    }
+
+    /// <summary>
+    /// Formats an amount of gil the way the rest of the window shows it.
+    /// </summary>
+    /// <param name="value">The amount to format.</param>
+    /// <returns>The amount as it reads in the table.</returns>
+    private string Gil(double value)
+    {
       return this.Plugin.Config.PriceIconShown
-        ? item.Price.ToString("C", this.Plugin.NumberFormatInfo)
-        : item.Price.ToString("N0", CultureInfo.CurrentCulture);
+        ? value.ToString("C", this.Plugin.NumberFormatInfo)
+        : value.ToString("N0", CultureInfo.CurrentCulture);
     }
 
     /// <summary>
@@ -987,9 +1223,7 @@ namespace MarketTerror.GUI
         return NoValue;
       }
 
-      return this.Plugin.Config.PriceIconShown
-        ? item.Total.ToString("C", this.Plugin.NumberFormatInfo)
-        : item.Total.ToString("N0", CultureInfo.CurrentCulture);
+      return this.Gil(item.Total);
     }
 
     private void DrawFooter()
@@ -1143,6 +1377,9 @@ namespace MarketTerror.GUI
 
       this.sortedItems.Clear();
       this.sortedItems.AddRange(this.SortItems());
+
+      // A row that has been taken off the list stops counting as open.
+      this.expanded.RemoveWhere(i => !this.sortedItems.Contains(i));
     }
 
     private IEnumerable<SavedItem> SortItems()
