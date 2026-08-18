@@ -12,13 +12,14 @@ namespace MarketTerror.Services
   using MarketTerror.Models.ShoppingList;
 
   /// <summary>
-  /// Buys shopping list rows off the Market Board, one listing at a time.
+  /// Buys the listings shopping list entries resolved to, off the Market Board, one at a time.
   /// </summary>
   /// <remarks>
-  /// A Buy-all run is ordered by how far it has to travel - the current world first, then the rest of
-  /// the data centre, then the rest of the region, then anywhere else - and listings on the same world
-  /// are kept together so each world is only travelled to once. Rows whose picked listings are spread
-  /// over several worlds go after the rest, since they are the ones that cost more than one trip.
+  /// A run is ordered by how far it has to travel - the current world first, then the rest of the
+  /// data centre, then the rest of the region, then anywhere else with Oceania last - and listings on
+  /// the same world are kept together so each world is only travelled to once. An entry's listings
+  /// are spread through that order along with everyone else's, since the entry itself is never
+  /// somewhere: only its listings are.
   /// </remarks>
   public sealed class ShoppingListBuyer : IDisposable
   {
@@ -31,9 +32,16 @@ namespace MarketTerror.Services
     private readonly Queue<BuyJob> queue = new Queue<BuyJob>();
 
     /// <summary>
-    /// How many jobs of each row the run still has to get through, so a row is only reported once.
+    /// How many listings of each entry the run still has to get through, so an entry is only
+    /// reported once it is finished with.
     /// </summary>
-    private readonly Dictionary<SavedItem, int> outstanding = new Dictionary<SavedItem, int>();
+    private readonly Dictionary<ListingEntry, int> outstanding = new Dictionary<ListingEntry, int>();
+
+    /// <summary>
+    /// How many listings of each entry the run started with, so the progress line can count them off.
+    /// A run started from one listing has fewer of them than the entry currently resolves to.
+    /// </summary>
+    private readonly Dictionary<ListingEntry, int> planned = new Dictionary<ListingEntry, int>();
 
     private string boardWorld = string.Empty;
 
@@ -101,38 +109,50 @@ namespace MarketTerror.Services
     public int Total { get; private set; }
 
     /// <summary>
-    /// Gets the row being bought right now, or null when no run is going.
+    /// Gets the entry being bought right now, or null when no run is going.
     /// </summary>
-    public SavedItem? CurrentRow { get; private set; }
+    public ListingEntry? CurrentEntry { get; private set; }
 
     /// <summary>
-    /// Gets the picked listing being bought right now, or null when the row stands for one listing.
+    /// Gets the resolved listing being bought right now, or null when no run is going.
     /// </summary>
-    public PickedListing? CurrentPick { get; private set; }
+    public ResolvedListing? CurrentListing { get; private set; }
 
     /// <summary>
-    /// Checks whether a run has still to get to a picked listing.
+    /// Checks whether a run has still to get to a resolved listing.
     /// </summary>
-    /// <param name="pick">The picked listing to look for.</param>
+    /// <param name="listing">The listing to look for.</param>
     /// <returns>True when the listing is waiting in the queue, the one in flight included.</returns>
-    public bool IsQueued(PickedListing pick)
+    public bool IsQueued(ResolvedListing listing)
     {
-      return this.IsRunning && this.queue.Any(job => ReferenceEquals(job.Pick, pick));
+      return this.IsRunning && this.queue.Any(job => ReferenceEquals(job.Listing, listing));
     }
 
     /// <summary>
-    /// Checks whether a row can be bought, and says why when it cannot.
+    /// Checks whether an entry can be bought, and says why when it cannot.
     /// </summary>
-    /// <param name="row">The row to check.</param>
-    /// <param name="reason">Why the row cannot be bought, or an empty string when it can.</param>
-    /// <returns>True when the row can be bought.</returns>
-    public bool CanBuy(SavedItem row, out string reason)
+    /// <param name="entry">The entry to check.</param>
+    /// <param name="reason">Why the entry cannot be bought, or an empty string when it can.</param>
+    /// <returns>True when the entry can be bought.</returns>
+    public bool CanBuy(ListingEntry entry, out string reason)
     {
-      ArgumentNullException.ThrowIfNull(row);
+      ArgumentNullException.ThrowIfNull(entry);
 
       if (!this.plugin.Config.ShoppingListBuyEnabled)
       {
         reason = "Buying from the shopping list is switched off in the settings.";
+        return false;
+      }
+
+      if (this.IsRunning)
+      {
+        reason = "A buy run is already going.";
+        return false;
+      }
+
+      if (this.plugin.ShoppingListBulkAdd.IsRunning)
+      {
+        reason = "The list is still being added to or priced.";
         return false;
       }
 
@@ -143,53 +163,31 @@ namespace MarketTerror.Services
         return false;
       }
 
-      if (row.Refreshing)
+      if (entry.Refreshing)
       {
-        reason = "This row is being priced again.";
+        reason = "This entry is being priced again.";
         return false;
       }
 
-      if (this.plugin.Config.SkipUnlockedWhenBuying && ItemUnlock.IsUnlocked(this.plugin.PlayerState, row.SourceItem) == true)
+      if (this.plugin.Config.SkipUnlockedWhenBuying && ItemUnlock.IsUnlocked(this.plugin.PlayerState, entry.SourceItem) == true)
       {
         reason = "This character has already unlocked this item.";
         return false;
       }
 
-      if (row.HasPicks)
-      {
-        if (!row.LivePicks.Any())
-        {
-          reason = row.IsLimited
-            ? "None of the listings under this row's limit are on sale any more."
-            : "None of the picked listings are on sale any more.";
-          return false;
-        }
+      var live = entry.Live.ToArray();
 
-        reason = string.Empty;
-        return true;
-      }
-
-      if (row.IsLimited)
+      if (live.Length == 0)
       {
-        reason = "Nothing in this row's scope is under its listing limit.";
+        reason = "Nothing on sale to buy.";
         return false;
       }
 
-      if (row.Unlisted)
+      // The board is asked for a stack of an exact size, so a listing whose size was never recorded
+      // has nothing to ask for.
+      if (live.All(listing => listing.Quantity <= 0))
       {
-        reason = "This row has no listing to buy.";
-        return false;
-      }
-
-      if (string.IsNullOrEmpty(row.World))
-      {
-        reason = "This row has no world to travel to.";
-        return false;
-      }
-
-      if (row.Quantity <= 0)
-      {
-        reason = "Refresh the list first so the stack size is recorded.";
+        reason = "Refresh to record the stack size.";
         return false;
       }
 
@@ -198,44 +196,44 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Buys a single row.
+    /// Buys every listing a single entry resolved to.
     /// </summary>
-    /// <param name="row">The row to buy.</param>
-    public void BuyOne(SavedItem row)
+    /// <param name="entry">The entry to buy.</param>
+    public void BuyOne(ListingEntry entry)
     {
-      this.BuyAll(new[] { row });
+      this.BuyAll(new[] { entry });
     }
 
     /// <summary>
-    /// Buys one of a row's picked listings, leaving the rest of the row for later.
+    /// Buys one of an entry's listings, leaving the rest of the entry for later.
     /// </summary>
-    /// <param name="row">The row the listing belongs to.</param>
-    /// <param name="pick">The listing to buy.</param>
-    public void BuyPick(SavedItem row, PickedListing pick)
+    /// <param name="entry">The entry the listing belongs to.</param>
+    /// <param name="listing">The listing to buy.</param>
+    public void BuyListing(ListingEntry entry, ResolvedListing listing)
     {
-      ArgumentNullException.ThrowIfNull(row);
-      ArgumentNullException.ThrowIfNull(pick);
+      ArgumentNullException.ThrowIfNull(entry);
+      ArgumentNullException.ThrowIfNull(listing);
 
-      if (this.IsRunning || pick.Gone || !this.CanBuy(row, out _))
+      if (listing.Gone || !this.CanBuy(entry, out _))
       {
         return;
       }
 
       // Two buys without a refresh in between would otherwise report the first one's result again.
-      pick.Outcome = BuyOutcome.None;
-      pick.FailReason = string.Empty;
-      pick.Paid = null;
+      listing.Outcome = BuyOutcome.None;
+      listing.FailReason = string.Empty;
+      listing.Paid = null;
 
-      this.Start(new[] { new BuyJob(row, pick) });
+      this.Start(new[] { new BuyJob(entry, listing) });
     }
 
     /// <summary>
-    /// Buys every row that can be bought, cheapest travel first.
+    /// Buys every listing of every entry it is handed, cheapest travel first.
     /// </summary>
-    /// <param name="rows">The rows to buy.</param>
-    public void BuyAll(IEnumerable<SavedItem> rows)
+    /// <param name="entries">The entries to buy, which can be one entry, one node's worth, or the whole list.</param>
+    public void BuyAll(IEnumerable<ListingEntry> entries)
     {
-      ArgumentNullException.ThrowIfNull(rows);
+      ArgumentNullException.ThrowIfNull(entries);
 
       if (this.IsRunning)
       {
@@ -250,24 +248,24 @@ namespace MarketTerror.Services
       var jobs = new List<BuyJob>();
       var skipped = new List<(string Name, string Reason)>();
 
-      foreach (var row in rows)
+      foreach (var entry in entries)
       {
-        if (!this.CanBuy(row, out var why))
+        if (!this.CanBuy(entry, out var why))
         {
-          skipped.Add((row.SourceItem.Name.ExtractText(), why));
+          skipped.Add((entry.SourceItem.Name.ExtractText(), why));
           continue;
         }
 
-        jobs.AddRange(Jobs(row));
+        jobs.AddRange(Jobs(entry));
       }
 
       if (skipped.Count > 0)
       {
-        this.plugin.ChatGui.Print($"Skipped {skipped.Count} shopping list rows that cannot be bought yet:");
+        this.plugin.ChatGui.Print($"Skipped {skipped.Count} shopping list entries that cannot be bought yet:");
 
-        foreach (var group in skipped.GroupBy(entry => entry.Reason, StringComparer.Ordinal))
+        foreach (var group in skipped.GroupBy(skip => skip.Reason, StringComparer.Ordinal))
         {
-          var who = group.Count() == 1 ? group.First().Name : $"{group.Count()} rows";
+          var who = group.Count() == 1 ? group.First().Name : $"{group.Count()} entries";
           this.plugin.ChatGui.Print($"  {who}: {group.Key}");
         }
       }
@@ -307,6 +305,7 @@ namespace MarketTerror.Services
 
       this.queue.Clear();
       this.outstanding.Clear();
+      this.planned.Clear();
       this.purchase.Dispose();
       this.refresh.Dispose();
       this.isDisposed = true;
@@ -319,29 +318,24 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Breaks a row into the listings a run has to buy for it.
+    /// Breaks an entry into the listings a run has to go and buy for it.
     /// </summary>
-    /// <param name="row">The row to break up.</param>
-    /// <returns>One job per picked listing, or a single job for a row that stands for one listing.</returns>
-    private static BuyJob[] Jobs(SavedItem row)
+    /// <param name="entry">The entry to break up.</param>
+    /// <returns>One job per listing the entry still has on sale.</returns>
+    private static BuyJob[] Jobs(ListingEntry entry)
     {
-      if (!row.HasPicks)
-      {
-        return new[] { new BuyJob(row, null) };
-      }
-
       // Two runs without a refresh in between would otherwise report the first run's results again.
-      foreach (var pick in row.Picks)
+      foreach (var listing in entry.Matches)
       {
-        pick.Outcome = BuyOutcome.None;
-        pick.FailReason = string.Empty;
-        pick.Paid = null;
+        listing.Outcome = BuyOutcome.None;
+        listing.FailReason = string.Empty;
+        listing.Paid = null;
       }
 
       // Cheapest first, so a run that is cancelled part way through has bought the best of them.
-      return row.LivePicks
-        .OrderBy(pick => pick.Price)
-        .Select(pick => new BuyJob(row, pick))
+      return entry.Live
+        .OrderBy(listing => listing.Price)
+        .Select(listing => new BuyJob(entry, listing))
         .ToArray();
     }
 
@@ -353,13 +347,13 @@ namespace MarketTerror.Services
     /// <summary>
     /// Names a listing by the retainer selling it and the world it is on.
     /// </summary>
-    /// <param name="pick">The listing to name.</param>
+    /// <param name="listing">The listing to name.</param>
     /// <returns>The text a chat line calls it.</returns>
-    private static string Where(PickedListing pick)
+    private static string Where(ResolvedListing listing)
     {
-      return pick.RetainerName.Length > 0
-        ? $"{pick.RetainerName} on {pick.World}"
-        : $"the listing on {pick.World}";
+      return listing.RetainerName.Length > 0
+        ? $"{listing.RetainerName} on {listing.World}"
+        : $"the listing on {listing.World}";
     }
 
     private static string Gil(double value)
@@ -374,11 +368,15 @@ namespace MarketTerror.Services
     private void Start(IEnumerable<BuyJob> jobs)
     {
       this.outstanding.Clear();
+      this.planned.Clear();
 
       foreach (var job in this.Order(jobs))
       {
         this.queue.Enqueue(job);
-        this.outstanding[job.Row] = this.outstanding.GetValueOrDefault(job.Row) + 1;
+
+        var count = this.outstanding.GetValueOrDefault(job.Entry) + 1;
+        this.outstanding[job.Entry] = count;
+        this.planned[job.Entry] = count;
       }
 
       this.IsRunning = true;
@@ -395,15 +393,13 @@ namespace MarketTerror.Services
         .Select(job => new
         {
           Job = job,
-          Spread = job.Row.HasPicks && job.Row.Worlds.Count > 1 ? 1 : 0,
           Tier = this.TravelTier(job.World),
           Region = this.plugin.WorldCatalogue.Find(job.World)?.Region ?? string.Empty,
         })
-        .OrderBy(entry => entry.Spread)
-        .ThenBy(entry => entry.Tier)
-        .ThenBy(entry => TieBreak(entry.Region), StringComparer.Ordinal)
-        .ThenBy(entry => entry.Job.World, StringComparer.Ordinal)
-        .Select(entry => entry.Job);
+        .OrderBy(step => step.Tier)
+        .ThenBy(step => TieBreak(step.Region), StringComparer.Ordinal)
+        .ThenBy(step => step.Job.World, StringComparer.Ordinal)
+        .Select(step => step.Job);
     }
 
     /// <summary>
@@ -455,10 +451,11 @@ namespace MarketTerror.Services
         this.purchase.CloseBoard();
         this.IsRunning = false;
         this.CurrentItemName = string.Empty;
-        this.CurrentRow = null;
-        this.CurrentPick = null;
+        this.CurrentEntry = null;
+        this.CurrentListing = null;
         this.ForgetBoardItem();
         this.outstanding.Clear();
+        this.planned.Clear();
         return;
       }
 
@@ -470,10 +467,10 @@ namespace MarketTerror.Services
       }
 
       this.CurrentItemName = this.Describe(job);
-      this.CurrentRow = job.Row;
-      this.CurrentPick = job.Pick;
+      this.CurrentEntry = job.Entry;
+      this.CurrentListing = job.Listing;
 
-      var sameBoardItem = this.boardItemId == job.Row.SourceItem.RowId
+      var sameBoardItem = this.boardItemId == job.Entry.SourceItem.RowId
         && string.Equals(this.boardWorld, job.World, StringComparison.OrdinalIgnoreCase);
 
       // Another listing of the same item, and the last purchase left the listings up: buy straight
@@ -490,12 +487,12 @@ namespace MarketTerror.Services
       // Same item, but the listings have gone: they only have to be opened again rather than
       // searched for from scratch.
       if (sameBoardItem
-        && this.plugin.MarketBoardContext.TryReopenListingsForBuy(job.World, job.Row.SourceItem, opened => this.OnSearchFinished(job, opened)))
+        && this.plugin.MarketBoardContext.TryReopenListingsForBuy(job.World, job.Entry.SourceItem, opened => this.OnSearchFinished(job, opened)))
       {
         return;
       }
 
-      this.plugin.MarketBoardContext.GoToMarketBoardForBuy(job.World, job.Row.SourceItem, opened => this.OnSearchFinished(job, opened));
+      this.plugin.MarketBoardContext.GoToMarketBoardForBuy(job.World, job.Entry.SourceItem, opened => this.OnSearchFinished(job, opened));
     }
 
     /// <summary>
@@ -520,7 +517,7 @@ namespace MarketTerror.Services
       {
         var next = this.queue.Peek();
 
-        if (next.Row.SourceItem.RowId == this.boardItemId
+        if (next.Entry.SourceItem.RowId == this.boardItemId
           && string.Equals(next.World, this.boardWorld, StringComparison.OrdinalIgnoreCase))
         {
           return false;
@@ -549,29 +546,23 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Names what is being bought, counting the listings off for a row that has more than one.
+    /// Names what is being bought, counting the listings off for an entry that has more than one.
     /// </summary>
     /// <param name="job">The job about to start.</param>
     /// <returns>The text the progress line shows.</returns>
     private string Describe(BuyJob job)
     {
-      var name = job.Row.SourceItem.Name.ExtractText();
+      var name = job.Entry.SourceItem.Name.ExtractText();
+      var queued = this.planned.GetValueOrDefault(job.Entry);
 
-      if (job.Pick == null || !job.Row.HasPicks)
+      if (queued <= 1)
       {
         return name;
       }
 
-      var live = job.Row.LivePicks.Count();
+      var left = this.outstanding.GetValueOrDefault(job.Entry);
 
-      if (live <= 1)
-      {
-        return name;
-      }
-
-      var left = this.outstanding.GetValueOrDefault(job.Row);
-
-      return $"{name} (listing {live - left + 1} of {live})";
+      return $"{name} (listing {queued - left + 1} of {queued})";
     }
 
     private void OnSearchFinished(BuyJob job, bool opened)
@@ -583,11 +574,11 @@ namespace MarketTerror.Services
       }
 
       this.boardWorld = job.World;
-      this.boardItemId = job.Row.SourceItem.RowId;
-      this.boardItemName = job.Row.SourceItem.Name.ExtractText();
+      this.boardItemId = job.Entry.SourceItem.RowId;
+      this.boardItemName = job.Entry.SourceItem.Name.ExtractText();
 
       this.purchase.Start(
-        new BuyRequest(job.Row.SourceItem.RowId, job.Row.SourceItem.Name.ExtractText(), job.Hq, job.Quantity, job.Price),
+        new BuyRequest(job.Entry.SourceItem.RowId, job.Entry.SourceItem.Name.ExtractText(), job.Hq, job.Quantity, job.Price),
         result => this.Report(job, result),
         this.reusingListings);
     }
@@ -608,26 +599,17 @@ namespace MarketTerror.Services
 
       this.boughtOnBoard |= result.Success;
 
-      if (job.Pick == null)
-      {
-        job.Row.Outcome = outcome;
-        job.Row.FailReason = result.Success ? string.Empty : result.Reason;
-        this.PrintOne(job, result);
-      }
-      else
-      {
-        job.Pick.Outcome = outcome;
-        job.Pick.FailReason = result.Success ? string.Empty : result.Reason;
-        job.Pick.Paid = result.Success ? result.UnitPrice : null;
-        job.Row.RollUpOutcome();
-      }
+      job.Listing.Outcome = outcome;
+      job.Listing.FailReason = result.Success ? string.Empty : result.Reason;
+      job.Listing.Paid = result.Success ? result.UnitPrice : null;
+      job.Entry.RollUpOutcome();
 
-      var left = this.outstanding.GetValueOrDefault(job.Row) - 1;
-      this.outstanding[job.Row] = left;
+      var left = this.outstanding.GetValueOrDefault(job.Entry) - 1;
+      this.outstanding[job.Entry] = left;
 
-      if (left == 0 && job.Pick != null)
+      if (left == 0)
       {
-        this.PrintRow(job.Row);
+        this.PrintEntry(job.Entry);
       }
 
       if (this.queue.Count > 0)
@@ -640,50 +622,40 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Says in chat how a row that stands for one listing ended.
+    /// Says in chat how an entry ended, once every listing the run wanted of it has been tried.
     /// </summary>
-    /// <param name="job">The finished job.</param>
-    /// <param name="result">How it ended.</param>
-    private void PrintOne(BuyJob job, BuyResult result)
+    /// <param name="entry">The finished entry.</param>
+    private void PrintEntry(ListingEntry entry)
     {
-      var name = job.Row.SourceItem.Name.ExtractText();
+      var name = entry.SourceItem.Name.ExtractText();
+      var tried = entry.Matches.Where(m => m.Outcome != BuyOutcome.None).ToArray();
+      var bought = tried.Where(m => m.Paid.HasValue).ToArray();
 
-      if (result.Success)
-      {
-        this.plugin.ChatGui.Print($"Bought {name} x{job.Quantity} for {Gil(result.UnitPrice * job.Quantity)} gil");
-      }
-      else
-      {
-        this.plugin.ChatGui.Print($"Did not buy {name} x{job.Quantity} {Quality(job.Hq)} on {job.World}: {result.Reason}");
-      }
-    }
-
-    /// <summary>
-    /// Says in chat how a row of picked listings ended, once all of them have been tried.
-    /// </summary>
-    /// <param name="row">The finished row.</param>
-    private void PrintRow(SavedItem row)
-    {
-      var name = row.SourceItem.Name.ExtractText();
-      var tried = row.Picks.Where(p => p.Outcome != BuyOutcome.None).ToArray();
-      var bought = tried.Where(p => p.Paid.HasValue).ToArray();
-
-      if (bought.Length == 0 && tried.Length == 1)
+      if (tried.Length == 1)
       {
         var only = tried[0];
-        this.plugin.ChatGui.Print($"Did not buy {name} x{only.Quantity} {Quality(only.Hq)} from {Where(only)}: {only.FailReason}");
+
+        if (bought.Length == 1)
+        {
+          this.plugin.ChatGui.Print($"Bought {name} x{only.Quantity} for {Gil(only.Paid!.Value * only.Quantity)} gil");
+        }
+        else
+        {
+          this.plugin.ChatGui.Print($"Did not buy {name} x{only.Quantity} {Quality(only.Hq)} from {Where(only)}: {only.FailReason}");
+        }
+
         return;
       }
 
       if (bought.Length == 0)
       {
-        this.plugin.ChatGui.Print($"Did not buy {name}: none of its {tried.Length} picked listings could be bought");
+        this.plugin.ChatGui.Print($"Did not buy {name}: none of its {tried.Length} listings could be bought");
         this.PrintReasons(tried);
         return;
       }
 
-      var units = bought.Sum(p => p.Quantity);
-      var spent = bought.Sum(p => p.Paid!.Value * p.Quantity);
+      var units = bought.Sum(m => m.Quantity);
+      var spent = bought.Sum(m => m.Paid!.Value * m.Quantity);
       var listings = bought.Length == tried.Length
         ? $"{bought.Length} listings"
         : $"{bought.Length} of {tried.Length} listings";
@@ -693,14 +665,14 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// Says in chat why the listings of a row that were not bought were left behind, one line a reason.
+    /// Says in chat why the listings of an entry that were not bought were left behind, one line a reason.
     /// </summary>
-    /// <param name="tried">Every listing of the row a buy was attempted on.</param>
-    private void PrintReasons(IEnumerable<PickedListing> tried)
+    /// <param name="tried">Every listing of the entry a buy was attempted on.</param>
+    private void PrintReasons(IEnumerable<ResolvedListing> tried)
     {
-      var failed = tried.Where(p => !p.Paid.HasValue && p.FailReason.Length > 0);
+      var failed = tried.Where(m => !m.Paid.HasValue && m.FailReason.Length > 0);
 
-      foreach (var group in failed.GroupBy(p => p.FailReason, StringComparer.Ordinal))
+      foreach (var group in failed.GroupBy(m => m.FailReason, StringComparer.Ordinal))
       {
         var who = group.Count() == 1
           ? Where(group.First())
@@ -711,38 +683,38 @@ namespace MarketTerror.Services
     }
 
     /// <summary>
-    /// One listing a buy run has to go and get.
+    /// One resolved listing a buy run has to go and get.
     /// </summary>
     private sealed class BuyJob
     {
       /// <summary>
       /// Initializes a new instance of the <see cref="BuyJob"/> class.
       /// </summary>
-      /// <param name="row">The row the listing belongs to.</param>
-      /// <param name="pick">The picked listing, or null when the row stands for one listing itself.</param>
-      public BuyJob(SavedItem row, PickedListing? pick)
+      /// <param name="entry">The entry the listing belongs to.</param>
+      /// <param name="listing">The listing to buy.</param>
+      public BuyJob(ListingEntry entry, ResolvedListing listing)
       {
-        this.Row = row;
-        this.Pick = pick;
+        this.Entry = entry;
+        this.Listing = listing;
       }
 
-      /// <summary>Gets the row the listing belongs to.</summary>
-      public SavedItem Row { get; }
+      /// <summary>Gets the entry the listing belongs to.</summary>
+      public ListingEntry Entry { get; }
 
-      /// <summary>Gets the picked listing, or null when the row stands for one listing itself.</summary>
-      public PickedListing? Pick { get; }
+      /// <summary>Gets the listing to buy.</summary>
+      public ResolvedListing Listing { get; }
 
       /// <summary>Gets the world to buy on.</summary>
-      public string World => this.Pick?.World ?? this.Row.World;
+      public string World => this.Listing.World;
 
       /// <summary>Gets the stack size the listing has to have.</summary>
-      public long Quantity => this.Pick?.Quantity ?? this.Row.Quantity;
+      public long Quantity => this.Listing.Quantity;
 
       /// <summary>Gets a value indicating whether the listing has to be high quality.</summary>
-      public bool Hq => this.Pick?.Hq ?? this.Row.Hq;
+      public bool Hq => this.Listing.Hq;
 
       /// <summary>Gets the highest price per unit that may be paid.</summary>
-      public double Price => this.Pick?.Price ?? this.Row.Price;
+      public double Price => this.Listing.Price;
     }
   }
 }
