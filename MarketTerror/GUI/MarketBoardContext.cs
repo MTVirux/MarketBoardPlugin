@@ -420,17 +420,18 @@ namespace MarketTerror.GUI
     /// Adds an entry buying the cheapest listing of an item to the shopping list.
     /// </summary>
     /// <param name="item">The item to add.</param>
+    /// <returns>True when a new entry was made, false when one was already there or no market is picked.</returns>
     /// <remarks>
     /// The entry is filed under the buy list's own scope and carries no price of its own; the next
     /// refresh is what tells it which listing it buys.
     /// </remarks>
-    public void TryAddCheapestToShoppingList(Item item)
+    public bool TryAddCheapestToShoppingList(Item item)
     {
       var picker = this.Plugin.ShoppingListScope;
 
       if (!picker.HasSelection)
       {
-        return;
+        return false;
       }
 
       this.Plugin.ShoppingList.AddLowest(item, picker.ToListingScope(), out var added);
@@ -441,6 +442,8 @@ namespace MarketTerror.GUI
         // points at the entry that was already there instead of the click going nowhere.
         this.Plugin.ShowShoppingList();
       }
+
+      return added;
     }
 
     /// <summary>

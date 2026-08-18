@@ -21,6 +21,7 @@ namespace MarketTerror
   using Dalamud.Interface.Windowing;
   using Dalamud.Plugin;
   using Dalamud.Plugin.Services;
+  using Dalamud.Utility;
   using FFXIVClientStructs.FFXIV.Client.UI.Agent;
   using Lumina.Excel.Sheets;
 
@@ -670,6 +671,15 @@ namespace MarketTerror
         PrefixColor = 48,
         IsEnabled = !item.Value.IsUntradable,
       });
+
+      args.AddMenuItem(new MenuItem
+      {
+        Name = "Add to shopping list",
+        OnClicked = this.GetAddToShoppingListHandler(item.Value),
+        Prefix = SeIconChar.BoxedLetterM,
+        PrefixColor = 48,
+        IsEnabled = !item.Value.IsUntradable,
+      });
     }
 
     private unsafe uint GetItemIdFromAgent(string? addonName)
@@ -700,6 +710,34 @@ namespace MarketTerror
         catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
         {
           this.Log.Error(ex, "Failed on context menu for itemId" + itemId);
+        }
+      };
+    }
+
+    /// <summary>
+    /// Builds the click handler that puts an item on the shopping list from the game's own context menu.
+    /// </summary>
+    /// <param name="item">The item the menu was opened on.</param>
+    /// <returns>The handler.</returns>
+    /// <remarks>
+    /// Nothing of the plugin is on screen when the menu is used, so a new entry is only visible as a
+    /// chat line. One that was already there brings the window up on its own.
+    /// </remarks>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types", Justification = "Context menu callback should log and continue without breaking the plugin UI.")]
+    private Action<IMenuItemClickedArgs> GetAddToShoppingListHandler(Item item)
+    {
+      return (IMenuItemClickedArgs args) =>
+      {
+        try
+        {
+          if (this.MarketBoardContext.TryAddCheapestToShoppingList(item))
+          {
+            this.ChatGui.Print($"MarketTerror: added {item.Name.ExtractText()} to the shopping list.");
+          }
+        }
+        catch (Exception ex) when (ex is not OutOfMemoryException and not StackOverflowException)
+        {
+          this.Log.Error(ex, "Failed to add item {0} to the shopping list from the context menu.", item.RowId);
         }
       };
     }
