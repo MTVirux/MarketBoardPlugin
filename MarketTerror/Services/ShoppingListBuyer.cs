@@ -159,12 +159,20 @@ namespace MarketTerror.Services
       {
         if (!row.LivePicks.Any())
         {
-          reason = "None of the picked listings are on sale any more.";
+          reason = row.IsLimited
+            ? "None of the listings under this row's limit are on sale any more."
+            : "None of the picked listings are on sale any more.";
           return false;
         }
 
         reason = string.Empty;
         return true;
+      }
+
+      if (row.IsLimited)
+      {
+        reason = "Nothing in this row's scope is under its listing limit.";
+        return false;
       }
 
       if (row.Unlisted)

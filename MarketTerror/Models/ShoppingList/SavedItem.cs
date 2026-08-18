@@ -61,6 +61,17 @@ namespace MarketTerror.Models.ShoppingList
     public bool HasPicks => this.Picks.Count > 0;
 
     /// <summary>
+    /// Gets or sets the standing rule that picks this row's listings, or null when they are picked by hand.
+    /// </summary>
+    /// <remarks>A row carrying one is swept again every time it is priced, so its picks are never chosen twice.</remarks>
+    public ListingLimit? Limit { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether a listing limit picks this row's listings.
+    /// </summary>
+    public bool IsLimited => this.Limit != null;
+
+    /// <summary>
     /// Gets the picks a buy run may still try, which is every one the last refresh could still find.
     /// </summary>
     public IEnumerable<PickedListing> LivePicks => this.Picks.Where(p => !p.Gone);
@@ -273,6 +284,35 @@ namespace MarketTerror.Models.ShoppingList
       {
         // The row is priced by its picks from here, and every one of them was on sale to be picked.
         this.Unlisted = false;
+      }
+    }
+
+    /// <summary>
+    /// Replaces the listings a limited row buys with the ones its rule has just chosen.
+    /// </summary>
+    /// <param name="chosen">The listings the rule chose, which can be none.</param>
+    /// <remarks>
+    /// Unlike <see cref="SetPicks"/>, a sweep that comes back empty leaves the row with nothing rather
+    /// than falling back on the cheapest listing it used to hold - that one is over the limit by
+    /// definition, and the row would go on offering to buy it.
+    /// </remarks>
+    public void SetSweptPicks(IEnumerable<PickedListing> chosen)
+    {
+      ArgumentNullException.ThrowIfNull(chosen);
+
+      var replacement = chosen.ToArray();
+
+      this.Picks.Clear();
+      this.Picks.AddRange(replacement);
+      this.Outcome = BuyOutcome.None;
+      this.FailReason = string.Empty;
+      this.Unlisted = replacement.Length == 0;
+
+      if (replacement.Length == 0)
+      {
+        this.SinglePrice = 0;
+        this.SingleQuantity = 0;
+        this.SingleWorld = string.Empty;
       }
     }
 

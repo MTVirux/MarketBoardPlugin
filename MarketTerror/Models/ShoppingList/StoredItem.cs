@@ -78,6 +78,11 @@ namespace MarketTerror.Models.ShoppingList
     public bool IsDirect { get; set; }
 
     /// <summary>
+    /// Gets or sets the standing rule that picks the entry's listings, or null when they are picked by hand.
+    /// </summary>
+    public ListingLimit? Limit { get; set; }
+
+    /// <summary>
     /// Gets or sets the listings the entry has been told to buy.
     /// </summary>
     /// <remarks>Empty in a configuration written before picking existed, which is the entry standing for one listing.</remarks>
