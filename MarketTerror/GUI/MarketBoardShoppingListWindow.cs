@@ -236,8 +236,8 @@ namespace MarketTerror.GUI
         return;
       }
 
-      ImGui.TableSetupColumn(HqHeader, ImGuiTableColumnFlags.WidthFixed);
       ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch);
+      ImGui.TableSetupColumn(HqHeader, ImGuiTableColumnFlags.WidthFixed);
       ImGui.TableSetupColumn(PriceHeader, ImGuiTableColumnFlags.WidthFixed);
       ImGui.TableSetupColumn(QtyHeader, ImGuiTableColumnFlags.WidthFixed);
       ImGui.TableSetupColumn(TotalHeader, ImGuiTableColumnFlags.WidthFixed);
@@ -254,7 +254,7 @@ namespace MarketTerror.GUI
 
       this.UpdateSort();
 
-      var hqWidth = ColumnWidth(HqHeader, new[] { HqMark });
+      var hqWidth = ColumnWidth(HqHeader, this.sortedItems.Select(HqText));
       var priceWidth = ColumnWidth(PriceHeader, this.sortedItems.Select(this.PriceText));
       var qtyWidth = ColumnWidth(QtyHeader, this.sortedItems.Select(QtyText));
       var totalWidth = ColumnWidth(TotalHeader, this.sortedItems.Select(this.TotalText));
@@ -269,16 +269,6 @@ namespace MarketTerror.GUI
         ImGui.TableNextRow();
 
         ImGui.TableSetColumnIndex(0);
-
-        if (item.Hq)
-        {
-          ImGui.PushStyleColor(ImGuiCol.Text, this.theme.TextBright);
-          Centered(HqMark, hqWidth);
-          ImGui.PopStyleColor();
-          Utilities.HoverTooltip("This row only buys high quality.");
-        }
-
-        ImGui.TableSetColumnIndex(1);
 
         this.DrawItemIcon(item);
 
@@ -313,6 +303,26 @@ namespace MarketTerror.GUI
           this.Plugin.MarketBoardContext.DrawListsMenu(item.SourceItem.RowId);
 
           ImGui.EndPopup();
+        }
+
+        ImGui.TableSetColumnIndex(1);
+
+        var quality = HqText(item);
+
+        if (quality.Length > 0)
+        {
+          ImGui.PushStyleColor(ImGuiCol.Text, item.HasPicks ? this.theme.TextDim : this.theme.TextBright);
+          Centered(quality, hqWidth);
+          ImGui.PopStyleColor();
+
+          if (item.HasPicks)
+          {
+            this.PickTooltip(item);
+          }
+          else
+          {
+            Utilities.HoverTooltip("This row only buys high quality.");
+          }
         }
 
         ImGui.TableSetColumnIndex(2);
@@ -553,6 +563,26 @@ namespace MarketTerror.GUI
       var listings = total == 1 ? "1 listing" : $"{total} listings";
 
       return live == total ? listings : $"{listings}, {total - live} gone";
+    }
+
+    /// <summary>
+    /// Formats the quality of what a row buys: the split of its picks, or the mark on a single
+    /// listing that is high quality.
+    /// </summary>
+    /// <param name="item">The row to format.</param>
+    /// <returns>The quality as it reads in the table, or an empty string when there is nothing to say.</returns>
+    private static string HqText(SavedItem item)
+    {
+      // A row without picks stands for one listing, which is either all high quality or none of it.
+      if (!item.HasPicks)
+      {
+        return item.Hq ? HqMark : string.Empty;
+      }
+
+      var nq = item.QuantityNq.ToString("N0", CultureInfo.CurrentCulture);
+      var hq = item.QuantityHq.ToString("N0", CultureInfo.CurrentCulture);
+
+      return $"{nq} NQ / {hq} HQ";
     }
 
     /// <summary>
@@ -1123,12 +1153,12 @@ namespace MarketTerror.GUI
       {
         case 0:
           return this.sortAscending
-            ? items.OrderBy(i => i.Hq)
-            : items.OrderByDescending(i => i.Hq);
-        case 1:
-          return this.sortAscending
             ? items.OrderBy(i => i.SourceItem.Name.ExtractText(), StringComparer.CurrentCultureIgnoreCase)
             : items.OrderByDescending(i => i.SourceItem.Name.ExtractText(), StringComparer.CurrentCultureIgnoreCase);
+        case 1:
+          return this.sortAscending
+            ? items.OrderBy(i => i.Hq)
+            : items.OrderByDescending(i => i.Hq);
         case 2:
           return this.sortAscending
             ? items.OrderBy(i => i.Price)

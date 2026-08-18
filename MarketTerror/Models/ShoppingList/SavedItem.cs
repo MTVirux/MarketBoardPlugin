@@ -125,6 +125,17 @@ namespace MarketTerror.Models.ShoppingList
     }
 
     /// <summary>
+    ///  Gets how many of the row's items come from high quality listings.
+    /// </summary>
+    public long QuantityHq =>
+      this.HasPicks ? this.Aggregated.Where(p => p.Hq).Sum(p => p.Quantity) : (this.Hq ? this.Quantity : 0);
+
+    /// <summary>
+    ///  Gets how many of the row's items come from normal quality listings.
+    /// </summary>
+    public long QuantityNq => this.Quantity - this.QuantityHq;
+
+    /// <summary>
     ///  Gets the gil the whole listing costs.
     /// </summary>
     /// <remarks>
