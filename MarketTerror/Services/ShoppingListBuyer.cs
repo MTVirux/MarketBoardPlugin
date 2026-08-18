@@ -47,6 +47,14 @@ namespace MarketTerror.Services
 
     private bool boughtOnBoard;
 
+    /// <summary>
+    /// Whether the listing in flight is being bought off a listings window the last purchase left up,
+    /// and whether the board turned out to still be holding that purchase's listings.
+    /// </summary>
+    private bool reusingListings;
+
+    private bool listingsWentStale;
+
     private bool isDisposed;
 
     /// <summary>
@@ -377,10 +385,23 @@ namespace MarketTerror.Services
 
       this.CurrentItemName = this.Describe(job);
 
-      // Another listing of the same item on the same world: the board is still on it, so its listings
-      // only have to be opened again rather than searched for from scratch.
-      if (this.boardItemId == job.Row.SourceItem.RowId
-        && string.Equals(this.boardWorld, job.World, StringComparison.OrdinalIgnoreCase)
+      var sameBoardItem = this.boardItemId == job.Row.SourceItem.RowId
+        && string.Equals(this.boardWorld, job.World, StringComparison.OrdinalIgnoreCase);
+
+      // Another listing of the same item, and the last purchase left the listings up: buy straight
+      // off them. The buy only takes a listing the board has sent since, so nothing stale is bought.
+      this.reusingListings = sameBoardItem && !this.listingsWentStale && this.purchase.IsListingsWindowOpen;
+      this.listingsWentStale = false;
+
+      if (this.reusingListings)
+      {
+        this.OnSearchFinished(job, true);
+        return;
+      }
+
+      // Same item, but the listings have gone: they only have to be opened again rather than
+      // searched for from scratch.
+      if (sameBoardItem
         && this.plugin.MarketBoardContext.TryReopenListingsForBuy(job.World, job.Row.SourceItem, opened => this.OnSearchFinished(job, opened)))
       {
         return;
@@ -405,7 +426,8 @@ namespace MarketTerror.Services
         return false;
       }
 
-      // More of the same item still to buy on the same world: that buy opens the listings again anyway.
+      // More of the same item still to buy on the same world: that buy waits for the board to send
+      // its listings again anyway, which is all an uploader needs.
       if (this.queue.Count > 0)
       {
         var next = this.queue.Peek();
@@ -434,6 +456,8 @@ namespace MarketTerror.Services
       this.boardItemName = string.Empty;
       this.boardItemId = 0;
       this.boughtOnBoard = false;
+      this.reusingListings = false;
+      this.listingsWentStale = false;
     }
 
     /// <summary>
@@ -476,11 +500,20 @@ namespace MarketTerror.Services
 
       this.purchase.Start(
         new BuyRequest(job.Row.SourceItem.RowId, job.Row.SourceItem.Name.ExtractText(), job.Hq, job.Quantity, job.Price),
-        result => this.Report(job, result));
+        result => this.Report(job, result),
+        this.reusingListings);
     }
 
     private void Report(BuyJob job, BuyResult result)
     {
+      // The board kept its window up but not its listings, so this job has not been tried yet.
+      if (result.Stale)
+      {
+        this.listingsWentStale = true;
+        this.StartNext();
+        return;
+      }
+
       var outcome = result.Success
         ? (result.UnitPrice < job.Price ? BuyOutcome.BoughtCheaper : BuyOutcome.Bought)
         : BuyOutcome.Failed;

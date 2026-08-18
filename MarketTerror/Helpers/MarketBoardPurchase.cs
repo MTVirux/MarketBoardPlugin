@@ -32,6 +32,7 @@ namespace MarketTerror.Helpers
     private const string BoardAddonName = "ItemSearch";
     private const string ConfirmAddonName = "SelectYesno";
     private const long ListingsTimeoutMs = 15000;
+    private const long ReusedListingsTimeoutMs = 3000;
     private const long ListingsSettleMs = 500;
     private const long EarlyArrivalMs = 3000;
     private const long ConfirmTimeoutMs = 10000;
@@ -48,6 +49,7 @@ namespace MarketTerror.Helpers
     private readonly Func<bool> includesSalesTax;
 
     private State state = State.Idle;
+    private bool reusedListings;
     private BuyRequest? request;
     private Action<BuyResult>? onFinished;
     private string answeredPrompt = string.Empty;
@@ -93,11 +95,20 @@ namespace MarketTerror.Helpers
     public bool IsRunning => this.state != State.Idle;
 
     /// <summary>
+    /// Gets a value indicating whether the listings window is up.
+    /// </summary>
+    public bool IsListingsWindowOpen => this.gameGui.GetAddonByName(ResultAddonName) != nint.Zero;
+
+    /// <summary>
     /// Starts buying the requested listing off the board that is currently open.
     /// </summary>
     /// <param name="buyRequest">What may be bought.</param>
     /// <param name="finished">Called once with how the attempt ended.</param>
-    public void Start(BuyRequest buyRequest, Action<BuyResult> finished)
+    /// <param name="reusingListings">
+    /// True when the listings window was left up by the last purchase rather than opened for this one,
+    /// so only what the board sends after this point may be bought off.
+    /// </param>
+    public void Start(BuyRequest buyRequest, Action<BuyResult> finished, bool reusingListings = false)
     {
       ArgumentNullException.ThrowIfNull(buyRequest);
       ArgumentNullException.ThrowIfNull(finished);
@@ -111,8 +122,9 @@ namespace MarketTerror.Helpers
       this.request = buyRequest;
       this.onFinished = finished;
       this.state = State.WaitingListings;
+      this.reusedListings = reusingListings;
       this.startTick = Environment.TickCount64;
-      this.deadlineTick = this.startTick + ListingsTimeoutMs;
+      this.deadlineTick = this.startTick + (reusingListings ? ReusedListingsTimeoutMs : ListingsTimeoutMs);
       this.answeredPrompt = string.Empty;
       this.warningPrompts = 0;
       this.targetListingId = 0;
@@ -242,6 +254,15 @@ namespace MarketTerror.Helpers
       {
         if (Environment.TickCount64 > this.deadlineTick)
         {
+          if (this.state == State.WaitingListings && this.reusedListings)
+          {
+            // The window stayed up but the board never sent the listings again, so it is still
+            // showing the ones the last purchase came off. The caller opens them again instead.
+            this.log.Debug($"The board never sent its listings again after the last purchase of \"{this.request!.ItemName}\"");
+            this.Finish(BuyResult.StaleListings());
+            return;
+          }
+
           if (this.state == State.WaitingListings)
           {
             this.LogListingsTimeout();
@@ -325,7 +346,9 @@ namespace MarketTerror.Helpers
     {
       var arrived = Interlocked.Read(ref this.lastOfferingsTick);
 
-      return arrived >= this.startTick - EarlyArrivalMs
+      // A window that was left up carries the listings the last purchase came off, and one of them
+      // has just been bought, so only a page that lands after this buy starts may be picked from.
+      return arrived >= (this.reusedListings ? this.startTick : this.startTick - EarlyArrivalMs)
         && Environment.TickCount64 - arrived >= ListingsSettleMs
         && proxy->ListingCount > 0
         && proxy->SearchItemId % HqItemIdOffset == buy.ItemId;
@@ -544,6 +567,7 @@ namespace MarketTerror.Helpers
       this.request = null;
       this.onFinished = null;
       this.targetListingId = 0;
+      this.reusedListings = false;
 
       callback?.Invoke(result);
     }

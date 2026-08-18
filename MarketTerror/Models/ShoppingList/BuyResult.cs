@@ -9,11 +9,12 @@ namespace MarketTerror.Models.ShoppingList
   /// </summary>
   public sealed class BuyResult
   {
-    private BuyResult(bool success, double unitPrice, string reason)
+    private BuyResult(bool success, double unitPrice, string reason, bool stale = false)
     {
       this.Success = success;
       this.UnitPrice = unitPrice;
       this.Reason = reason;
+      this.Stale = stale;
     }
 
     /// <summary>Gets a value indicating whether the item was bought.</summary>
@@ -24,6 +25,12 @@ namespace MarketTerror.Models.ShoppingList
 
     /// <summary>Gets the reason nothing was bought, or an empty string on success.</summary>
     public string Reason { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the attempt was given up on because the board was still
+    /// holding the listings from before the last purchase, which is worth another go.
+    /// </summary>
+    public bool Stale { get; }
 
     /// <summary>
     /// Builds the result of a purchase that went through.
@@ -38,5 +45,12 @@ namespace MarketTerror.Models.ShoppingList
     /// <param name="reason">Why nothing was bought, phrased to be printed in chat.</param>
     /// <returns>The result.</returns>
     public static BuyResult Failed(string reason) => new BuyResult(false, 0, reason);
+
+    /// <summary>
+    /// Builds the result of a purchase that never started because the listings on the board were the
+    /// ones from before the last purchase.
+    /// </summary>
+    /// <returns>The result.</returns>
+    public static BuyResult StaleListings() => new BuyResult(false, 0, "the board's listings were out of date", true);
   }
 }
