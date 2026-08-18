@@ -141,6 +141,28 @@ namespace MarketTerror.Models.ShoppingList
     }
 
     /// <summary>
+    /// Copies the listing so that whoever resolves to it owns its mutable state outright.
+    /// </summary>
+    /// <returns>The copy.</returns>
+    /// <remarks>
+    /// The buy state - the outcome, the reason and what was paid - is deliberately left behind. A
+    /// listing that has just been resolved to has not been attempted, and a refresh is exactly when
+    /// that state should reset.
+    /// </remarks>
+    public ResolvedListing Copy()
+    {
+      return new ResolvedListing(this.Price, this.Quantity, this.Hq, this.World, this.RetainerName, this.ListingId)
+      {
+        OnMannequin = this.OnMannequin,
+        IsCrafted = this.IsCrafted,
+        CreatorName = this.CreatorName,
+        MateriaCount = this.MateriaCount,
+        StainId = this.StainId,
+        Gone = this.Gone,
+      };
+    }
+
+    /// <summary>
     /// Checks whether another resolved listing stands for the same Market Board listing as this one.
     /// </summary>
     /// <param name="other">The resolved listing to compare against.</param>

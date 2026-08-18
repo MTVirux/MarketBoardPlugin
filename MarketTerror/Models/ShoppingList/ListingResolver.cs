@@ -13,7 +13,9 @@ namespace MarketTerror.Models.ShoppingList
   /// </summary>
   /// <remarks>
   /// The one place any of the three kinds is interpreted. Pure on purpose: it takes the listings and
-  /// gives back the choice, so nothing about pricing, saving or drawing can change what an entry means.
+  /// gives back the choice without writing to either, so nothing about pricing, saving or drawing can
+  /// change what an entry means. Every listing handed back is the entry's own copy, so two entries on
+  /// the same item and scope resolved from one fetch never share a listing's buy state.
   /// </remarks>
   public static class ListingResolver
   {
@@ -22,22 +24,27 @@ namespace MarketTerror.Models.ShoppingList
     /// </summary>
     /// <param name="entry">The entry to resolve.</param>
     /// <param name="onSale">Every listing of the entry's item in the entry's scope.</param>
-    /// <returns>The listings to buy, cheapest first.</returns>
+    /// <returns>The listings to buy, cheapest first, each one a copy the entry owns.</returns>
     public static IReadOnlyList<ResolvedListing> Resolve(ListingEntry entry, IReadOnlyList<ResolvedListing> onSale)
     {
       ArgumentNullException.ThrowIfNull(entry);
       ArgumentNullException.ThrowIfNull(onSale);
 
+      // A scope can ask a world and its data centre in the same breath, which hands the same listing
+      // back twice. Listings without an id are kept, since two blank ids are not the same listing.
+      var seen = new HashSet<string>(StringComparer.Ordinal);
+
       // Mannequin listings are never bought, whatever the entry asks for.
       var available = onSale
         .Where(l => !l.OnMannequin)
+        .Where(l => l.ListingId.Length == 0 || seen.Add(l.ListingId))
         .OrderBy(l => l.Price)
         .ThenBy(l => l.Total)
         .ToArray();
 
       return entry.Kind switch
       {
-        ListingKind.Lowest => available.Take(Math.Max(1, entry.Count)).ToArray(),
+        ListingKind.Lowest => available.Take(Math.Max(1, entry.Count)).Select(l => l.Copy()).ToArray(),
         ListingKind.Direct => Direct(entry, available),
         _ => Conditional(entry, available),
       };
@@ -54,12 +61,15 @@ namespace MarketTerror.Models.ShoppingList
 
       if (found != null)
       {
-        return new[] { found };
+        return new[] { found.Copy() };
       }
 
-      // Keeping the target, marked gone, is what lets the row still say which listing it wanted.
-      entry.Target.Gone = true;
-      return new[] { entry.Target };
+      // A copy of the target, marked gone, is what lets the row still say which listing it wanted.
+      // The target itself is left alone, so it goes on meaning the listing the entry asked for.
+      var missing = entry.Target.Copy();
+      missing.Gone = true;
+
+      return new[] { missing };
     }
 
     private static ResolvedListing[] Conditional(ListingEntry entry, ResolvedListing[] available)
@@ -89,7 +99,7 @@ namespace MarketTerror.Models.ShoppingList
         }
 
         spent += listing.Total;
-        chosen.Add(listing);
+        chosen.Add(listing.Copy());
       }
 
       return chosen.ToArray();
