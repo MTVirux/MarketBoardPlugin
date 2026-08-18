@@ -6,6 +6,7 @@ namespace MarketTerror.GUI
 {
   using System;
   using System.Collections.Generic;
+  using System.Linq;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.ManagedFontAtlas;
   using Lumina.Excel.Sheets;
@@ -170,9 +171,13 @@ namespace MarketTerror.GUI
     public bool CanReadUnlockState => this.Plugin.ClientState.IsLoggedIn;
 
     /// <summary>
-    /// Gets or sets the index of the highlighted listing.
+    /// Gets the indices of the highlighted listings, over the price-sorted listings the table draws.
     /// </summary>
-    public int SelectedListing { get; set; } = -1;
+    /// <remarks>
+    /// The indices are positional, so they only mean anything while the listings behind them stay put.
+    /// The table clears them whenever the listings it is drawing change.
+    /// </remarks>
+    public HashSet<int> SelectedListings { get; } = new HashSet<int>();
 
     /// <summary>
     /// Gets or sets the index of the highlighted history entry.
@@ -434,16 +439,20 @@ namespace MarketTerror.GUI
     }
 
     /// <summary>
-    /// Adds one particular listing to the shopping list, kept as it is instead of being priced again.
+    /// Adds listings of one item to the shopping list, kept as they are instead of being priced again.
     /// </summary>
-    /// <param name="item">The item the listing belongs to.</param>
-    /// <param name="listing">The listing to add.</param>
-    public void AddListingToShoppingList(Item item, MarketDataListing listing)
+    /// <param name="item">The item the listings belong to.</param>
+    /// <param name="listings">The listings to add.</param>
+    public void AddListingsToShoppingList(Item item, IEnumerable<MarketDataListing> listings)
     {
+      ArgumentNullException.ThrowIfNull(listings);
+
       // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
       var fallbackWorld = this.Worlds.IsMultiWorld ? string.Empty : this.Worlds.QueryTarget;
+      var withTax = !this.Config.NoGilSalesTax;
 
-      this.Plugin.ShoppingList.Add(SavedItem.FromListing(item, listing, !this.Config.NoGilSalesTax, fallbackWorld));
+      this.Plugin.ShoppingList.AddRange(
+        listings.Select(listing => SavedItem.FromListing(item, listing, withTax, fallbackWorld)));
     }
 
     /// <summary>

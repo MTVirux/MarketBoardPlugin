@@ -5,6 +5,7 @@
 namespace MarketTerror.GUI.Components
 {
   using System;
+  using System.Collections.Generic;
   using System.Globalization;
   using System.Linq;
   using System.Numerics;
@@ -21,6 +22,22 @@ namespace MarketTerror.GUI.Components
   public sealed class ListingsTable
   {
     private readonly MarketBoardContext context;
+
+    /// <summary>
+    /// The row a drag started on, or -1 when no drag is in progress.
+    /// </summary>
+    private int dragAnchor = -1;
+
+    /// <summary>
+    /// The row the drag is currently over. Only meaningful while <see cref="dragAnchor"/> is set.
+    /// </summary>
+    private int dragCursor = -1;
+
+    /// <summary>
+    /// How many listings were drawn last frame. The selection is positional, so a different count
+    /// means the rows moved under it and it has to go.
+    /// </summary>
+    private int lastListingCount = -1;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ListingsTable"/> class.
@@ -88,13 +105,22 @@ namespace MarketTerror.GUI.Components
 
       var listingsSnapshot = this.context.MarketData.MarketData?.Listings.ToArray();
       var marketDataListings = listingsSnapshot?.OrderBy(l => l.PricePerUnit).ToList();
+      var count = marketDataListings?.Count ?? 0;
+
+      if (count != this.lastListingCount)
+      {
+        this.ClearSelection();
+        this.lastListingCount = count;
+      }
 
       if (marketDataListings != null)
       {
-        for (var index = 0; index < marketDataListings.Count; index++)
+        for (var index = 0; index < count; index++)
         {
-          this.DrawRow(marketDataListings[index], index);
+          this.DrawRow(marketDataListings, index);
         }
+
+        this.ApplyDrag(count);
       }
 
       ImGui.EndTable();
@@ -153,8 +179,9 @@ namespace MarketTerror.GUI.Components
       ImGui.PopStyleColor();
     }
 
-    private void DrawRow(MarketDataListing listing, int index)
+    private void DrawRow(List<MarketDataListing> listings, int index)
     {
+      var listing = listings[index];
       var worlds = this.context.Worlds;
 
       ImGui.TableNextRow();
@@ -163,13 +190,23 @@ namespace MarketTerror.GUI.Components
       var cursor = ImGui.GetCursorPos();
       var hqOffset = CenterOffset(SeIconChar.HighQuality.AsString());
 
+      // How many rows were lit up going into this frame, before the drag gets a say. A click that
+      // lands on a multi-row selection only narrows it down; it must not travel anywhere.
+      var wasMultiple = this.context.SelectedListings.Count > 1;
+
       var clicked = ImGui.Selectable(
         $"##listing{index}",
-        this.context.SelectedListing == index,
+        this.context.SelectedListings.Contains(index),
         ImGuiSelectableFlags.SpanAllColumns);
 
+      // The row that started the drag holds ImGui's active id, which would otherwise stop every
+      // other row reporting the mouse passing over it.
+      var hovered = ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem);
+
       // Bound while the selectable is still the last item, so the whole row answers the right click.
-      this.DrawRowContextMenu(listing, index);
+      this.DrawRowContextMenu(listings, index);
+
+      this.TrackDrag(index, hovered);
 
       if (listing.Hq)
       {
@@ -179,9 +216,9 @@ namespace MarketTerror.GUI.Components
         ImGui.PopStyleColor();
       }
 
-      if (clicked)
+      if (clicked && !wasMultiple && !ImGui.GetIO().KeyCtrl)
       {
-        this.HandleClick(listing, index);
+        this.HandleClick(listing);
       }
 
       ImGui.TableSetColumnIndex(1);
@@ -220,27 +257,133 @@ namespace MarketTerror.GUI.Components
       ImGui.Text(retainerSB.ToString());
     }
 
-    private void DrawRowContextMenu(MarketDataListing listing, int index)
+    private void DrawRowContextMenu(List<MarketDataListing> listings, int index)
     {
       if (!ImGui.BeginPopupContextItem($"listingContextMenu{index}"))
       {
         return;
       }
 
-      if (this.context.SelectedItem.HasValue && ImGui.Selectable("Add to the shopping list"))
+      // Right-clicking away from the selection acts on that row alone, the way selections usually do.
+      if (!this.context.SelectedListings.Contains(index))
       {
-        this.context.AddListingToShoppingList(this.context.SelectedItem.Value, listing);
+        this.ClearSelection();
+        this.context.SelectedListings.Add(index);
+      }
+
+      var selected = this.SelectedRows(listings);
+
+      if (this.context.SelectedItem.HasValue)
+      {
+        var label = selected.Count > 1
+          ? $"Add {selected.Count} listings to the shopping list"
+          : "Add to the shopping list";
+
+        if (ImGui.Selectable(label))
+        {
+          this.context.AddListingsToShoppingList(this.context.SelectedItem.Value, selected);
+        }
       }
 
       ImGui.EndPopup();
     }
 
-    private void HandleClick(MarketDataListing listing, int index)
+    /// <summary>
+    /// Notes what the mouse is doing to a row, so the drag can be turned into a range once every row
+    /// has had its say.
+    /// </summary>
+    /// <param name="index">The row.</param>
+    /// <param name="hovered">True when the mouse is over it.</param>
+    private void TrackDrag(int index, bool hovered)
     {
-      var plugin = this.context.Plugin;
-      var worlds = this.context.Worlds;
+      if (!hovered)
+      {
+        return;
+      }
 
-      this.context.SelectedListing = index;
+      if (ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+      {
+        if (ImGui.GetIO().KeyCtrl)
+        {
+          // Ctrl picks rows off one at a time and starts no drag, so no range overwrites them.
+          this.dragAnchor = -1;
+
+          if (!this.context.SelectedListings.Remove(index))
+          {
+            this.context.SelectedListings.Add(index);
+          }
+
+          return;
+        }
+
+        this.dragAnchor = index;
+        this.dragCursor = index;
+        return;
+      }
+
+      if (this.dragAnchor >= 0 && ImGui.IsMouseDown(ImGuiMouseButton.Left))
+      {
+        this.dragCursor = index;
+      }
+    }
+
+    /// <summary>
+    /// Lights up every row between where the drag started and where it has got to.
+    /// </summary>
+    /// <param name="count">How many listings the table is drawing.</param>
+    private void ApplyDrag(int count)
+    {
+      if (this.dragAnchor < 0)
+      {
+        return;
+      }
+
+      if (this.dragAnchor >= count || this.dragCursor >= count)
+      {
+        // The listings changed under the drag, so there is nothing left to drag over.
+        this.dragAnchor = -1;
+        return;
+      }
+
+      var first = Math.Min(this.dragAnchor, this.dragCursor);
+      var last = Math.Max(this.dragAnchor, this.dragCursor);
+
+      this.context.SelectedListings.Clear();
+
+      for (var index = first; index <= last; index++)
+      {
+        this.context.SelectedListings.Add(index);
+      }
+
+      if (ImGui.IsMouseReleased(ImGuiMouseButton.Left))
+      {
+        this.dragAnchor = -1;
+      }
+    }
+
+    /// <summary>
+    /// The selected listings, in the order the table shows them.
+    /// </summary>
+    /// <param name="listings">The listings the table is drawing.</param>
+    /// <returns>The listings the selection points at.</returns>
+    private List<MarketDataListing> SelectedRows(List<MarketDataListing> listings)
+    {
+      return this.context.SelectedListings
+        .Where(index => index >= 0 && index < listings.Count)
+        .OrderBy(index => index)
+        .Select(index => listings[index])
+        .ToList();
+    }
+
+    private void ClearSelection()
+    {
+      this.context.SelectedListings.Clear();
+      this.dragAnchor = -1;
+    }
+
+    private void HandleClick(MarketDataListing listing)
+    {
+      var worlds = this.context.Worlds;
 
       // Single-world Universalis queries don't populate per-listing WorldName, so fall back to the selected world.
       var worldName = worlds.IsMultiWorld
