@@ -624,6 +624,7 @@ namespace MarketTerror.GUI
       // Nothing here works from the main menu: there is no board to open and no character to travel with.
       if (!plugin.ClientState.IsLoggedIn)
       {
+        plugin.Log.Debug("Market board trip ignored: no character is logged in.");
         onFinished?.Invoke(false);
         return;
       }
