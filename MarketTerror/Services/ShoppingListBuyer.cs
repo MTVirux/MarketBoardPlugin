@@ -351,6 +351,13 @@ namespace MarketTerror.Services
         return;
       }
 
+      // Travel goes through the main menu, so a run only stops when the next job comes round with nobody logged in.
+      if (this.queue.Count > 0 && !this.plugin.ClientState.IsLoggedIn)
+      {
+        this.queue.Clear();
+        this.plugin.ChatGui.Print("Stopped buying: no character is logged in.");
+      }
+
       if (this.queue.Count == 0)
       {
         this.purchase.CloseBoard();

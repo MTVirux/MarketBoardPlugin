@@ -171,6 +171,11 @@ namespace MarketTerror.GUI
     public bool CanReadUnlockState => this.Plugin.ClientState.IsLoggedIn;
 
     /// <summary>
+    /// Gets a value indicating whether the game can be sent to a Market Board, which needs a character logged in.
+    /// </summary>
+    public bool CanTravel => this.Plugin.ClientState.IsLoggedIn;
+
+    /// <summary>
     /// Gets the indices of the highlighted listings, over the price-sorted listings the table draws.
     /// </summary>
     /// <remarks>
@@ -615,6 +620,13 @@ namespace MarketTerror.GUI
     private void GoToMarketBoard(string worldName, Item? item, bool allowTravel, bool force, Action<bool>? onFinished)
     {
       var plugin = this.Plugin;
+
+      // Nothing here works from the main menu: there is no board to open and no character to travel with.
+      if (!plugin.ClientState.IsLoggedIn)
+      {
+        onFinished?.Invoke(false);
+        return;
+      }
 
       var travelEnabled = allowTravel && !string.IsNullOrEmpty(worldName);
       var currentWorld = PlayerWorld.CurrentName(plugin.PlayerState);

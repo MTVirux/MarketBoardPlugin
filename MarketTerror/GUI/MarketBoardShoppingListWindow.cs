@@ -392,12 +392,16 @@ namespace MarketTerror.GUI
         }
         else
         {
-          ImGui.BeginDisabled(string.IsNullOrEmpty(item.World));
+          var canTravel = this.Plugin.MarketBoardContext.CanTravel;
+
+          ImGui.BeginDisabled(string.IsNullOrEmpty(item.World) || !canTravel);
           ImGui.PushFont(UiBuilder.IconFont);
           travel = ImGui.Button($"{(char)FontAwesomeIcon.Walking}##shoplistgo" + k, buttonSize);
           ImGui.PopFont();
           ImGui.EndDisabled();
-          Utilities.HoverTooltip($"Go to the market board on {item.World}.");
+          Utilities.HoverTooltip(
+            canTravel ? $"Go to the market board on {item.World}." : "Log in to a character to travel.",
+            ImGuiHoveredFlags.AllowWhenDisabled);
         }
 
         ImGui.SameLine();
