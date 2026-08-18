@@ -1,4 +1,4 @@
-// <copyright file="MarketBoardAutoSearch.cs" company="MTVirux">
+﻿// <copyright file="MarketBoardAutoSearch.cs" company="MTVirux">
 // Copyright (c) MTVirux. All rights reserved.
 // </copyright>
 
@@ -32,6 +32,7 @@ namespace MarketTerror.Helpers
     private const long AddonSettleMs = 500;
     private const long ResultsTimeoutMs = 10000;
     private const long ResultWindowTimeoutMs = 10000;
+    private const long ResultCloseTimeoutMs = 3000;
     private const uint HqItemIdOffset = 1000000;
 
     private readonly IFramework framework;
@@ -49,6 +50,7 @@ namespace MarketTerror.Helpers
     private long fallbackDeadlineTick;
     private long resultsDeadlineTick;
     private long resultWindowDeadlineTick;
+    private long resultCloseDeadlineTick;
     private long addonSettleTick;
     private bool addonSeen;
     private bool resultsLogged;
@@ -93,6 +95,7 @@ namespace MarketTerror.Helpers
       Idle,
       Traveling,
       WaitingAddon,
+      ClosingResultWindow,
       WaitingResults,
       WaitingResultWindow,
     }
@@ -166,7 +169,7 @@ namespace MarketTerror.Helpers
       this.itemId = id;
       this.onFinished = onFinished;
       this.forced = force;
-      this.Fire(addon);
+      this.BeginSearch(addon);
     }
 
     /// <inheritdoc/>
@@ -337,6 +340,12 @@ namespace MarketTerror.Helpers
         return;
       }
 
+      if (this.state == State.ClosingResultWindow)
+      {
+        this.WaitForResultWindowToClose(now);
+        return;
+      }
+
       if (now > this.fallbackDeadlineTick)
       {
         this.log.Debug($"Auto-search for \"{this.itemName}\" timed out before the Market Board was ready");
@@ -404,7 +413,7 @@ namespace MarketTerror.Helpers
         return;
       }
 
-      this.Fire(addonPtr);
+      this.BeginSearch(addonPtr);
     }
 
     private void OnItemSearchPostSetup(AddonEvent type, AddonArgs args)
@@ -418,6 +427,54 @@ namespace MarketTerror.Helpers
       // update fires the search once the addon is fully built. Firing here is too early.
       this.state = State.WaitingAddon;
       this.addonSettleTick = 0;
+    }
+
+    /// <summary>
+    /// Closes the listings window and only searches once it is gone. A search run while the window
+    /// is still up leaves it showing the item it was already on, so nothing asks the board for the
+    /// new item's listings.
+    /// </summary>
+    /// <param name="addonPtr">The Market Board addon to search on.</param>
+    private unsafe void BeginSearch(nint addonPtr)
+    {
+      nint resultPtr = this.gameGui.GetAddonByName(ResultAddonName);
+      if (resultPtr == nint.Zero)
+      {
+        this.Fire(addonPtr);
+        return;
+      }
+
+      ((AtkUnitBase*)resultPtr)->Close(true);
+      this.state = State.ClosingResultWindow;
+      this.resultCloseDeadlineTick = Environment.TickCount64 + ResultCloseTimeoutMs;
+      this.log.Debug($"Closing the listings window before searching for \"{this.itemName}\"");
+    }
+
+    /// <summary>
+    /// Searches as soon as the listings window has gone, or once waiting for it stops being worth it.
+    /// </summary>
+    /// <param name="now">The current tick count.</param>
+    private void WaitForResultWindowToClose(long now)
+    {
+      nint addonPtr = this.gameGui.GetAddonByName(AddonName);
+      if (addonPtr == nint.Zero)
+      {
+        this.log.Debug($"The Market Board closed before \"{this.itemName}\" could be searched for");
+        this.Finish(false);
+        return;
+      }
+
+      if (this.gameGui.GetAddonByName(ResultAddonName) == nint.Zero)
+      {
+        this.Fire(addonPtr);
+        return;
+      }
+
+      if (now > this.resultCloseDeadlineTick)
+      {
+        this.log.Debug($"The listings window never closed; searching for \"{this.itemName}\" anyway");
+        this.Fire(addonPtr);
+      }
     }
 
     private unsafe bool IsResultWindowOpen()
