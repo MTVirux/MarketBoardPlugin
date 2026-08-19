@@ -33,6 +33,7 @@ namespace MarketTerror.GUI
       ("Tabs", new[] { ThemeColor.Tab, ThemeColor.TabActive }),
       ("Text", new[] { ThemeColor.Text, ThemeColor.TextDim, ThemeColor.TextBright, ThemeColor.GilText }),
       ("Tables", new[] { ThemeColor.RowAlt, ThemeColor.TableHeaderBg }),
+      ("Modals", new[] { ThemeColor.ModalDim }),
     };
 
     private static readonly (bool Hq, string Price, string Quantity, string Retainer)[] PreviewRows =
