@@ -6,6 +6,7 @@ namespace MarketTerror.GUI
 {
   using System;
   using System.Collections.Generic;
+  using System.Linq;
   using Dalamud.Bindings.ImGui;
   using Dalamud.Interface.ManagedFontAtlas;
   using Lumina.Excel.Sheets;
@@ -140,6 +141,17 @@ namespace MarketTerror.GUI
     public HashSet<byte> SelectedRarities { get; } = new HashSet<byte>();
 
     /// <summary>
+    /// Gets or sets a value indicating whether the item list is limited to the recently viewed items.
+    /// </summary>
+    public bool SearchHistory { get; set; }
+
+    /// <summary>
+    /// Gets the ids of the user's lists the item list is limited to, or an empty set for no list.
+    /// </summary>
+    /// <remarks>Combines with <see cref="SearchHistory"/>: an item on any picked source is kept.</remarks>
+    public HashSet<Guid> SearchLists { get; } = new HashSet<Guid>();
+
+    /// <summary>
     /// Gets or sets the minimum equip level filter.
     /// </summary>
     public int MinLevel { get; set; }
@@ -207,7 +219,8 @@ namespace MarketTerror.GUI
     /// Gets a value indicating whether any advanced search filter is set to something other than its default.
     /// </summary>
     public bool HasActiveFilters =>
-      this.SelectedCategories.Count > 0
+      this.HasSearchSource
+      || this.SelectedCategories.Count > 0
       || this.SelectedRarities.Count > 0
       || this.SelectedClassJob != null
       || (this.CanReadUnlockState && this.UnlockFilter != null)
@@ -215,6 +228,15 @@ namespace MarketTerror.GUI
       || this.MaxLevel != DefaultMaxLevel
       || this.MinItemLevel != 0
       || this.MaxItemLevel != DefaultMaxItemLevel;
+
+    /// <summary>
+    /// Gets a value indicating whether the item list is limited to the recently viewed items or to a list
+    /// the user still has.
+    /// </summary>
+    /// <remarks>A list that has since been deleted stops counting rather than emptying the results.</remarks>
+    public bool HasSearchSource =>
+      this.SearchHistory
+      || (this.SearchLists.Count > 0 && this.Plugin.ItemLists.Any(l => this.SearchLists.Contains(l.Id)));
 
     /// <summary>
     /// Stops this board's in-flight market data fetch.
@@ -241,6 +263,10 @@ namespace MarketTerror.GUI
       state.MinItemLevel = this.MinItemLevel;
       state.MaxItemLevel = this.MaxItemLevel;
       state.UnlockFilter = this.UnlockFilter;
+      state.SearchHistory = this.SearchHistory;
+
+      state.SearchLists.Clear();
+      state.SearchLists.AddRange(this.SearchLists);
 
       state.SelectedCategories.Clear();
       state.SelectedCategories.AddRange(this.SelectedCategories);
@@ -263,6 +289,13 @@ namespace MarketTerror.GUI
       this.MinItemLevel = state.MinItemLevel;
       this.MaxItemLevel = state.MaxItemLevel;
       this.UnlockFilter = state.UnlockFilter;
+      this.SearchHistory = state.SearchHistory;
+
+      this.SearchLists.Clear();
+      foreach (var listId in state.SearchLists)
+      {
+        this.SearchLists.Add(listId);
+      }
 
       this.SelectedCategories.Clear();
       foreach (var category in state.SelectedCategories)
@@ -332,7 +365,8 @@ namespace MarketTerror.GUI
         this.MaxItemLevel,
         this.SelectedClassJob,
         this.CanReadUnlockState ? this.UnlockFilter : null,
-        item => ItemUnlock.Read(this.Plugin.PlayerState, item));
+        item => ItemUnlock.Read(this.Plugin.PlayerState, item),
+        this.BuildSearchSource());
     }
 
     /// <summary>
@@ -340,6 +374,8 @@ namespace MarketTerror.GUI
     /// </summary>
     public void ResetFilters()
     {
+      this.SearchHistory = false;
+      this.SearchLists.Clear();
       this.SelectedCategories.Clear();
       this.SelectedRarities.Clear();
       this.SelectedClassJob = null;
@@ -660,6 +696,35 @@ namespace MarketTerror.GUI
       {
         this.Plugin.Log.Warning($"Failed to notify clipboard copied: {ex.Message}");
       }
+    }
+
+    /// <summary>
+    /// Collects the row ids of every item on the picked search sources.
+    /// </summary>
+    /// <returns>The ids the search is limited to, or null when no source is picked.</returns>
+    private HashSet<uint>? BuildSearchSource()
+    {
+      if (!this.HasSearchSource)
+      {
+        return null;
+      }
+
+      var ids = new HashSet<uint>();
+
+      if (this.SearchHistory)
+      {
+        ids.UnionWith(this.Config.History);
+      }
+
+      foreach (var list in this.Plugin.ItemLists)
+      {
+        if (this.SearchLists.Contains(list.Id))
+        {
+          ids.UnionWith(list.ItemIds);
+        }
+      }
+
+      return ids;
     }
 
     /// <summary>
