@@ -747,6 +747,13 @@ namespace MarketTerror
     {
       if (!string.IsNullOrEmpty(arguments))
       {
+#if DEBUG
+        if (ItemUnlockDebug.TryHandle(this.DataManager, this.PlayerState, this.Log, arguments))
+        {
+          return;
+        }
+#endif
+
         if (BuyListCommands.Contains(arguments.Trim(), StringComparer.OrdinalIgnoreCase))
         {
           this.shoppingListWindow.ToggleShown();

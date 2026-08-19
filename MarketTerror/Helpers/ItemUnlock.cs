@@ -20,8 +20,11 @@ namespace MarketTerror.Helpers
   {
     private const long Unlocked = 1;
     private const long Locked = 2;
+    private const long NotLoaded = 3;
 
-    private static readonly Dictionary<uint, bool> Known = new Dictionary<uint, bool>();
+    // Only unlocked items are remembered: the character can unlock something at any time, but never
+    // loses it, so a locked item has to go back to the game every time it is asked about.
+    private static readonly HashSet<uint> Known = new HashSet<uint>();
 
     /// <summary>
     /// Drops every remembered unlock state, so the next read goes back to the game.
@@ -48,9 +51,9 @@ namespace MarketTerror.Helpers
         return UnlockState.NotUnlockable;
       }
 
-      if (Known.TryGetValue(item.RowId, out var known))
+      if (Known.Contains(item.RowId))
       {
-        return known ? UnlockState.Unlocked : UnlockState.Locked;
+        return UnlockState.Unlocked;
       }
 
       // The unlock tables are empty until the character has loaded, and every item reads as locked until then.
@@ -75,12 +78,15 @@ namespace MarketTerror.Helpers
         {
           Unlocked => UnlockState.Unlocked,
           Locked => UnlockState.Locked,
+
+          // The game has not filled in what this item unlocks yet, so asking again later can answer.
+          NotLoaded => UnlockState.Unreadable,
           _ => UnlockState.NotUnlockable,
         };
 
-        if (state != UnlockState.NotUnlockable)
+        if (state == UnlockState.Unlocked)
         {
-          Known[item.RowId] = state == UnlockState.Unlocked;
+          Known.Add(item.RowId);
         }
 
         return state;
