@@ -4,6 +4,7 @@
 
 namespace MarketTerror.Models
 {
+  using System;
   using System.Collections.Generic;
   using System.Diagnostics.CodeAnalysis;
   using MarketTerror.GUI;
@@ -43,6 +44,17 @@ namespace MarketTerror.Models
     /// Gets or sets a value indicating whether this window's advanced search options were open.
     /// </summary>
     public bool AdvancedSearchOpen { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this window is limited to the recently viewed items.
+    /// </summary>
+    public bool SearchHistory { get; set; }
+
+    /// <summary>
+    /// Gets the ids of the user's lists this window is limited to.
+    /// </summary>
+    [SuppressMessage("Design", "CA1002:Do not expose generic lists", Justification = "Rewritten wholesale when the window is saved")]
+    public List<Guid> SearchLists { get; } = new List<Guid>();
 
     /// <summary>
     /// Gets the item search categories this window is limited to.

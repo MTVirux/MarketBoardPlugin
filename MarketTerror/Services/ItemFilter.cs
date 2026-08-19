@@ -23,6 +23,8 @@ namespace MarketTerror.Services
 
     private readonly Func<Item, UnlockState>? unlockProbe;
 
+    private readonly HashSet<uint>? itemIds;
+
     /// <summary>
     /// Initializes a new instance of the <see cref="ItemFilter"/> class.
     /// </summary>
@@ -36,6 +38,7 @@ namespace MarketTerror.Services
     /// <param name="classJob">The class job to filter by, or null for all classes.</param>
     /// <param name="unlocked">The unlock state to keep, or null to keep every item.</param>
     /// <param name="unlockProbe">Reads the unlock state of an item, or null to leave the unlock state unfiltered.</param>
+    /// <param name="itemIds">The row ids to keep, or null to keep an item whatever list it came from.</param>
     public ItemFilter(
       string searchString,
       IEnumerable<uint> categories,
@@ -46,7 +49,8 @@ namespace MarketTerror.Services
       int maxItemLevel,
       ClassJob? classJob,
       bool? unlocked = null,
-      Func<Item, UnlockState>? unlockProbe = null)
+      Func<Item, UnlockState>? unlockProbe = null,
+      IEnumerable<uint>? itemIds = null)
     {
       this.SearchString = searchString ?? string.Empty;
       this.categories = new HashSet<uint>(categories ?? Enumerable.Empty<uint>());
@@ -58,6 +62,7 @@ namespace MarketTerror.Services
       this.ClassJob = classJob;
       this.Unlocked = unlocked;
       this.unlockProbe = unlockProbe;
+      this.itemIds = itemIds == null ? null : new HashSet<uint>(itemIds);
     }
 
     /// <summary>
@@ -135,6 +140,11 @@ namespace MarketTerror.Services
     /// <returns>True when the item is kept.</returns>
     public bool Matches(Item item)
     {
+      if (this.itemIds != null && !this.itemIds.Contains(item.RowId))
+      {
+        return false;
+      }
+
       if (this.SearchString.Length > 0
         && !item.Name.ExtractText().Contains(this.SearchString, StringComparison.InvariantCultureIgnoreCase))
       {
@@ -198,7 +208,13 @@ namespace MarketTerror.Services
         && this.ClassJob?.RowId == other.ClassJob?.RowId
         && this.Unlocked == other.Unlocked
         && this.categories.SetEquals(other.categories)
-        && this.rarities.SetEquals(other.rarities);
+        && this.rarities.SetEquals(other.rarities)
+        && SameIds(this.itemIds, other.itemIds);
+    }
+
+    private static bool SameIds(HashSet<uint>? ids, HashSet<uint>? other)
+    {
+      return ids == null || other == null ? ids == other : ids.SetEquals(other);
     }
   }
 }

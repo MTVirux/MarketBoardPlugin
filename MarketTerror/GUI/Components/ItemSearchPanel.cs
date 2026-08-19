@@ -129,6 +129,9 @@ namespace MarketTerror.GUI.Components
         ImGui.TableSetColumnIndex(1);
       }
 
+      Row("Search in");
+      this.DrawSourcePicker(scale);
+
       Row("Category");
       this.DrawCategoryPicker(scale);
 
@@ -182,6 +185,55 @@ namespace MarketTerror.GUI.Components
 
       return selected.Count > 0
         && this.context.Catalog.Categories.Any(c => selected.Contains(c.RowId) && c.Category is 1 or 2);
+    }
+
+    private string SourcePreview()
+    {
+      var lists = this.context.Plugin.ItemLists.Where(l => this.context.SearchLists.Contains(l.Id)).ToList();
+      var count = lists.Count + (this.context.SearchHistory ? 1 : 0);
+
+      return count switch
+      {
+        0 => "All items",
+        1 => lists.Count == 1 ? lists[0].Name : "Recently viewed",
+        _ => $"{count} sources",
+      };
+    }
+
+    private void DrawSourcePicker(float scale)
+    {
+      ImGui.SetNextItemWidth(-1);
+      ImGui.SetNextWindowSizeConstraints(Vector2.Zero, new Vector2(float.MaxValue, 400.0f * scale));
+
+      if (!ImGui.BeginCombo("##sourcePicker", this.SourcePreview()))
+      {
+        return;
+      }
+
+      if (ImGui.Selectable("All items", !this.context.HasSearchSource))
+      {
+        this.context.SearchHistory = false;
+        this.context.SearchLists.Clear();
+      }
+
+      ImGui.Separator();
+
+      var history = this.context.SearchHistory;
+      if (ImGui.Checkbox("Recently viewed##sourceHistory", ref history))
+      {
+        this.context.SearchHistory = history;
+      }
+
+      foreach (var list in this.context.Plugin.ItemLists)
+      {
+        var on = this.context.SearchLists.Contains(list.Id);
+        if (ImGui.Checkbox($"{list.Name}##source{list.Id}", ref on))
+        {
+          Toggle(this.context.SearchLists, list.Id, on);
+        }
+      }
+
+      ImGui.EndCombo();
     }
 
     private string CategoryPreview()
