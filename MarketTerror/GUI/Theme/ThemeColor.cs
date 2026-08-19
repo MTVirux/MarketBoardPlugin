@@ -42,6 +42,9 @@ namespace MarketTerror.GUI.Theme
     /// <summary>The table header row background.</summary>
     TableHeaderBg,
 
+    /// <summary>The wash laid over the screen behind a modal box.</summary>
+    ModalDim,
+
     /// <summary>Body text.</summary>
     Text,
 

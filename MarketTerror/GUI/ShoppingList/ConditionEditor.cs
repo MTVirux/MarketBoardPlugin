@@ -131,6 +131,8 @@ namespace MarketTerror.GUI.ShoppingList
         return;
       }
 
+      ModalDim.Mark();
+
       ImGui.PushStyleColor(ImGuiCol.Text, theme.TextDim);
       ImGui.TextWrapped(
         "Buys every listing in " + this.scope.Display(this.plugin.WorldCatalogue)

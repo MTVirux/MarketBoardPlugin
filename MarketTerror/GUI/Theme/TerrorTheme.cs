@@ -40,6 +40,7 @@ namespace MarketTerror.GUI.Theme
       { ThemeColor.AccentHover, Rgb(0x8A, 0x1E, 0x18) },
       { ThemeColor.RowAlt, Rgb(0x18, 0x18, 0x18) },
       { ThemeColor.TableHeaderBg, Rgb(0x08, 0x08, 0x09) },
+      { ThemeColor.ModalDim, Rgba(0x00, 0x00, 0x00, 0x99) },
       { ThemeColor.Text, Rgb(0xE8, 0xE6, 0xE3) },
       { ThemeColor.TextDim, Rgb(0x83, 0x80, 0x81) },
       { ThemeColor.TextBright, Rgb(0xF4, 0xF2, 0xEF) },
@@ -302,7 +303,12 @@ namespace MarketTerror.GUI.Theme
 
     private static uint Rgb(byte r, byte g, byte b)
     {
-      return 0xFF000000u | ((uint)b << 16) | ((uint)g << 8) | r;
+      return Rgba(r, g, b, 0xFF);
+    }
+
+    private static uint Rgba(byte r, byte g, byte b, byte a)
+    {
+      return ((uint)a << 24) | ((uint)b << 16) | ((uint)g << 8) | r;
     }
 
     private uint Resolve(ThemeColor color, ImGuiCol fallback)

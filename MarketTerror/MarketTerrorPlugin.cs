@@ -27,6 +27,7 @@ namespace MarketTerror
 
   using MarketTerror.GUI;
   using MarketTerror.GUI.ShoppingList;
+  using MarketTerror.GUI.Theme;
   using MarketTerror.Helpers;
   using MarketTerror.Models;
   using MarketTerror.Models.ItemLists;
@@ -771,6 +772,9 @@ namespace MarketTerror
     {
       this.windowSystem.Draw();
       this.boardManager.ApplyPendingChanges();
+
+      // After every window, because the wash has to stay on the shared style until ImGui ends the frame.
+      ModalDim.Apply(this.boardManager.Services.Theme);
     }
 
     /// <summary>

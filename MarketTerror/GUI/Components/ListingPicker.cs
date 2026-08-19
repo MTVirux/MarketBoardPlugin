@@ -127,6 +127,8 @@ namespace MarketTerror.GUI.Components
         return;
       }
 
+      ModalDim.Mark();
+
       this.DrawScope(theme);
 
       ImGui.Separator();

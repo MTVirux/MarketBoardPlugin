@@ -10,6 +10,7 @@ namespace MarketTerror.GUI.Components
   using System.Text;
   using Dalamud.Bindings.ImGui;
   using Lumina.Excel.Sheets;
+  using MarketTerror.GUI.Theme;
   using MarketTerror.Models.ItemLists;
   using MarketTerror.Models.ShoppingList;
 
@@ -328,6 +329,8 @@ namespace MarketTerror.GUI.Components
       {
         return;
       }
+
+      ModalDim.Mark();
 
       var count = list.ItemIds.Count == 1 ? "1 item" : $"{list.ItemIds.Count} items";
       ImGui.Text($"Delete \"{list.Name}\" and its {count}?");

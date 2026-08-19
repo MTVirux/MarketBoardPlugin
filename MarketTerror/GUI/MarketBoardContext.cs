@@ -602,6 +602,8 @@ namespace MarketTerror.GUI
         return;
       }
 
+      ModalDim.Mark();
+
       ImGui.SetNextItemWidth(220 * ImGui.GetIO().FontGlobalScale);
 
       var name = this.newListName;
