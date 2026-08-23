@@ -171,12 +171,12 @@ namespace MarketTerror.Services
         return null;
       }
 
-      if (entries.All(e => e.Conditions?.Quality == QualityFilter.HqOnly))
+      if (entries.All(e => e.EffectiveQuality == QualityFilter.HqOnly))
       {
         return true;
       }
 
-      if (entries.All(e => e.Conditions?.Quality == QualityFilter.NqOnly))
+      if (entries.All(e => e.EffectiveQuality == QualityFilter.NqOnly))
       {
         return false;
       }

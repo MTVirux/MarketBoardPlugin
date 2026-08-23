@@ -44,7 +44,11 @@ namespace MarketTerror.Models.ShoppingList
 
       return entry.Kind switch
       {
-        ListingKind.Lowest => available.Take(Math.Max(1, entry.Count)).Select(l => l.Copy()).ToArray(),
+        ListingKind.Lowest => available
+          .Where(l => entry.Quality.Accepts(l.Hq))
+          .Take(Math.Max(1, entry.Count))
+          .Select(l => l.Copy())
+          .ToArray(),
         ListingKind.Direct => Direct(entry, available),
         _ => Conditional(entry, available),
       };

@@ -170,7 +170,7 @@ namespace MarketTerror.Models.ShoppingList
 
       if (this.Quality != QualityFilter.Any)
       {
-        parts.Add(this.Quality == QualityFilter.HqOnly ? "HQ" : "NQ");
+        parts.Add(this.Quality.Label());
       }
 
       if (this.Worlds.Count > 0)
@@ -240,12 +240,7 @@ namespace MarketTerror.Models.ShoppingList
 
     private bool QualityHolds(ResolvedListing listing)
     {
-      return this.Quality switch
-      {
-        QualityFilter.HqOnly => listing.Hq,
-        QualityFilter.NqOnly => !listing.Hq,
-        _ => true,
-      };
+      return this.Quality.Accepts(listing.Hq);
     }
 
     private bool SellerHolds(ResolvedListing listing)

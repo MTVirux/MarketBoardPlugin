@@ -51,6 +51,19 @@ namespace MarketTerror.Models.ShoppingList
     /// <summary>Gets or sets how many listings a <see cref="ListingKind.Lowest"/> entry takes.</summary>
     public int Count { get; set; } = 1;
 
+    /// <summary>Gets or sets which qualities a <see cref="ListingKind.Lowest"/> entry takes.</summary>
+    /// <remarks>A conditional entry reads its quality off its rule instead, and a direct one is
+    /// whatever quality the listing it stands for is.</remarks>
+    public QualityFilter Quality { get; set; }
+
+    /// <summary>Gets which qualities the entry buys, whichever kind it is.</summary>
+    public QualityFilter EffectiveQuality => this.Kind switch
+    {
+      ListingKind.Lowest => this.Quality,
+      ListingKind.Conditional => this.Conditions?.Quality ?? QualityFilter.Any,
+      _ => QualityFilter.Any,
+    };
+
     /// <summary>Gets or sets the listing a <see cref="ListingKind.Direct"/> entry stands for.</summary>
     public ResolvedListing? Target { get; set; }
 
@@ -123,9 +136,7 @@ namespace MarketTerror.Models.ShoppingList
     /// <summary>Gets the label that says what kind of entry this is on its own row.</summary>
     public string Summary => this.Kind switch
     {
-      ListingKind.Lowest => this.Count > 1
-        ? FormattableString.Invariant($"Lowest x{this.Count}")
-        : "Lowest",
+      ListingKind.Lowest => LowestSummary(this.Quality, this.Count),
       ListingKind.Direct => this.Target == null
         ? "Direct"
         : "Direct - " + this.Target.RetainerName,
@@ -178,6 +189,19 @@ namespace MarketTerror.Models.ShoppingList
         .ToArray();
 
       this.FailReason = reasons.Length == 1 ? reasons[0] : string.Empty;
+    }
+
+    /// <summary>
+    /// Writes out what a lowest entry buys.
+    /// </summary>
+    /// <param name="quality">The qualities it takes.</param>
+    /// <param name="count">How many listings it takes.</param>
+    /// <returns>The label.</returns>
+    private static string LowestSummary(QualityFilter quality, int count)
+    {
+      var name = quality == QualityFilter.Any ? "Lowest" : "Lowest " + quality.Label();
+
+      return count > 1 ? FormattableString.Invariant($"{name} x{count}") : name;
     }
   }
 }

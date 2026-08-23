@@ -48,6 +48,7 @@ namespace MarketTerror.Services
         var entry = new ListingEntry(item.Value, new ListingScope(stored.AnchorWorld, stored.Level), stored.Kind)
         {
           Count = Math.Max(1, stored.Count),
+          Quality = stored.Quality,
           Target = stored.Target?.ToListing(),
           Conditions = stored.Conditions?.Clone(),
         };
@@ -274,6 +275,41 @@ namespace MarketTerror.Services
 
         // Trimming is not a repricing, so the listings that stay keep whatever a buy run wrote on
         // them and the entry only says again what the ones left under it say.
+        entry.Matches.Clear();
+        entry.Matches.AddRange(kept);
+        entry.Outcome = BuyOutcome.None;
+        entry.FailReason = string.Empty;
+        entry.RollUpOutcome();
+      }
+
+      this.Save();
+    }
+
+    /// <summary>
+    /// Sets which qualities of its market's cheapest listings an entry takes.
+    /// </summary>
+    /// <param name="entry">The entry to set the quality on.</param>
+    /// <param name="quality">The qualities to take.</param>
+    /// <remarks>
+    /// The listings the entry no longer accepts go straight away, so the row stops claiming them
+    /// while it waits to be priced again. The ones that stay are still short of what was asked for,
+    /// since the cheapest of one quality are not the cheapest overall - only a refresh fills it back up.
+    /// </remarks>
+    public void SetQuality(ListingEntry entry, QualityFilter quality)
+    {
+      ArgumentNullException.ThrowIfNull(entry);
+
+      if (entry.Quality == quality)
+      {
+        return;
+      }
+
+      entry.Quality = quality;
+
+      var kept = entry.Matches.Where(m => quality.Accepts(m.Hq)).ToArray();
+
+      if (kept.Length < entry.Matches.Count)
+      {
         entry.Matches.Clear();
         entry.Matches.AddRange(kept);
         entry.Outcome = BuyOutcome.None;

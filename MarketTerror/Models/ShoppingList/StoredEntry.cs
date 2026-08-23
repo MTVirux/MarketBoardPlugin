@@ -36,6 +36,7 @@ namespace MarketTerror.Models.ShoppingList
       this.Level = entry.Scope.Level;
       this.Kind = entry.Kind;
       this.Count = entry.Count;
+      this.Quality = entry.Quality;
       this.Target = entry.Target == null ? null : new StoredListing(entry.Target);
       this.Conditions = entry.Conditions?.Clone();
       this.Matches.AddRange(entry.Matches.Select(m => new StoredListing(m)));
@@ -55,6 +56,9 @@ namespace MarketTerror.Models.ShoppingList
 
     /// <summary>Gets or sets how many listings a lowest entry takes.</summary>
     public int Count { get; set; } = 1;
+
+    /// <summary>Gets or sets which qualities a lowest entry takes.</summary>
+    public QualityFilter Quality { get; set; }
 
     /// <summary>Gets or sets the listing a direct entry stands for.</summary>
     public StoredListing? Target { get; set; }

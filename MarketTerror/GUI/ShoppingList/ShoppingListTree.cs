@@ -92,6 +92,26 @@ namespace MarketTerror.GUI.ShoppingList
     private ListingEntry? followed;
 
     /// <summary>
+    /// The entry whose count box is open, or null when none is.
+    /// </summary>
+    private ListingEntry? countEditing;
+
+    /// <summary>
+    /// The count the open box is being set to, which only reaches the entry once the box closes.
+    /// </summary>
+    private int countDraft = 1;
+
+    /// <summary>
+    /// The entry whose quality was last cycled and is still waiting to be priced again.
+    /// </summary>
+    private ListingEntry? qualityCycled;
+
+    /// <summary>
+    /// True while the pointer is still on the cycled entry's quality button.
+    /// </summary>
+    private bool qualityHeld;
+
+    /// <summary>
     /// The skin the window is drawing in, kept for as long as the frame lasts.
     /// </summary>
     private TerrorTheme theme;
@@ -140,6 +160,8 @@ namespace MarketTerror.GUI.ShoppingList
 
       // An entry that has been taken off the list stops counting as open.
       this.expanded.IntersectWith(nodes.SelectMany(n => n.AllEntries));
+      this.ForgetDroppedEntries(nodes);
+      this.qualityHeld = false;
 
       if (!ImGui.BeginTable("shoppingList", 6, TableFlags | ImGuiTableFlags.ScrollY, new Vector2(0, tableHeight)))
       {
@@ -175,6 +197,8 @@ namespace MarketTerror.GUI.ShoppingList
       }
 
       ImGui.EndTable();
+
+      this.SettleQualityCycle();
     }
 
     /// <summary>
@@ -1033,29 +1057,11 @@ namespace MarketTerror.GUI.ShoppingList
     {
       if (entry.Kind == ListingKind.Lowest)
       {
-        ImGui.BeginDisabled(busy || entry.Count <= 1);
-        var fewer = ImGui.Button($"-##shoplistfewer{key}", buttonSize);
-        ImGui.EndDisabled();
-        Utilities.HoverTooltip("Buy one listing fewer.", ImGuiHoveredFlags.AllowWhenDisabled);
-
+        this.DrawCountButton(entry, key, buttonSize, busy);
         ImGui.SameLine();
 
-        ImGui.BeginDisabled(busy);
-        var more = ImGui.Button($"+##shoplistmore{key}", buttonSize);
-        ImGui.EndDisabled();
-        Utilities.HoverTooltip("Buy one listing more.", ImGuiHoveredFlags.AllowWhenDisabled);
-
+        this.DrawQualityButton(entry, key, buttonSize, busy);
         ImGui.SameLine();
-
-        if (fewer)
-        {
-          this.plugin.ShoppingList.SetCount(entry, entry.Count - 1);
-        }
-
-        if (more)
-        {
-          this.plugin.ShoppingList.SetCount(entry, entry.Count + 1);
-        }
 
         return;
       }
@@ -1091,6 +1097,173 @@ namespace MarketTerror.GUI.ShoppingList
       {
         request.PickListing = entry;
       }
+    }
+
+    /// <summary>
+    /// Draws how many listings a lowest entry takes, as a button opening the box that changes it.
+    /// </summary>
+    /// <param name="entry">The entry the button belongs to.</param>
+    /// <param name="key">Where the entry sits in the tree.</param>
+    /// <param name="buttonSize">How big one button is.</param>
+    /// <param name="busy">True while a pricing or buy run is going.</param>
+    private void DrawCountButton(ListingEntry entry, string key, Vector2 buttonSize, bool busy)
+    {
+      var popupId = $"shoplistcountpop{key}";
+
+      ImGui.BeginDisabled(busy);
+      var open = ImGui.Button(FormattableString.Invariant($"x{entry.Count}##shoplistcount{key}"), buttonSize);
+      ImGui.EndDisabled();
+      Utilities.HoverTooltip(
+        entry.Count == 1
+          ? "Buys the cheapest listing. Click to buy more of them."
+          : FormattableString.Invariant($"Buys the {entry.Count} cheapest listings. Click to change."),
+        ImGuiHoveredFlags.AllowWhenDisabled);
+
+      if (open)
+      {
+        this.countEditing = entry;
+        this.countDraft = entry.Count;
+        ImGui.OpenPopup(popupId);
+      }
+
+      if (ImGui.BeginPopup(popupId))
+      {
+        this.DrawCountPopup(popupId, buttonSize);
+        ImGui.EndPopup();
+      }
+      else if (this.countEditing == entry)
+      {
+        // The box closing is what settles the number, so a count being typed is never read half
+        // written and trimmed down to what its first digit said.
+        this.plugin.ShoppingList.SetCount(entry, this.countDraft);
+        this.countEditing = null;
+      }
+    }
+
+    /// <summary>
+    /// Draws the box that changes how many listings a lowest entry takes.
+    /// </summary>
+    /// <param name="popupId">What the box is identified by.</param>
+    /// <param name="buttonSize">How big one button is.</param>
+    private void DrawCountPopup(string popupId, Vector2 buttonSize)
+    {
+      ImGui.TextUnformatted("Listings to buy");
+
+      ImGui.BeginDisabled(this.countDraft <= 1);
+      var fewer = ImGui.Button($"-##{popupId}fewer", buttonSize);
+      ImGui.EndDisabled();
+
+      ImGui.SameLine();
+
+      ImGui.SetNextItemWidth(2 * buttonSize.X);
+      var typed = this.countDraft;
+
+      if (ImGui.InputInt($"##{popupId}count", ref typed, 0, 0))
+      {
+        this.countDraft = typed;
+      }
+
+      ImGui.SameLine();
+
+      if (ImGui.Button($"+##{popupId}more", buttonSize))
+      {
+        this.countDraft++;
+      }
+
+      if (fewer)
+      {
+        this.countDraft--;
+      }
+
+      this.countDraft = Math.Max(1, this.countDraft);
+    }
+
+    /// <summary>
+    /// Draws which qualities a lowest entry takes, as a button cycling through them.
+    /// </summary>
+    /// <param name="entry">The entry the button belongs to.</param>
+    /// <param name="key">Where the entry sits in the tree.</param>
+    /// <param name="buttonSize">How big one button is.</param>
+    /// <param name="busy">True while a pricing or buy run is going.</param>
+    private void DrawQualityButton(ListingEntry entry, string key, Vector2 buttonSize, bool busy)
+    {
+      ImGui.BeginDisabled(busy);
+      var cycled = ImGui.Button($"{entry.Quality.Label()}##shoplistquality{key}", buttonSize);
+      ImGui.EndDisabled();
+
+      if (this.qualityCycled == entry && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+      {
+        this.qualityHeld = true;
+      }
+
+      Utilities.HoverTooltip(
+        entry.Quality switch
+        {
+          QualityFilter.HqOnly => "Buys high quality listings only. Click for normal quality.",
+          QualityFilter.NqOnly => "Buys normal quality listings only. Click for either quality.",
+          _ => "Buys either quality. Click for high quality only.",
+        },
+        ImGuiHoveredFlags.AllowWhenDisabled);
+
+      if (!cycled)
+      {
+        return;
+      }
+
+      this.plugin.ShoppingList.SetQuality(entry, entry.Quality.Next());
+      this.qualityCycled = entry;
+      this.qualityHeld = true;
+    }
+
+    /// <summary>
+    /// Drops what is being held about entries that are no longer on the list.
+    /// </summary>
+    /// <param name="nodes">The groups being drawn.</param>
+    private void ForgetDroppedEntries(IReadOnlyList<ShoppingListNode> nodes)
+    {
+      if (this.countEditing == null && this.qualityCycled == null)
+      {
+        return;
+      }
+
+      var live = nodes.SelectMany(n => n.AllEntries).ToHashSet();
+
+      if (this.countEditing != null && !live.Contains(this.countEditing))
+      {
+        this.countEditing = null;
+      }
+
+      if (this.qualityCycled != null && !live.Contains(this.qualityCycled))
+      {
+        this.qualityCycled = null;
+      }
+    }
+
+    /// <summary>
+    /// Prices a cycled entry again once the pointer has left its quality button.
+    /// </summary>
+    /// <remarks>
+    /// Waiting is what makes a walk from either quality round to high and on to normal cost one
+    /// pricing rather than three. A row scrolled out of sight is left too, since a button that is
+    /// not drawn cannot be hovered.
+    /// </remarks>
+    private void SettleQualityCycle()
+    {
+      if (this.qualityCycled == null || this.qualityHeld)
+      {
+        return;
+      }
+
+      var entry = this.qualityCycled;
+
+      if (this.plugin.ShoppingListBulkAdd.IsRunning || this.plugin.ShoppingListBuyer.IsRunning)
+      {
+        // A run that started in the meantime holds the pricing back rather than dropping it.
+        return;
+      }
+
+      this.qualityCycled = null;
+      this.plugin.ShoppingListBulkAdd.StartRefresh(new[] { entry }, entry.SourceItem.Name.ExtractText());
     }
 
     /// <summary>
